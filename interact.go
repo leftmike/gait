@@ -54,7 +54,7 @@ func Interact(llm gollm.LLM, historyFilename string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(s)
+		fmt.Println(s, "\n")
 	}
 
 	return nil
