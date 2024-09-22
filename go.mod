@@ -2,9 +2,13 @@ module github.com/leftmike/gait
 
 go 1.22.5
 
+replace github.com/teilomillet/gollm => ../gollm
+
 require (
 	github.com/hashicorp/hcl/v2 v2.22.0
-	github.com/teilomillet/gollm v0.0.94
+	github.com/mitchellh/go-homedir v1.1.0
+	github.com/teilomillet/gollm v0.0.95
+	golang.org/x/term v0.17.0
 )
 
 require (
@@ -24,8 +28,9 @@ require (
 	github.com/invopop/jsonschema v0.12.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/mattn/go-runewidth v0.0.3 // indirect
 	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
+	github.com/peterh/liner v1.2.2 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.7 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/zclconf/go-cty v1.13.0 // indirect

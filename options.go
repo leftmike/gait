@@ -14,11 +14,18 @@ func flagOption[T int | float64 | time.Duration](opts []gollm.ConfigOption, f T,
 
 	if f != 0 {
 		return append(opts, setFn(f))
+	} else if m != nil {
+		return append(opts, setFn(*m))
+	} else if p != nil {
+		return append(opts, setFn(*p))
+	} else if c != nil {
+		return append(opts, setFn(*c))
 	}
 	return opts
 }
 
 func options(cfg Config) ([]gollm.ConfigOption, string, string, error) {
+	logFlag := flag.String("log", "off", "log level: off, error, warn, info, debug")
 	providerFlag := flag.String("provider", "", "generate using this llm `provider`")
 	apikeyFlag := flag.String("apikey", "", "`api key` to use")
 	modelFlag := flag.String("model", "", "generate using this llm `model`")
@@ -30,23 +37,38 @@ func options(cfg Config) ([]gollm.ConfigOption, string, string, error) {
 
 	flag.Parse()
 
+	var logLevel gollm.LogLevel
+	switch *logFlag {
+	case "off":
+		logLevel = gollm.LogLevelOff
+	case "error":
+		logLevel = gollm.LogLevelError
+	case "warn":
+		logLevel = gollm.LogLevelWarn
+	case "info":
+		logLevel = gollm.LogLevelInfo
+	case "debug":
+		logLevel = gollm.LogLevelDebug
+	default:
+		return nil, "", "", errors.New("bad log level")
+	}
+	opts := append([]gollm.ConfigOption{}, gollm.SetDebugLevel(logLevel))
+
 	provider := *providerFlag
 	if provider == "" {
 		if cfg.Provider == "" {
-			return nil, "", "", errors.New("gait: no provider specified")
+			return nil, "", "", errors.New("no provider specified")
 		}
 
 		provider = cfg.Provider
 	}
-
-	var opts []gollm.ConfigOption
 	opts = append(opts, gollm.SetProvider(provider))
 	p := cfg.FindProvider(provider)
 
 	apikey := *apikeyFlag
 	if apikey == "" {
 		if p.APIKey == "" {
-			return nil, "", "", fmt.Errorf("gait: provider missing API key: %s", provider)
+			return nil, "", "", fmt.Errorf("provider missing API key: %s", provider)
 		}
 
 		apikey = p.APIKey
@@ -56,7 +78,7 @@ func options(cfg Config) ([]gollm.ConfigOption, string, string, error) {
 	model := *modelFlag
 	if model == "" {
 		if p.Model == "" {
-			return nil, "", "", fmt.Errorf("gait: no model specified: %s", provider)
+			return nil, "", "", fmt.Errorf("no model specified: %s", provider)
 		}
 
 		model = p.Model
