@@ -50,7 +50,7 @@ func Interact(llm gollm.LLM, historyFilename string) error {
 		}
 		line.AppendHistory(s)
 
-		s, err = llm.Generate(ctx, gollm.NewPrompt(s), gollm.WithFullResponse())
+		s, err = llm.Generate(ctx, gollm.NewPrompt(s))
 		if err != nil {
 			return err
 		}

@@ -57,8 +57,7 @@ func main() {
 			fatal("reading stdin", err)
 		}
 
-		s, err := llm.Generate(context.Background(), gollm.NewPrompt(string(buf)),
-			gollm.WithFullResponse())
+		s, err := llm.Generate(context.Background(), gollm.NewPrompt(string(buf)))
 		if err != nil {
 			fatal("llm generate", err)
 		}

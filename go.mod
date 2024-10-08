@@ -2,12 +2,10 @@ module github.com/leftmike/gait
 
 go 1.22.5
 
-replace github.com/teilomillet/gollm => ../gollm
-
 require (
 	github.com/hashicorp/hcl/v2 v2.22.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/teilomillet/gollm v0.0.95
+	github.com/teilomillet/gollm v0.1.0
 	golang.org/x/term v0.17.0
 )
 
@@ -18,6 +16,7 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/caarlos0/env/v11 v11.1.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -32,6 +31,9 @@ require (
 	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
 	github.com/peterh/liner v1.2.2 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.7 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/zclconf/go-cty v1.13.0 // indirect
 	golang.org/x/crypto v0.19.0 // indirect

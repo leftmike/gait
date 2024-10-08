@@ -52,7 +52,7 @@ func options(cfg Config) ([]gollm.ConfigOption, string, string, error) {
 	default:
 		return nil, "", "", errors.New("bad log level")
 	}
-	opts := append([]gollm.ConfigOption{}, gollm.SetDebugLevel(logLevel))
+	opts := append([]gollm.ConfigOption{}, gollm.SetLogLevel(logLevel))
 
 	provider := *providerFlag
 	if provider == "" {
