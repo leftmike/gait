@@ -3,7 +3,6 @@ package main
 import (
 	"io/ioutil"
 	"os"
-	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -12,34 +11,25 @@ import (
 )
 
 type Model struct {
-	Name        string         `hcl:"name,label"`
-	MaxRetries  *int           `hcl:"max_retries,optional"`
-	MaxTokens   *int           `hcl:"max_tokens,optional"`
-	Memory      *int           `hcl:"memory,optional"`
-	RetryDelay  *time.Duration `hcl:"retry_delay,optional"`
-	Temperature *float64       `hcl:"temperature,optional"`
+	Name        string   `hcl:"name,label"`
+	MaxTokens   *int     `hcl:"max_tokens,optional"`
+	Temperature *float64 `hcl:"temperature,optional"`
 }
 
 type Provider struct {
-	Name        string         `hcl:"name,label"`
-	APIKey      string         `hcl:"api_key"`
-	MaxRetries  *int           `hcl:"max_retries,optional"`
-	MaxTokens   *int           `hcl:"max_tokens,optional"`
-	Memory      *int           `hcl:"memory,optional"`
-	RetryDelay  *time.Duration `hcl:"retry_delay,optional"`
-	Temperature *float64       `hcl:"temperature,optional"`
-	Model       string         `hcl:"model,optional"`
-	Models      []Model        `hcl:"model,block"`
+	Name        string   `hcl:"name,label"`
+	APIKey      string   `hcl:"api_key"`
+	MaxTokens   *int     `hcl:"max_tokens,optional"`
+	Temperature *float64 `hcl:"temperature,optional"`
+	Model       string   `hcl:"model,optional"`
+	Models      []Model  `hcl:"model,block"`
 }
 
 type Config struct {
-	Provider    string         `hcl:"provider,optional"`
-	MaxRetries  *int           `hcl:"max_retries,optional"`
-	MaxTokens   *int           `hcl:"max_tokens,optional"`
-	Memory      *int           `hcl:"memory,optional"`
-	RetryDelay  *time.Duration `hcl:"retry_delay,optional"`
-	Temperature *float64       `hcl:"temperature,optional"`
-	Providers   []Provider     `hcl:"provider,block"`
+	Provider    string     `hcl:"provider,optional"`
+	MaxTokens   *int       `hcl:"max_tokens,optional"`
+	Temperature *float64   `hcl:"temperature,optional"`
+	Providers   []Provider `hcl:"provider,block"`
 }
 
 func (cfg *Config) FindProvider(name string) Provider {

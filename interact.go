@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/peterh/liner"
-	"github.com/teilomillet/gollm"
+	"github.com/tmc/langchaingo/llms"
 	"golang.org/x/term"
 )
 
@@ -15,7 +15,7 @@ func IsTerminal() bool {
 	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-func Interact(llm gollm.LLM, historyFilename string) error {
+func Interact(llm llms.Model, opts []llms.CallOption, historyFilename string) error {
 	line := liner.NewLiner()
 	defer line.Close()
 
@@ -50,7 +50,7 @@ func Interact(llm gollm.LLM, historyFilename string) error {
 		}
 		line.AppendHistory(s)
 
-		s, err = llm.Generate(ctx, gollm.NewPrompt(s))
+		s, err = llms.GenerateFromSinglePrompt(ctx, llm, s, opts...)
 		if err != nil {
 			return err
 		}

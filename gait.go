@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/teilomillet/gollm"
+	"github.com/tmc/langchaingo/llms"
 )
 
 func configFilenames() []string {
@@ -35,19 +35,19 @@ func main() {
 	if err != nil {
 		fatal("load config", err)
 	}
-	opts, provider, model, err := options(cfg)
+	provider, model, apikey, opts, err := options(cfg)
 	if err != nil {
 		fatal("options", err)
 	}
 
-	llm, err := gollm.NewLLM(opts...)
+	llm, err := NewModel(provider, model, apikey, opts)
 	if err != nil {
-		fatal("unable to create LLM", err)
+		fatal("unable to create model", err)
 	}
 
 	if IsTerminal() {
 		fmt.Printf("%s: %s\n", provider, model)
-		err := Interact(llm, historyFilename())
+		err := Interact(llm, opts, historyFilename())
 		if err != nil {
 			fatal("interact", err)
 		}
@@ -57,7 +57,7 @@ func main() {
 			fatal("reading stdin", err)
 		}
 
-		s, err := llm.Generate(context.Background(), gollm.NewPrompt(string(buf)))
+		s, err := llms.GenerateFromSinglePrompt(context.Background(), llm, string(buf), opts...)
 		if err != nil {
 			fatal("llm generate", err)
 		}
