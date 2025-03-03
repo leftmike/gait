@@ -46,7 +46,10 @@ func main() {
 	}
 
 	if IsTerminal() {
-		fmt.Printf("%s: %s\n", provider, model)
+		if verbose {
+			fmt.Printf("%s: %s\n", provider, model)
+		}
+
 		err := Interact(llm, opts, historyFilename())
 		if err != nil {
 			fatal("interact", err)
