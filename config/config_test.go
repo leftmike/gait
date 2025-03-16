@@ -1,14 +1,15 @@
 package config
 
 import (
+	"reflect"
 	"testing"
 )
 
 func TestMatch(t *testing.T) {
 	tests := []struct {
-		pattern  string
-		str      string
-		expected bool
+		pat string
+		str string
+		ret bool
 	}{
 		// Empty pattern matches anything
 		{"", "anything", true},
@@ -34,18 +35,17 @@ func TestMatch(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := match(test.pattern, test.str)
-		if result != test.expected {
-			t.Errorf("match(%q, %q) = %v, expected %v",
-				test.pattern, test.str, result, test.expected)
+		ret := match(test.pat, test.str)
+		if ret != test.ret {
+			t.Errorf("match(%q, %q) got %v, want %v", test.pat, test.str, ret, test.ret)
 		}
 	}
 }
 
 func TestValidateConfig(t *testing.T) {
 	tests := []struct {
-		config      *Config
-		expectError bool
+		config *Config
+		fail   bool
 	}{
 		{
 			config: &Config{
@@ -58,7 +58,7 @@ func TestValidateConfig(t *testing.T) {
 					{Provider: "*", Name: "*"},
 				},
 			},
-			expectError: false,
+			fail: false,
 		},
 		{
 			config: &Config{
@@ -66,7 +66,7 @@ func TestValidateConfig(t *testing.T) {
 					{Provider: "[invalid", Name: "model"},
 				},
 			},
-			expectError: true,
+			fail: true,
 		},
 		{
 			config: &Config{
@@ -74,7 +74,7 @@ func TestValidateConfig(t *testing.T) {
 					{Provider: "provider", Name: "model[abc"},
 				},
 			},
-			expectError: true,
+			fail: true,
 		},
 		{
 			config: &Config{
@@ -82,21 +82,144 @@ func TestValidateConfig(t *testing.T) {
 					{Name: "provider["},
 				},
 			},
-			expectError: true,
+			fail: true,
 		},
 		{
-			config:      &Config{},
-			expectError: false,
+			config: &Config{},
+			fail:   false,
 		},
 	}
 
-	for i, test := range tests {
+	for _, test := range tests {
 		err := test.config.validateConfig()
-		if test.expectError && err == nil {
-			t.Errorf("test %d: expected error but got nil", i)
+		if test.fail {
+			if err == nil {
+				t.Errorf("validateConfig(%+v) did not fail", test.config)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("validateConfig(%+v) failed with %s", test.config, err)
+			}
 		}
-		if !test.expectError && err != nil {
-			t.Errorf("test %d: expected no error but got: %v", i, err)
+	}
+}
+
+func TestParseConfig(t *testing.T) {
+	maxTokens8192 := 8192
+	temperature07 := 0.7
+
+	tests := []struct {
+		buf    string
+		config *Config
+		fail   bool
+	}{
+		{
+			buf: `
+				provider="openai"
+				provider openai {
+					model="gpt-4"
+					api_key="test-key"
+				}
+				model openai gpt-4 {
+					max_tokens=8192
+					temperature=0.7
+				}
+			`,
+			config: &Config{
+				Provider: "openai",
+				Providers: []Provider{
+					{
+						Name:   "openai",
+						Model:  "gpt-4",
+						APIKey: "test-key",
+					},
+				},
+				Models: []Model{
+					{
+						Provider:    "openai",
+						Name:        "gpt-4",
+						MaxTokens:   &maxTokens8192,
+						Temperature: &temperature07,
+					},
+				},
+			},
+			fail: false,
+		},
+		{
+			buf: `
+				provider="openai"
+				provider openai {
+					api_key="test-key"
+				}
+				model openai "*" {
+					max_tokens=8192
+				}
+			`,
+			config: &Config{
+				Provider: "openai",
+				Providers: []Provider{
+					{
+						Name:   "openai",
+						APIKey: "test-key",
+					},
+				},
+				Models: []Model{
+					{
+						Provider:  "openai",
+						Name:      "*",
+						MaxTokens: &maxTokens8192,
+					},
+				},
+			},
+			fail: false,
+		},
+		{
+			buf: `
+				provider="openai"
+				provider openai {
+					api_key="test-key"
+				
+				// Missing closing brace
+			`,
+			config: nil,
+			fail:   true,
+		},
+		{
+			buf: `
+				provider="openai"
+				provider openai {
+					api_key="test-key"
+				}
+				model openai "[invalid" {
+					max_tokens=8192
+				}
+			`,
+			config: nil,
+			fail:   true,
+		},
+		{
+			buf:    ``,
+			config: &Config{},
+			fail:   false,
+		},
+	}
+
+	for _, test := range tests {
+		cfg, err := parseConfig("test.hcl", []byte(test.buf))
+
+		if test.fail {
+			if err == nil {
+				t.Errorf("parseConfig(%s) did not fail", test.buf)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("parseConfig(%s) failed with %s", test.buf, err)
+				continue
+			}
+
+			if !reflect.DeepEqual(test.config, cfg) {
+				t.Errorf("parseConfig(%s) got %+v want %+v", test.buf, cfg, test.config)
+			}
 		}
 	}
 }
