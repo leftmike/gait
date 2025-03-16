@@ -1,9 +1,10 @@
-package main
+package config
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
-	"regexp"
+	"path/filepath"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -46,20 +47,23 @@ type Config struct {
 	Models    []Model    `hcl:"model,block"`
 }
 
-func match(s1, s2 string) bool {
-	if s1 == "" {
+func match(pattern, str string) bool {
+	if pattern == "" {
 		return true
 	}
 
-	if s1 == s2 {
+	if pattern == str {
 		return true
 	}
 
-	re, err := regexp.Compile(s1)
-	return err == nil && re.MatchString(s2)
+	matched, err := filepath.Match(pattern, str)
+	if err != nil {
+		panic(fmt.Sprintf("unexpected bad glob pattern %q: %v", pattern, err))
+	}
+	return matched
 }
 
-func (cfg *Config) FindProvider(name string) Provider {
+func (cfg *Config) findProvider(name string) Provider {
 	for _, p := range cfg.Providers {
 		if match(p.Name, name) {
 			return p
@@ -69,7 +73,7 @@ func (cfg *Config) FindProvider(name string) Provider {
 	return Provider{}
 }
 
-func (cfg *Config) FindModel(provider, name string) Model {
+func (cfg *Config) findModel(provider, name string) Model {
 	for _, m := range cfg.Models {
 		if match(m.Provider, provider) && match(m.Name, name) {
 			return m
@@ -79,7 +83,53 @@ func (cfg *Config) FindModel(provider, name string) Model {
 	return Model{}
 }
 
-func loadConfig(filenames []string) (*Config, error) {
+func (cfg *Config) validateConfig() error {
+	for _, m := range cfg.Models {
+		if m.Provider != "" {
+			if _, err := filepath.Match(m.Provider, ""); err != nil {
+				return fmt.Errorf("model: bad pattern %q: %v", m.Provider, err)
+			}
+		}
+
+		if m.Name != "" {
+			if _, err := filepath.Match(m.Name, ""); err != nil {
+				return fmt.Errorf("model: bad pattern %q: %v", m.Name, err)
+			}
+		}
+	}
+
+	for _, p := range cfg.Providers {
+		if p.Name != "" {
+			_, err := filepath.Match(p.Name, "")
+			if err != nil {
+				return fmt.Errorf("provider: bad pattern %q: %v", p.Name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func parseConfig(filename string, buf []byte) (*Config, error) {
+	tree, ret := hclsyntax.ParseConfig(buf, filename, hcl.Pos{Line: 1, Column: 1})
+	if ret.HasErrors() {
+		return nil, ret
+	}
+
+	var cfg Config
+	ret = gohcl.DecodeBody(tree.Body, nil, &cfg)
+	if ret.HasErrors() {
+		return nil, ret
+	}
+
+	if err := cfg.validateConfig(); err != nil {
+		return nil, fmt.Errorf("%s: %w", filename, err)
+	}
+
+	return &cfg, nil
+}
+
+func Load(filenames []string) (*Config, error) {
 	for _, filename := range filenames {
 		filename, err := homedir.Expand(filename)
 		if err != nil {
@@ -87,7 +137,6 @@ func loadConfig(filenames []string) (*Config, error) {
 		}
 
 		buf, err := ioutil.ReadFile(filename)
-
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -96,17 +145,12 @@ func loadConfig(filenames []string) (*Config, error) {
 			return nil, err
 		}
 
-		tree, ret := hclsyntax.ParseConfig(buf, filename, hcl.Pos{Line: 1, Column: 1})
-		if ret.HasErrors() {
-			return nil, ret
+		cfg, err := parseConfig(filename, buf)
+		if err != nil {
+			return nil, err
 		}
 
-		var cfg Config
-		ret = gohcl.DecodeBody(tree.Body, nil, &cfg)
-		if ret.HasErrors() {
-			return nil, ret
-		}
-		return &cfg, nil
+		return cfg, nil
 	}
 
 	return nil, nil

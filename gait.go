@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/leftmike/gait/config"
 	"github.com/tmc/langchaingo/llms"
 )
 
@@ -31,11 +32,11 @@ func fatal(msg string, err error) {
 }
 
 func main() {
-	cfg, err := loadConfig(configFilenames())
+	cfg, err := config.Load(configFilenames())
 	if err != nil {
 		fatal("load config", err)
 	}
-	provider, model, apikey, opts, err := options(cfg)
+	provider, model, apikey, opts, err := config.Options(cfg)
 	if err != nil {
 		fatal("options", err)
 	}
@@ -46,7 +47,7 @@ func main() {
 	}
 
 	if IsTerminal() {
-		if verbose {
+		if config.Verbose {
 			fmt.Printf("%s: %s\n", provider, model)
 		}
 

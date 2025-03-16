@@ -54,7 +54,7 @@ func Interact(llm llms.Model, opts []llms.CallOption, historyFilename string) er
 		if err != nil {
 			return err
 		}
-		fmt.Println(s, "\n")
+		fmt.Print(s, "\n\n")
 	}
 
 	return nil

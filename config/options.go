@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"errors"
@@ -9,6 +9,9 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 )
+
+// Verbose indicates whether to output verbose information
+var Verbose bool
 
 var (
 	intModelOptions = map[string]*struct {
@@ -51,8 +54,6 @@ var (
 			with:  llms.WithPresencePenalty,
 		},
 	}
-
-	verbose bool
 )
 
 func optionalFields(typ reflect.Type, field func(fdx int, name string)) {
@@ -68,9 +69,11 @@ func optionalFields(typ reflect.Type, field func(fdx int, name string)) {
 	}
 }
 
-func options(cfg *Config) (string, string, string, []llms.CallOption, error) {
-	flag.BoolVar(&verbose, "verbose", false, "verbose output")
-	flag.BoolVar(&verbose, "v", false, "verbose output")
+// Options processes command line options and configuration settings
+// to determine provider, model, API key, and LLM options.
+func Options(cfg *Config) (string, string, string, []llms.CallOption, error) {
+	flag.BoolVar(&Verbose, "verbose", false, "verbose output")
+	flag.BoolVar(&Verbose, "v", false, "verbose output")
 
 	providerFlag := flag.String("provider", "", "generate using this llm `provider`")
 	modelFlag := flag.String("model", "", "generate using this llm `model`")
@@ -97,7 +100,7 @@ func options(cfg *Config) (string, string, string, []llms.CallOption, error) {
 
 		provider = cfg.Provider
 	}
-	p := cfg.FindProvider(provider)
+	p := cfg.findProvider(provider)
 
 	apikey := *apikeyFlag
 	if apikey == "" {
@@ -116,7 +119,7 @@ func options(cfg *Config) (string, string, string, []llms.CallOption, error) {
 
 		model = p.Model
 	}
-	m := cfg.FindModel(provider, model)
+	m := cfg.findModel(provider, model)
 
 	var opts []llms.CallOption
 
@@ -126,24 +129,24 @@ func options(cfg *Config) (string, string, string, []llms.CallOption, error) {
 			if opt, ok := intModelOptions[name]; ok {
 				if opt.val != 0 {
 					opts = append(opts, opt.with(opt.val))
-					if verbose {
+					if Verbose {
 						fmt.Printf("flag: %s: %v\n", name, opt.val)
 					}
 				} else if ip := val.Field(fdx).Interface().(*int); ip != nil && *ip != 0 {
 					opts = append(opts, opt.with(*ip))
-					if verbose {
+					if Verbose {
 						fmt.Printf("config: %s: %v\n", name, *ip)
 					}
 				}
 			} else if opt, ok := float64ModelOptions[name]; ok {
 				if opt.val != 0.0 {
 					opts = append(opts, opt.with(opt.val))
-					if verbose {
+					if Verbose {
 						fmt.Printf("flag: %s: %v\n", name, opt.val)
 					}
 				} else if fp := val.Field(fdx).Interface().(*float64); fp != nil && *fp != 0.0 {
 					opts = append(opts, opt.with(*fp))
-					if verbose {
+					if Verbose {
 						fmt.Printf("config: %s: %v\n", name, *fp)
 					}
 				}
