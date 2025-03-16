@@ -48,10 +48,6 @@ type Config struct {
 }
 
 func match(pattern, str string) bool {
-	if pattern == "" {
-		return true
-	}
-
 	if pattern == str {
 		return true
 	}

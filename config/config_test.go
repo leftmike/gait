@@ -11,9 +11,6 @@ func TestMatch(t *testing.T) {
 		str string
 		ret bool
 	}{
-		// Empty pattern matches anything
-		{"", "anything", true},
-
 		// Exact match
 		{"exact", "exact", true},
 		{"exact", "notexact", false},
@@ -106,6 +103,8 @@ func TestValidateConfig(t *testing.T) {
 
 func TestParseConfig(t *testing.T) {
 	maxTokens8192 := 8192
+	maxTokens4096 := 4096
+	maxTokens2048 := 2048
 	temperature07 := 0.7
 
 	tests := []struct {
@@ -115,24 +114,20 @@ func TestParseConfig(t *testing.T) {
 	}{
 		{
 			buf: `
-				provider="openai"
-				provider openai {
-					model="gpt-4"
-					api_key="test-key"
-				}
-				model openai gpt-4 {
-					max_tokens=8192
-					temperature=0.7
-				}
-			`,
+provider="openai"
+provider openai {
+	model="gpt-4"
+	api_key="test-key"
+}
+model openai gpt-4 {
+	max_tokens=8192
+	temperature=0.7
+}
+`,
 			config: &Config{
 				Provider: "openai",
 				Providers: []Provider{
-					{
-						Name:   "openai",
-						Model:  "gpt-4",
-						APIKey: "test-key",
-					},
+					{Name: "openai", Model: "gpt-4", APIKey: "test-key"},
 				},
 				Models: []Model{
 					{
@@ -147,27 +142,59 @@ func TestParseConfig(t *testing.T) {
 		},
 		{
 			buf: `
-				provider="openai"
-				provider openai {
-					api_key="test-key"
-				}
-				model openai "*" {
-					max_tokens=8192
-				}
-			`,
+provider="openai"
+provider openai {
+	api_key="test-key"
+}
+model openai "*" {
+	max_tokens=8192
+}
+`,
 			config: &Config{
 				Provider: "openai",
 				Providers: []Provider{
-					{
-						Name:   "openai",
-						APIKey: "test-key",
-					},
+					{Name: "openai", APIKey: "test-key"},
 				},
 				Models: []Model{
+					{Provider: "openai", Name: "*", MaxTokens: &maxTokens8192},
+				},
+			},
+			fail: false,
+		},
+		{
+			buf: `
+provider="openai"
+provider openai {
+	api_key="test-key"
+}
+model openai "gpt-4o-mini" {
+	max_tokens=4096
+}
+model openai "*" {
+	max_tokens=8192
+}
+provider "anthropic" {
+	api_key="api-key"
+}
+model anthropic "claude-3-7-sonnet" {
+	max_tokens=2048
+	temperature=0.7
+}
+`,
+			config: &Config{
+				Provider: "openai",
+				Providers: []Provider{
+					{Name: "openai", APIKey: "test-key"},
+					{Name: "anthropic", APIKey: "api-key"},
+				},
+				Models: []Model{
+					{Provider: "openai", Name: "gpt-4o-mini", MaxTokens: &maxTokens4096},
+					{Provider: "openai", Name: "*", MaxTokens: &maxTokens8192},
 					{
-						Provider:  "openai",
-						Name:      "*",
-						MaxTokens: &maxTokens8192,
+						Provider:    "anthropic",
+						Name:        "claude-3-7-sonnet",
+						MaxTokens:   &maxTokens2048,
+						Temperature: &temperature07,
 					},
 				},
 			},
@@ -175,25 +202,25 @@ func TestParseConfig(t *testing.T) {
 		},
 		{
 			buf: `
-				provider="openai"
-				provider openai {
-					api_key="test-key"
-				
-				// Missing closing brace
-			`,
+provider="openai"
+provider openai {
+	api_key="test-key"
+
+// Missing closing brace
+`,
 			config: nil,
 			fail:   true,
 		},
 		{
 			buf: `
-				provider="openai"
-				provider openai {
-					api_key="test-key"
-				}
-				model openai "[invalid" {
-					max_tokens=8192
-				}
-			`,
+provider="openai"
+provider openai {
+	api_key="test-key"
+}
+model openai "[invalid" {
+	max_tokens=8192
+}
+`,
 			config: nil,
 			fail:   true,
 		},
