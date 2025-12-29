@@ -44,7 +44,11 @@ func (m *openAIModel) Generate(ctx context.Context, s string, tools Tools, opts 
 
 	var reasoningParam responses.ReasoningParam
 	if opts != nil && opts.Summary {
-		reasoningParam.Summary = "detailed"
+		if opts.Verbose {
+			reasoningParam.Summary = "detailed"
+		} else {
+			reasoningParam.Summary = "concise"
+		}
 	}
 
 	rsp, err := m.client.Responses.New(ctx,

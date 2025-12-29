@@ -50,7 +50,9 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// XXX: if verbose { fmt.Println(provider, modelName) }
+	if verbose {
+		fmt.Println(provider, modelName)
+	}
 
 	ctx := context.Background()
 	line := liner.NewLiner()

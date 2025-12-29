@@ -2,7 +2,8 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
+	"os"
 	"runtime"
 	"strings"
 
@@ -40,14 +41,17 @@ func configFilenames() []string {
 	return []string{"~/.gait/gait.hcl", "~/.gait.hcl", "./gait.hcl"}
 }
 
-func readConfig() (Config, error) {
-	var cfg Config
-	err := hclsimple.DecodeFile("gait.hcl", nil, &cfg)
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %s", err)
+func readConfig(filenames []string) (Config, error) {
+	for _, name := range filenames {
+		buf, err := os.ReadFile(name)
+		if err == nil {
+			var cfg Config
+			err := hclsimple.Decode(name, buf, nil, &cfg)
+			return cfg, err
+		}
 	}
 
-	return cfg, nil
+	return Config{}, fmt.Errorf("config file not found: %v", filenames)
 }
 
 var (
@@ -73,11 +77,17 @@ func options() (string, string, string, *model.Options, error) {
 	flag.Parse()
 
 	if !noConfig {
-		// XXX: default filenames; configFilename
-		cfg, err := readConfig()
+		var filenames []string
+		if configFilename != "" {
+			filenames = []string{configFilename}
+		} else {
+			filenames = configFilenames()
+		}
+		cfg, err := readConfig(filenames)
 		if err != nil {
 			return "", "", "", nil, err
 		}
+
 		if provider == "" {
 			provider = cfg.Provider
 		}
