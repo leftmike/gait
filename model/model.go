@@ -6,7 +6,7 @@ import (
 )
 
 type Model interface {
-	Generate(ctx context.Context, st *State, tools Tools, opts *Options) (int, error)
+	Generate(ctx context.Context, st *State, tools Tools, opts *Options) error
 }
 
 type Tool struct {

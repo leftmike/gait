@@ -93,12 +93,14 @@ func main() {
 		}
 
 		st.Prompt(s)
-		cnt, err := mdl.Generate(ctx, &st, tools, opts)
+		n := len(st.Steps)
+		err = mdl.Generate(ctx, &st, tools, opts)
 		if err != nil {
 			log.Fatalln(err)
 		}
-		for n := len(st.Steps) - cnt; n < len(st.Steps); n += 1 {
+		for n < len(st.Steps) {
 			step := st.Steps[n]
+
 			switch step.Type {
 			case model.PromptStep:
 				panic("did not expect prompt step in model output")
@@ -117,6 +119,8 @@ func main() {
 					fmt.Println("Tool Output: ", step.Content)
 				}
 			}
+
+			n += 1
 		}
 	}
 }

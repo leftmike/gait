@@ -49,7 +49,7 @@ var (
 	}
 )
 
-func (m *openAIModel) generate(ctx context.Context, st *State, tools Tools, opts *Options) error {
+func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts *Options) error {
 	var reasoningParam responses.ReasoningParam
 	if opts != nil && opts.Summary {
 		if opts.Verbose {
@@ -117,15 +117,4 @@ func (m *openAIModel) generate(ctx context.Context, st *State, tools Tools, opts
 	}
 
 	return nil
-}
-
-func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts *Options) (int,
-	error) {
-
-	cnt := len(st.Steps)
-	err := m.generate(ctx, st, tools, opts)
-	if err != nil {
-		return 0, err
-	}
-	return len(st.Steps) - cnt, nil
 }
