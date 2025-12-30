@@ -13,7 +13,6 @@ import (
 )
 
 func getWeather(args json.RawMessage) string {
-	fmt.Println("tool call: ", args)
 	return "It is 75 degrees and sunny."
 }
 
@@ -83,6 +82,7 @@ func main() {
 		},
 	}
 
+	var st model.State
 	for {
 		s, err := line.Prompt("> ")
 		if err == io.EOF {
@@ -92,10 +92,31 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		s, err = mdl.Generate(ctx, s, tools, opts)
+		st.Prompt(s)
+		cnt, err := mdl.Generate(ctx, &st, tools, opts)
 		if err != nil {
 			log.Fatalln(err)
 		}
-		fmt.Println(s)
+		for n := len(st.Steps) - cnt; n < len(st.Steps); n += 1 {
+			step := st.Steps[n]
+			switch step.Type {
+			case model.PromptStep:
+				panic("did not expect prompt step in model output")
+			case model.ModelResponseStep:
+				fmt.Println(step.Content)
+			case model.ReasoningStep:
+				if opts.Summary {
+					fmt.Printf("[%s]\n", step.Content)
+				}
+			case model.ToolCallStep:
+				if opts.Verbose {
+					fmt.Println("Tool Call: ", step.Content)
+				}
+			case model.ToolOutputStep:
+				if opts.Verbose {
+					fmt.Println("Tool Output: ", step.Content)
+				}
+			}
+		}
 	}
 }
