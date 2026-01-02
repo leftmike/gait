@@ -22,46 +22,12 @@ var (
 		},
 		Func: func(city, state, country string) (string, error) {
 			if verbose {
-				fmt.Printf("$$ city: %s state: %s country: %s\n $$", city, state, country)
+				fmt.Printf("$$ city: %s state: %s country: %s $$\n", city, state, country)
 			}
 			return fmt.Sprintf("It is 75 degrees and sunny in %s.", city), nil
 		},
 	}
 )
-
-/*
-		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"city": map[string]any{
-					"type":        "string",
-					"description": "The city to get the weather for",
-				},
-				"state": map[string]any{
-					"type":        "string",
-					"description": "The state of the city",
-				},
-				"country": map[string]any{
-					"type":        "string",
-					"description": "The country of the city",
-				},
-			},
-			"requried": []string{"city", "country"},
-		},
-		Function: getWeather,
-
-func (w weatherTool) Run(ctx context.Context, args json.RawMessage) (string, error) {
-	var p struct {
-		City    string `json:"city"`
-		State   string `json:"state"`
-		Country string `json:"country"`
-	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", err
-	}
-
-return fmt.Sprintf("It's sunny and 75 degrees in %s %s, %s", p.City, p.State, p.Country), nil
-*/
 
 func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Model, error) {
 	if strings.EqualFold(provider, "openai") {

@@ -7,7 +7,7 @@ import (
 	"github.com/leftmike/gait/model"
 )
 
-func TestBuild(t *testing.T) {
+func TestToolBuild(t *testing.T) {
 	cases := []struct {
 		tl   model.Tool
 		fail bool
@@ -102,6 +102,20 @@ func TestBuild(t *testing.T) {
 				},
 				Func: func(s1, s2, s3 string) (string, error) {
 					return s1 + s2 + s3, nil
+				},
+			},
+			fail: true,
+		},
+		{
+			tl: model.Tool{
+				Name:        "test8",
+				Description: "test function 8",
+				Args: []model.ToolArg{
+					{Arg: "s1", Description: "string 1"},
+					{Arg: "s2", Description: "string 2"},
+				},
+				Func: func(s1 string, s2 ...string) (string, error) {
+					return s1, nil
 				},
 			},
 			fail: true,

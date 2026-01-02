@@ -10,5 +10,6 @@ type Model interface {
 
 type Options struct {
 	Verbose bool
+	Trace   bool
 	Summary bool
 }

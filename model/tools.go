@@ -14,13 +14,15 @@ type Tool struct {
 	Description string
 	Args        []ToolArg
 	Func        any
-	typ         reflect.Type
+	val         reflect.Value
+	built       bool
 }
 
 type ToolArg struct {
-	Arg         string
+	Arg         string // XXX: change to Name
 	Description string
 	Optional    bool
+	typ         reflect.Type
 }
 
 func (tls Tools) Build() error {
@@ -34,10 +36,10 @@ func (tls Tools) Build() error {
 	return nil
 }
 
-func (tls Tools) Call(name string, args json.RawMessage) (string, error) {
+func (tls Tools) Call(name string, args json.RawMessage, opts *Options) (string, error) {
 	for _, tl := range tls {
 		if tl.Name == name {
-			return tl.Call(args)
+			return tl.Call(args, opts)
 		}
 	}
 
@@ -49,23 +51,28 @@ var (
 )
 
 func (tl *Tool) Build() error {
-	if tl.typ != nil {
+	if tl.built {
 		return nil
 	}
 
 	typ := reflect.TypeOf(tl.Func)
 	if typ.Kind() != reflect.Func {
-		return fmt.Errorf("expected a function: %T", tl.Func)
+		return fmt.Errorf("expected a function: %s %T", tl.Name, tl.Func)
+	}
+
+	if typ.IsVariadic() {
+		return fmt.Errorf("function must not be variadic: %s", tl.Name)
 	}
 
 	numArgs := typ.NumIn()
 	if numArgs != len(tl.Args) {
-		return errors.New("args must match function arguments")
+		return fmt.Errorf("args must match function arguments: %s", tl.Name)
 	}
 
-	// XXX: build up the parameters based on the typ
 	for i := 0; i < numArgs; i += 1 {
-		fmt.Println("in:", i, typ.In(i).Name())
+		atyp := typ.In(i)
+		// XXX: check the atyp
+		tl.Args[i].typ = atyp
 	}
 
 	if typ.NumOut() != 2 || typ.Out(0).Kind() != reflect.String ||
@@ -74,15 +81,48 @@ func (tl *Tool) Build() error {
 		return errors.New("expected a function that returns (string, error)")
 	}
 
-	tl.typ = typ
+	tl.val = reflect.ValueOf(tl.Func)
+	tl.built = true
 	return nil
 }
 
-func (tl *Tool) Call(args json.RawMessage) (string, error) {
-	if tl.typ == nil {
-		panic(fmt.Sprintf("tool %s must be built before use", tl.Name))
+// XXX: switch to []byte for the type?
+func (tl *Tool) Call(buf json.RawMessage, opts *Options) (string, error) {
+	if !tl.built {
+		panic(fmt.Sprintf("tool must be built before use: %s", tl.Name))
 	}
 
-	// XXX
-	return "", nil
+	var jsonArgs map[string]json.RawMessage
+	err := json.Unmarshal(buf, &jsonArgs)
+	if err != nil {
+		return "", err
+	}
+
+	args := make([]reflect.Value, len(tl.Args))
+	for i, arg := range tl.Args {
+		buf, ok := jsonArgs[arg.Arg]
+		if !ok {
+			if !arg.Optional {
+				return "", fmt.Errorf("missing required argument: %s", arg.Arg)
+			}
+			continue
+		}
+
+		val := reflect.New(arg.typ)
+		err := json.Unmarshal(buf, val.Interface())
+		if err != nil {
+			return "", err
+		}
+		args[i] = val.Elem()
+	}
+
+	ret := tl.val.Call(args)
+	if len(ret) != 2 || !ret[1].Type().Implements(errorType) {
+		panic("XXX")
+	}
+
+	if !ret[1].IsNil() {
+		return "", ret[1].Interface().(error)
+	}
+	return ret[0].Interface().(string), nil
 }

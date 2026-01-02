@@ -11,6 +11,11 @@ import (
 	"github.com/leftmike/gait/model"
 )
 
+var (
+	verbose bool
+	trace   bool
+)
+
 type Provider struct {
 	Name    string `hcl:"name,label"`
 	Model   string `hcl:"model,optional"`
@@ -54,10 +59,6 @@ func readConfig(filenames []string) (Config, error) {
 	return Config{}, fmt.Errorf("config file not found: %v", filenames)
 }
 
-var (
-	verbose bool
-)
-
 func options() (string, string, string, *model.Options, error) {
 	var configFilename string
 	var noConfig bool
@@ -68,6 +69,8 @@ func options() (string, string, string, *model.Options, error) {
 
 	flag.BoolVar(&verbose, "verbose", false, "verbose output")
 	flag.BoolVar(&verbose, "v", false, "verbose output")
+	flag.BoolVar(&trace, "trace", false, "trace llm interaction")
+	flag.BoolVar(&trace, "t", false, "trace llm interaction")
 	flag.StringVar(&configFilename, "config", "", "config filename")
 	flag.BoolVar(&noConfig, "no-config", false, "do not load config")
 	flag.StringVar(&provider, "provider", "", "generate using this llm `provider`")
@@ -107,6 +110,7 @@ func options() (string, string, string, *model.Options, error) {
 
 	return provider, modelName, apiKey, &model.Options{
 		Verbose: verbose,
+		Trace:   trace,
 		Summary: summary,
 	}, nil
 }
