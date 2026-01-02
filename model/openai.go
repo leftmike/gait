@@ -26,13 +26,13 @@ func NewOpenAIModel(name, apiKey string, opts *Options) (Model, error) {
 
 func openAIToolParams(tools Tools) []responses.ToolUnionParam {
 	var toolParams []responses.ToolUnionParam
-	for name, tool := range tools {
+	for _, tl := range tools {
 		toolParams = append(toolParams,
 			responses.ToolUnionParam{
 				OfFunction: &responses.FunctionToolParam{
-					Parameters:  tool.Parameters, // XXX: generate based on the Function
-					Name:        name,
-					Description: param.NewOpt(tool.Description),
+					//Parameters:  tl.Parameters, // XXX: generate based on typ
+					Name:        tl.Name,
+					Description: param.NewOpt(tl.Description),
 				},
 			})
 	}
@@ -102,8 +102,10 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 			case "function_call":
 				toolCalls = true
 				st.appendStep(ToolCallStep, fmt.Sprintf("%s(%s)", rspItem.Name, rspItem.Arguments))
-				// XXX: check for the name
-				out := tools[rspItem.Name].Function(json.RawMessage(rspItem.Arguments))
+				out, err := tools.Call(rspItem.Name, json.RawMessage(rspItem.Arguments))
+				if err != nil {
+					out = fmt.Sprintf("error: %s", err)
+				}
 				st.appendStep(ToolOutputStep, out)
 
 			default:
