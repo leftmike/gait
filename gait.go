@@ -16,9 +16,9 @@ var (
 		Name:        "get_weather",
 		Description: "Gets the current weather for the given city",
 		Args: []model.ToolArg{
-			{Arg: "city", Description: "The city to get the weather for"},
-			{Arg: "state", Description: "The state of the city", Optional: true},
-			{Arg: "country", Description: "The country of the city"},
+			{Name: "city", Description: "The city to get the weather for"},
+			{Name: "state", Description: "The state of the city", Optional: true},
+			{Name: "country", Description: "The country of the city"},
 		},
 		Func: func(city, state, country string) (string, error) {
 			if verbose {

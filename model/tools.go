@@ -19,7 +19,7 @@ type Tool struct {
 }
 
 type ToolArg struct {
-	Arg         string // XXX: change to Name
+	Name        string
 	Description string
 	Optional    bool
 	typ         reflect.Type
@@ -100,10 +100,10 @@ func (tl *Tool) Call(buf json.RawMessage, opts *Options) (string, error) {
 
 	args := make([]reflect.Value, len(tl.Args))
 	for i, arg := range tl.Args {
-		buf, ok := jsonArgs[arg.Arg]
+		buf, ok := jsonArgs[arg.Name]
 		if !ok {
 			if !arg.Optional {
-				return "", fmt.Errorf("missing required argument: %s", arg.Arg)
+				return "", fmt.Errorf("missing required argument: %s", arg.Name)
 			}
 			continue
 		}

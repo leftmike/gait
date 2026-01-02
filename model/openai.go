@@ -49,12 +49,12 @@ func toOpenAIToolParams(tl *Tool) map[string]any {
 	props := map[string]any{}
 	var req []string
 	for _, arg := range tl.Args {
-		props[arg.Arg] = map[string]any{
+		props[arg.Name] = map[string]any{
 			"type":        "string", // XXX
 			"description": arg.Description,
 		}
 		if !arg.Optional {
-			req = append(req, arg.Arg)
+			req = append(req, arg.Name)
 		}
 	}
 
