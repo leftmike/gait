@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/openai/openai-go/v2"
@@ -45,12 +46,38 @@ func NewOpenAIModel(name, apiKey string, opts *Options) (Model, error) {
 	},
 */
 
+var (
+	openAIKind = map[reflect.Kind]string{
+		reflect.Bool:    "boolean",
+		reflect.Int:     "integer",
+		reflect.Int8:    "integer",
+		reflect.Int16:   "integer",
+		reflect.Int32:   "integer",
+		reflect.Int64:   "integer",
+		reflect.Uint:    "integer",
+		reflect.Uint8:   "integer",
+		reflect.Uint16:  "integer",
+		reflect.Uint32:  "integer",
+		reflect.Uint64:  "integer",
+		reflect.Float32: "number",
+		reflect.Float64: "number",
+		reflect.String:  "string",
+	}
+)
+
 func toOpenAIToolParams(tl *Tool) map[string]any {
 	props := map[string]any{}
 	var req []string
 	for _, arg := range tl.Args {
+		s, ok := openAIKind[arg.typ.Kind()]
+		if !ok {
+			panic(fmt.Sprintf("openai tool argument type not supported: %s %s %s", tl.Name,
+				arg.Name, arg.typ))
+		}
+
 		props[arg.Name] = map[string]any{
-			"type":        "string", // XXX
+			// null, boolean, object, array, number, string, integer
+			"type":        s,
 			"description": arg.Description,
 		}
 		if !arg.Optional {

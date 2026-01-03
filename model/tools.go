@@ -48,6 +48,22 @@ func (tls Tools) Call(name string, args json.RawMessage, opts *Options) (string,
 
 var (
 	errorType = reflect.TypeOf((*error)(nil)).Elem()
+
+	invalidKind = [reflect.UnsafePointer + 1]bool{
+		reflect.Invalid:       true,
+		reflect.Uintptr:       true,
+		reflect.Complex64:     true,
+		reflect.Complex128:    true,
+		reflect.Array:         true,
+		reflect.Chan:          true,
+		reflect.Func:          true,
+		reflect.Interface:     true,
+		reflect.Map:           true,
+		reflect.Pointer:       true,
+		reflect.Slice:         true,
+		reflect.Struct:        true,
+		reflect.UnsafePointer: true,
+	}
 )
 
 func (tl *Tool) Build() error {
@@ -71,7 +87,10 @@ func (tl *Tool) Build() error {
 
 	for i := 0; i < numArgs; i += 1 {
 		atyp := typ.In(i)
-		// XXX: check the atyp
+		kind := atyp.Kind()
+		if invalidKind[kind] {
+			return fmt.Errorf("invalid parameter type: %s %s", tl.Name, kind)
+		}
 		tl.Args[i].typ = atyp
 	}
 
@@ -118,7 +137,7 @@ func (tl *Tool) Call(buf json.RawMessage, opts *Options) (string, error) {
 
 	ret := tl.val.Call(args)
 	if len(ret) != 2 || !ret[1].Type().Implements(errorType) {
-		panic("XXX")
+		panic(fmt.Sprintf("unexpected: %s should return (string, error)", tl.Name))
 	}
 
 	if !ret[1].IsNil() {
