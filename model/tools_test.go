@@ -1,12 +1,37 @@
-package model_test
+package model
 
 import (
-	"fmt"
 	"testing"
-
-	"github.com/leftmike/gait/model"
 )
 
+func TestFieldNameToJSON(t *testing.T) {
+	cases := []struct {
+		nam, json string
+	}{
+		{"UserID", "user_id"},
+		{"URLValue", "url_value"},
+		{"CreatedAt", "created_at"},
+		{"HTTPRequest", "http_request"},
+		{"Xyz", "xyz"},
+		{"xyz", "xyz"},
+		{"XyZ", "xy_z"},
+		{"xyZ", "xy_z"},
+		{"XYZ", "xyz"},
+		{"abcDef", "abc_def"},
+		{"AbcDef", "abc_def"},
+		{"abcDEFGhi", "abc_def_ghi"},
+		{"AbcDEFGhi", "abc_def_ghi"},
+	}
+
+	for _, c := range cases {
+		json := fieldNameToJSON(c.nam)
+		if json != c.json {
+			t.Errorf("fieldNameToJSON(%s) got %s want %s", c.nam, json, c.json)
+		}
+	}
+}
+
+/*
 func TestToolBuild(t *testing.T) {
 	cases := []struct {
 		tl   model.Tool
@@ -133,3 +158,4 @@ func TestToolBuild(t *testing.T) {
 		}
 	}
 }
+*/

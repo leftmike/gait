@@ -1,51 +1,166 @@
 package model
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
+	"strings"
+	"unicode"
 )
 
-type Tools []*Tool
+type Tools []Tool
+
+type ToolFunc func(buf []byte) (string, error)
 
 type Tool struct {
 	Name        string
 	Description string
-	Args        []ToolArg
-	Func        any
-	val         reflect.Value
-	built       bool
+	Func        ToolFunc
+	Schema      *ToolSchema
 }
 
+type ToolSchema struct {
+	schema map[string]any
+	typ    reflect.Type
+}
+
+var (
+	kindToJSONType = map[reflect.Kind]string{
+		reflect.Bool:    "boolean",
+		reflect.Int:     "integer",
+		reflect.Int8:    "integer",
+		reflect.Int16:   "integer",
+		reflect.Int32:   "integer",
+		reflect.Int64:   "integer",
+		reflect.Uint:    "integer",
+		reflect.Uint8:   "integer",
+		reflect.Uint16:  "integer",
+		reflect.Uint32:  "integer",
+		reflect.Uint64:  "integer",
+		reflect.Float32: "number",
+		reflect.Float64: "number",
+		reflect.String:  "string",
+	}
+)
+
+func fieldNameToJSON(s string) string {
+	rs := []rune(s)
+	nam := make([]rune, 0, len(rs))
+	for i, r := range rs {
+		if unicode.IsUpper(r) {
+			if i > 0 && (unicode.IsLower(rs[i-1]) || (i < len(rs)-1 && unicode.IsLower(rs[i+1]))) {
+				nam = append(nam, '_')
+			}
+			nam = append(nam, unicode.ToLower(r))
+		} else {
+			nam = append(nam, r)
+		}
+	}
+
+	return string(nam)
+}
+
+func NewToolSchema[T any]() (*ToolSchema, error) {
+	typ := reflect.TypeFor[T]()
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("tool arguments must be a (pointer to a) struct: %s", typ)
+	}
+
+	var req []string
+	props := map[string]any{}
+	for i := 0; i < typ.NumField(); i += 1 {
+		var name, desc string
+		var optional bool
+
+		fld := typ.Field(i)
+		jt, ok := fld.Tag.Lookup("json")
+		if ok {
+			vals := strings.Split(jt, ",")
+			name = vals[0]
+			for j := 1; j < len(vals); j += 1 {
+				if vals[j] == "omitzero" || vals[j] == "omitempty" {
+					optional = true
+				}
+			}
+		}
+		gt, ok := fld.Tag.Lookup("gait")
+		if ok {
+			if vals := strings.Split(gt, ","); len(vals) > 1 {
+				return nil, fmt.Errorf("only one value allowed for gait tag: %s: %s",
+					fld.Name, gt)
+			}
+			desc = gt
+		}
+
+		ftyp := fld.Type
+		if ftyp.Kind() == reflect.Pointer {
+			optional = true
+			ftyp = ftyp.Elem()
+		}
+
+		if name == "" {
+			name = fieldNameToJSON(fld.Name)
+		}
+		if desc == "" {
+			desc = name
+		}
+
+		// XXX: struct, array, slice; fail on bad types
+		props[name] = map[string]any{
+			"type":        kindToJSONType[ftyp.Kind()],
+			"description": desc,
+		}
+
+		if !optional {
+			req = append(req, name)
+		}
+	}
+
+	scm := map[string]any{
+		"type":       "object",
+		"properties": props,
+	}
+	if len(req) > 0 {
+		scm["required"] = req
+	}
+
+	return &ToolSchema{
+		schema: scm,
+		typ:    typ,
+	}, nil
+}
+
+func MustToolSchema[T any]() *ToolSchema {
+	ts, err := NewToolSchema[T]()
+	if err != nil {
+		var v T
+		panic(fmt.Sprintf("new tool schema failed: %T: %s", v, err))
+	}
+	return ts
+}
+
+/*
 type ToolArg struct {
 	Name        string
 	Description string
 	Optional    bool
 	typ         reflect.Type
 }
-
-func (tls Tools) Build() error {
-	for _, tl := range tls {
-		err := tl.Build()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
+*/
 
 func (tls Tools) Call(name string, args []byte, opts *Options) (string, error) {
 	for _, tl := range tls {
 		if tl.Name == name {
-			return tl.Call(args, opts)
+			return tl.Func(args)
 		}
 	}
 
 	return "", fmt.Errorf("function not found: %s", name)
 }
 
+/*
 var (
 	errorType = reflect.TypeOf((*error)(nil)).Elem()
 
@@ -65,11 +180,6 @@ var (
 		reflect.UnsafePointer: true,
 	}
 )
-
-/*
-Consider using https://github.com/google/jsonschema-go
-https://pkg.go.dev/github.com/google/jsonschema-go@v0.4.2/jsonschema#pkg-overview
-*/
 
 func (tl *Tool) Build() error {
 	if tl.built {
@@ -149,3 +259,4 @@ func (tl *Tool) Call(buf []byte, opts *Options) (string, error) {
 	}
 	return ret[0].Interface().(string), nil
 }
+*/

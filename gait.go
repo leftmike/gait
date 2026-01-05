@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,23 +12,24 @@ import (
 	"github.com/peterh/liner"
 )
 
-var (
-	getWeatherTool = model.Tool{
-		Name:        "get_weather",
-		Description: "Gets the current weather for the given city",
-		Args: []model.ToolArg{
-			{Name: "city", Description: "The city to get the weather for"},
-			{Name: "state", Description: "The state of the city", Optional: true},
-			{Name: "country", Description: "The country of the city"},
-		},
-		Func: func(city, state, country string) (string, error) {
-			if verbose {
-				fmt.Printf("$$ city: %s state: %s country: %s $$\n", city, state, country)
-			}
-			return fmt.Sprintf("It is 75 degrees and sunny in %s.", city), nil
-		},
+type getWeatherArgs struct {
+	City    string `json:"city" jsonschema:"the city to get the weather for"`
+	State   string `json:"state,omitzero" jsonschema:"the state of the city"`
+	Country string `json:"country" jsonschema:"the country of the city"`
+}
+
+func getWeather(buf []byte) (string, error) {
+	var args getWeatherArgs
+	err := json.Unmarshal(buf, &args)
+	if err != nil {
+		return "", err
 	}
-)
+
+	if verbose {
+		fmt.Printf("$$ city: %s state: %s country: %s $$\n", args.City, args.State, args.Country)
+	}
+	return fmt.Sprintf("It is 75 degrees and sunny in %s.", args.City), nil
+}
 
 func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Model, error) {
 	if strings.EqualFold(provider, "openai") {
@@ -53,10 +55,14 @@ func main() {
 	}
 
 	tools := model.Tools{
-		&getWeatherTool,
+		{
+			Name:        "get_weather",
+			Description: "Gets the current weather for the given city",
+			Func:        getWeather,
+			Schema:      model.MustToolSchema[getWeatherArgs](),
+		},
 	}
 
-	err = tools.Build()
 	if err != nil {
 		log.Fatalln(err)
 	}
