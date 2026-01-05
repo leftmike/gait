@@ -4,6 +4,10 @@ import (
 	"testing"
 )
 
+/*
+test typeToSchema
+*/
+
 func TestFieldNameToJSON(t *testing.T) {
 	cases := []struct {
 		nam, json string

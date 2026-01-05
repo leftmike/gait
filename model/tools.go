@@ -24,7 +24,7 @@ type ToolSchema struct {
 }
 
 var (
-	kindToJSONType = map[reflect.Kind]string{
+	kindToSimpleJSONType = map[reflect.Kind]string{
 		reflect.Bool:    "boolean",
 		reflect.Int:     "integer",
 		reflect.Int8:    "integer",
@@ -59,15 +59,7 @@ func fieldNameToJSON(s string) string {
 	return string(nam)
 }
 
-func NewToolSchema[T any]() (*ToolSchema, error) {
-	typ := reflect.TypeFor[T]()
-	if typ.Kind() == reflect.Pointer {
-		typ = typ.Elem()
-	}
-	if typ.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("tool arguments must be a (pointer to a) struct: %s", typ)
-	}
-
+func structToSchema(typ reflect.Type) (map[string]any, error) {
 	var req []string
 	props := map[string]any{}
 	for i := 0; i < typ.NumField(); i += 1 {
@@ -103,15 +95,15 @@ func NewToolSchema[T any]() (*ToolSchema, error) {
 		if name == "" {
 			name = fieldNameToJSON(fld.Name)
 		}
-		if desc == "" {
-			desc = name
-		}
 
-		// XXX: struct, array, slice; fail on bad types
-		props[name] = map[string]any{
-			"type":        kindToJSONType[ftyp.Kind()],
-			"description": desc,
+		fscm, err := typeToSchema(ftyp)
+		if err != nil {
+			return nil, err
 		}
+		if desc != "" {
+			fscm["description"] = desc
+		}
+		props[name] = fscm
 
 		if !optional {
 			req = append(req, name)
@@ -125,7 +117,50 @@ func NewToolSchema[T any]() (*ToolSchema, error) {
 	if len(req) > 0 {
 		scm["required"] = req
 	}
+	return scm, nil
+}
 
+func typeToSchema(typ reflect.Type) (map[string]any, error) {
+	kind := typ.Kind()
+	switch kind {
+	case reflect.Struct:
+		return structToSchema(typ)
+
+	case reflect.Array, reflect.Slice:
+		items, err := typeToSchema(typ.Elem())
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"type":  "array",
+			"items": items,
+		}, nil
+
+	default:
+		jsonType, ok := kindToSimpleJSONType[kind]
+		if !ok {
+			return nil, fmt.Errorf("type not supported: %T", typ)
+		}
+
+		return map[string]any{
+			"type": jsonType,
+		}, nil
+	}
+}
+
+func NewToolSchema[T any]() (*ToolSchema, error) {
+	typ := reflect.TypeFor[T]()
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("tool arguments must be a (pointer to a) struct: %s", typ)
+	}
+
+	scm, err := structToSchema(typ)
+	if err != nil {
+		return nil, err
+	}
 	return &ToolSchema{
 		schema: scm,
 		typ:    typ,
@@ -141,15 +176,6 @@ func MustToolSchema[T any]() *ToolSchema {
 	return ts
 }
 
-/*
-type ToolArg struct {
-	Name        string
-	Description string
-	Optional    bool
-	typ         reflect.Type
-}
-*/
-
 func (tls Tools) Call(name string, args []byte, opts *Options) (string, error) {
 	for _, tl := range tls {
 		if tl.Name == name {
@@ -159,104 +185,3 @@ func (tls Tools) Call(name string, args []byte, opts *Options) (string, error) {
 
 	return "", fmt.Errorf("function not found: %s", name)
 }
-
-/*
-var (
-	errorType = reflect.TypeOf((*error)(nil)).Elem()
-
-	invalidKind = [reflect.UnsafePointer + 1]bool{
-		reflect.Invalid:       true,
-		reflect.Uintptr:       true,
-		reflect.Complex64:     true,
-		reflect.Complex128:    true,
-		reflect.Array:         true,
-		reflect.Chan:          true,
-		reflect.Func:          true,
-		reflect.Interface:     true,
-		reflect.Map:           true,
-		reflect.Pointer:       true,
-		reflect.Slice:         true,
-		reflect.Struct:        true,
-		reflect.UnsafePointer: true,
-	}
-)
-
-func (tl *Tool) Build() error {
-	if tl.built {
-		return nil
-	}
-
-	typ := reflect.TypeOf(tl.Func)
-	if typ.Kind() != reflect.Func {
-		return fmt.Errorf("expected a function: %s %T", tl.Name, tl.Func)
-	}
-
-	if typ.IsVariadic() {
-		return fmt.Errorf("function must not be variadic: %s", tl.Name)
-	}
-
-	numArgs := typ.NumIn()
-	if numArgs != len(tl.Args) {
-		return fmt.Errorf("args must match function arguments: %s", tl.Name)
-	}
-
-	for i := 0; i < numArgs; i += 1 {
-		atyp := typ.In(i)
-		kind := atyp.Kind()
-		if invalidKind[kind] {
-			return fmt.Errorf("invalid parameter type: %s %s", tl.Name, kind)
-		}
-		tl.Args[i].typ = atyp
-	}
-
-	if typ.NumOut() != 2 || typ.Out(0).Kind() != reflect.String ||
-		!typ.Out(1).Implements(errorType) {
-
-		return errors.New("expected a function that returns (string, error)")
-	}
-
-	tl.val = reflect.ValueOf(tl.Func)
-	tl.built = true
-	return nil
-}
-
-func (tl *Tool) Call(buf []byte, opts *Options) (string, error) {
-	if !tl.built {
-		panic(fmt.Sprintf("tool must be built before use: %s", tl.Name))
-	}
-
-	var jsonArgs map[string]json.RawMessage
-	err := json.Unmarshal(buf, &jsonArgs)
-	if err != nil {
-		return "", err
-	}
-
-	args := make([]reflect.Value, len(tl.Args))
-	for i, arg := range tl.Args {
-		buf, ok := jsonArgs[arg.Name]
-		if !ok {
-			if !arg.Optional {
-				return "", fmt.Errorf("missing required argument: %s", arg.Name)
-			}
-			continue
-		}
-
-		val := reflect.New(arg.typ)
-		err := json.Unmarshal(buf, val.Interface())
-		if err != nil {
-			return "", err
-		}
-		args[i] = val.Elem()
-	}
-
-	ret := tl.val.Call(args)
-	if len(ret) != 2 || !ret[1].Type().Implements(errorType) {
-		panic(fmt.Sprintf("unexpected: %s should return (string, error)", tl.Name))
-	}
-
-	if !ret[1].IsNil() {
-		return "", ret[1].Interface().(error)
-	}
-	return ret[0].Interface().(string), nil
-}
-*/
