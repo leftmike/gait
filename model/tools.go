@@ -36,7 +36,7 @@ func (tls Tools) Build() error {
 	return nil
 }
 
-func (tls Tools) Call(name string, args json.RawMessage, opts *Options) (string, error) {
+func (tls Tools) Call(name string, args []byte, opts *Options) (string, error) {
 	for _, tl := range tls {
 		if tl.Name == name {
 			return tl.Call(args, opts)
@@ -65,6 +65,11 @@ var (
 		reflect.UnsafePointer: true,
 	}
 )
+
+/*
+Consider using https://github.com/google/jsonschema-go
+https://pkg.go.dev/github.com/google/jsonschema-go@v0.4.2/jsonschema#pkg-overview
+*/
 
 func (tl *Tool) Build() error {
 	if tl.built {
@@ -105,8 +110,7 @@ func (tl *Tool) Build() error {
 	return nil
 }
 
-// XXX: switch to []byte for the type?
-func (tl *Tool) Call(buf json.RawMessage, opts *Options) (string, error) {
+func (tl *Tool) Call(buf []byte, opts *Options) (string, error) {
 	if !tl.built {
 		panic(fmt.Sprintf("tool must be built before use: %s", tl.Name))
 	}

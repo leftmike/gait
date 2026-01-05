@@ -2,7 +2,6 @@ package model
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -217,7 +216,7 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 
 				toolCalls = true
 				st.appendStep(ToolCallStep, fmt.Sprintf("%s(%s)", rspItem.Name, rspItem.Arguments))
-				out, err := tools.Call(rspItem.Name, json.RawMessage(rspItem.Arguments), opts)
+				out, err := tools.Call(rspItem.Name, []byte(rspItem.Arguments), opts)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%q, ", rspItem.Name, out)
 					fmt.Print(err)
