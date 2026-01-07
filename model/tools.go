@@ -23,25 +23,6 @@ type ToolSchema struct {
 	typ    reflect.Type
 }
 
-var (
-	kindToSimpleJSONType = map[reflect.Kind]string{
-		reflect.Bool:    "boolean",
-		reflect.Int:     "integer",
-		reflect.Int8:    "integer",
-		reflect.Int16:   "integer",
-		reflect.Int32:   "integer",
-		reflect.Int64:   "integer",
-		reflect.Uint:    "integer",
-		reflect.Uint8:   "integer",
-		reflect.Uint16:  "integer",
-		reflect.Uint32:  "integer",
-		reflect.Uint64:  "integer",
-		reflect.Float32: "number",
-		reflect.Float64: "number",
-		reflect.String:  "string",
-	}
-)
-
 func fieldNameToJSON(s string) string {
 	rs := []rune(s)
 	nam := make([]rune, 0, len(rs))
@@ -59,8 +40,8 @@ func fieldNameToJSON(s string) string {
 	return string(nam)
 }
 
-func structToSchema(typ reflect.Type) (map[string]any, error) {
-	var req []string
+func structToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
+	var req []any
 	props := map[string]any{}
 	for i := 0; i < typ.NumField(); i += 1 {
 		var name, desc string
@@ -87,16 +68,19 @@ func structToSchema(typ reflect.Type) (map[string]any, error) {
 		}
 
 		ftyp := fld.Type
+		var pointer bool
 		if ftyp.Kind() == reflect.Pointer {
-			optional = true
+			pointer = true
 			ftyp = ftyp.Elem()
 		}
 
-		if name == "" {
+		if name == "-" {
+			continue
+		} else if name == "" {
 			name = fieldNameToJSON(fld.Name)
 		}
 
-		fscm, err := typeToSchema(ftyp)
+		fscm, err := typeToSchema(ftyp, pointer)
 		if err != nil {
 			return nil, err
 		}
@@ -111,40 +95,104 @@ func structToSchema(typ reflect.Type) (map[string]any, error) {
 	}
 
 	scm := map[string]any{
-		"type":       "object",
 		"properties": props,
 	}
 	if len(req) > 0 {
 		scm["required"] = req
 	}
+	if mayBeNull {
+		scm["type"] = []any{"null", "object"}
+	} else {
+		scm["type"] = "object"
+	}
 	return scm, nil
 }
 
-func typeToSchema(typ reflect.Type) (map[string]any, error) {
+var (
+	kindToSimpleJSONType = map[reflect.Kind]string{
+		reflect.Bool:    "boolean",
+		reflect.Int:     "integer",
+		reflect.Int8:    "integer",
+		reflect.Int16:   "integer",
+		reflect.Int32:   "integer",
+		reflect.Int64:   "integer",
+		reflect.Uint:    "integer",
+		reflect.Uint8:   "integer",
+		reflect.Uint16:  "integer",
+		reflect.Uint32:  "integer",
+		reflect.Uint64:  "integer",
+		reflect.Float32: "number",
+		reflect.Float64: "number",
+		reflect.String:  "string",
+	}
+
+	formats = map[reflect.Kind]string{
+		reflect.Int32:   "int32",
+		reflect.Int64:   "int64",
+		reflect.Float32: "float",
+		reflect.Float64: "double",
+	}
+)
+
+func typeToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
 	kind := typ.Kind()
 	switch kind {
 	case reflect.Struct:
-		return structToSchema(typ)
+		return structToSchema(typ, mayBeNull)
 
-	case reflect.Array, reflect.Slice:
-		items, err := typeToSchema(typ.Elem())
+	case reflect.Slice:
+		items, err := typeToSchema(typ.Elem(), false)
 		if err != nil {
 			return nil, err
 		}
 		return map[string]any{
-			"type":  "array",
+			"type":  []interface{}{"null", "array"},
 			"items": items,
+		}, nil
+
+	case reflect.Array:
+		items, err := typeToSchema(typ.Elem(), false)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"type":     "array",
+			"maxItems": float64(typ.Len()),
+			"minItems": float64(typ.Len()),
+			"items":    items,
+		}, nil
+
+	case reflect.Map:
+		if typ.Key().Kind() != reflect.String {
+			return nil, fmt.Errorf("maps must be string-keyed: %s", typ)
+		}
+		vals, err := typeToSchema(typ.Elem(), false)
+		if err != nil {
+			return nil, err
+		}
+
+		return map[string]any{
+			"type":                 "object",
+			"additionalProperties": vals,
 		}, nil
 
 	default:
 		jsonType, ok := kindToSimpleJSONType[kind]
 		if !ok {
-			return nil, fmt.Errorf("type not supported: %T", typ)
+			return nil, fmt.Errorf("type not supported: %s", typ)
+		}
+		scm := map[string]any{}
+		if mayBeNull {
+			scm["type"] = []any{"null", jsonType}
+		} else {
+			scm["type"] = jsonType
+		}
+		format, ok := formats[kind]
+		if ok {
+			scm["format"] = format
 		}
 
-		return map[string]any{
-			"type": jsonType,
-		}, nil
+		return scm, nil
 	}
 }
 
@@ -157,7 +205,7 @@ func NewToolSchema[T any]() (*ToolSchema, error) {
 		return nil, fmt.Errorf("tool arguments must be a (pointer to a) struct: %s", typ)
 	}
 
-	scm, err := structToSchema(typ)
+	scm, err := structToSchema(typ, false)
 	if err != nil {
 		return nil, err
 	}

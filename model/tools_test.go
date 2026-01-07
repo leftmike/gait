@@ -1,12 +1,13 @@
 package model
 
 import (
+	"encoding/json"
+	"reflect"
+	"sort"
 	"testing"
-)
 
-/*
-test typeToSchema
-*/
+	"github.com/google/jsonschema-go/jsonschema"
+)
 
 func TestFieldNameToJSON(t *testing.T) {
 	cases := []struct {
@@ -35,131 +36,119 @@ func TestFieldNameToJSON(t *testing.T) {
 	}
 }
 
-/*
-func TestToolBuild(t *testing.T) {
-	cases := []struct {
-		tl   model.Tool
-		fail bool
-	}{
-		{
-			tl: model.Tool{
-				Name:        "test1",
-				Description: "test function 1",
-				Args: []model.ToolArg{
-					{Name: "s", Description: "string to return"},
-				},
-				Func: func(s string) (string, error) {
-					return s, nil
-				},
-			},
-		},
-		{
-			tl: model.Tool{
-				Name:        "test2",
-				Description: "test function 2",
-				Args: []model.ToolArg{
-					{Name: "i", Description: "an integer"},
-					{Name: "f", Description: "a float"},
-					{Name: "s", Description: "a string"},
-					{Name: "b", Description: "a boolean"},
-				},
-				Func: func(i int, f float64, s string, b bool) (string, error) {
-					return fmt.Sprintf("%d %f %s %v", i, f, s, b), nil
-				},
-			},
-		},
-		{
-			tl: model.Tool{
-				Name:        "test3",
-				Description: "test function 3",
-				Args: []model.ToolArg{
-					{Name: "s", Description: "string to return"},
-				},
-				Func: func(s string) string {
-					return s
-				},
-			},
-			fail: true,
-		},
-		{
-			tl: model.Tool{
-				Name:        "test4",
-				Description: "test function 4",
-				Args: []model.ToolArg{
-					{Name: "s", Description: "string to return"},
-				},
-				Func: func(s string) (string, string, error) {
-					return s, s, nil
-				},
-			},
-			fail: true,
-		},
-		{
-			tl: model.Tool{
-				Name:        "test5",
-				Description: "test function 5",
-				Args: []model.ToolArg{
-					{Name: "s", Description: "string to return"},
-				},
-				Func: func(s string) (error, string) {
-					return nil, s
-				},
-			},
-			fail: true,
-		},
-		{
-			tl: model.Tool{
-				Name:        "test6",
-				Description: "test function 6",
-				Args: []model.ToolArg{
-					{Name: "s1", Description: "string 1"},
-					{Name: "s2", Description: "string 2"},
-				},
-				Func: func(s string) (string, error) {
-					return s, nil
-				},
-			},
-			fail: true,
-		},
-		{
-			tl: model.Tool{
-				Name:        "test7",
-				Description: "test function 7",
-				Args: []model.ToolArg{
-					{Name: "s1", Description: "string 1"},
-					{Name: "s2", Description: "string 2"},
-				},
-				Func: func(s1, s2, s3 string) (string, error) {
-					return s1 + s2 + s3, nil
-				},
-			},
-			fail: true,
-		},
-		{
-			tl: model.Tool{
-				Name:        "test8",
-				Description: "test function 8",
-				Args: []model.ToolArg{
-					{Name: "s1", Description: "string 1"},
-					{Name: "s2", Description: "string 2"},
-				},
-				Func: func(s1 string, s2 ...string) (string, error) {
-					return s1, nil
-				},
-			},
-			fail: true,
-		},
-	}
+func walkSchema(scm map[string]any, fn func(scm map[string]any)) {
+	fn(scm)
 
-	for _, c := range cases {
-		err := c.tl.Build()
-		if c.fail {
-			if err == nil {
-				t.Errorf("Build(%s) did not fail", c.tl.Name)
-			}
-		} else if err != nil {
-			t.Errorf("Build(%s) failed with %s", c.tl.Name, err)
+	for _, val := range scm {
+		if val, ok := val.(map[string]any); ok {
+			walkSchema(val, fn)
 		}
 	}
 }
-*/
+
+func sortRequired(scm map[string]any) {
+	val, ok := scm["required"]
+	if ok {
+		req := val.([]any)
+		sort.Slice(req,
+			func(i, j int) bool {
+				return req[i].(string) < req[j].(string)
+			})
+	}
+}
+
+func jsonSchema(typ reflect.Type) (map[string]any, error) {
+	sc, err := jsonschema.ForType(typ, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	buf, err := json.Marshal(sc)
+	if err != nil {
+		return nil, err
+	}
+
+	var scm map[string]any
+	err = json.Unmarshal(buf, &scm)
+	if err != nil {
+		return nil, err
+	}
+
+	walkSchema(scm,
+		func(scm map[string]any) {
+			sortRequired(scm)
+			delete(scm, "maximum")
+			delete(scm, "minimum")
+			val, ok := scm["additionalProperties"]
+			if ok && reflect.DeepEqual(val, false) {
+				delete(scm, "additionalProperties")
+			}
+		})
+	return scm, nil
+}
+
+func normalizeSchema(scm map[string]any) {
+	walkSchema(scm,
+		func(scm map[string]any) {
+			sortRequired(scm)
+			delete(scm, "format")
+		})
+}
+
+func TestTypeToSchema(t *testing.T) {
+	type struct1 struct {
+		Value string `json:"value"`
+	}
+
+	cases := []any{
+		"string",
+		int(123),
+		int8(123),
+		int16(123),
+		int32(123),
+		int64(123),
+		uint8(123),
+		uint16(123),
+		uint32(123),
+		uint64(123),
+		float32(12.3),
+		float64(12.3),
+		false,
+		[]int{},
+		[]uint32{},
+		[2]string{},
+		struct {
+			ID    int      `json:"id"`
+			Name  string   `json:"name,omitempty"`
+			Value *float64 `json:"value"`
+		}{},
+		struct {
+			ID    *int    `json:"id,omitempty"`
+			Name  string  `json:"name"`
+			Inner struct1 `json:"inner"`
+		}{},
+		struct {
+			ID    int      `json:"id,omitzero"`
+			Name  string   `json:"other_name"`
+			Inner *struct1 `json:"inner"`
+		}{},
+	}
+
+	for _, c := range cases {
+		typ := reflect.TypeOf(c)
+		scm, err := typeToSchema(typ, false)
+		if err != nil {
+			t.Errorf("typeToSchema(%#v) failed with %s", c, err)
+		}
+		normalizeSchema(scm)
+
+		jscm, err := jsonSchema(typ)
+		if err != nil {
+			t.Errorf("jsonSchema(%#v) failed with %s", c, err)
+		}
+
+		if !reflect.DeepEqual(scm, jscm) {
+			t.Errorf("typeToSchema(%#v) got %#v want %#v", c, scm, jscm)
+		}
+	}
+}
