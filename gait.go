@@ -113,7 +113,7 @@ func main() {
 				}
 			case model.ToolCallStep:
 				if opts.Verbose {
-					fmt.Println("Tool Call: ", step.Content)
+					fmt.Printf("Tool Call: %s(%s)\n", step.Name, string(step.Input))
 				}
 			case model.ToolOutputStep:
 				if opts.Verbose {

@@ -14,11 +14,11 @@ const (
 
 type Step struct {
 	Type    StepType
-	Content string
-	Name    string
-	ID      string
-	Input   json.RawMessage
-	IsError bool
+	Content string          // Prompt, ModelResponse, Reasoning, and ToolOutput
+	Name    string          // ToolCall and ToolOutput
+	ID      string          // ToolCall and ToolOutput: optional, depending upon the provider
+	Input   json.RawMessage // ToolCall
+	IsError bool            // ToolOutput
 }
 
 type State struct {

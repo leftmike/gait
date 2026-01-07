@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -66,11 +67,16 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 		}
 
 		for _, step := range st.Steps {
-			if step.Type == ReasoningStep {
-				continue
-			}
+			switch step.Type {
+			case PromptStep, ModelResponseStep, ToolOutputStep:
+				fmt.Fprintf(&buf, "%s: %s\n", stepName[step.Type], step.Content)
 
-			fmt.Fprintf(&buf, "%s: %s\n", stepName[step.Type], step.Content)
+			case ReasoningStep:
+				continue
+
+			case ToolCallStep:
+				fmt.Fprintf(&buf, "%s: %s(%s)", stepName[step.Type], step.Name, step.Input)
+			}
 		}
 
 		if opts.Trace {
@@ -147,9 +153,8 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 					fmt.Printf("Trace: calling %s(%s)\n", rspItem.Name, rspItem.Arguments)
 				}
 
-				// XXX: use st.appendTool
 				toolCalls = true
-				st.appendStep(ToolCallStep, fmt.Sprintf("%s(%s)", rspItem.Name, rspItem.Arguments))
+				st.appendToolCall(rspItem.Name, "", json.RawMessage(rspItem.Arguments))
 				out, err := tools.Call(rspItem.Name, []byte(rspItem.Arguments), opts)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%q, ", rspItem.Name, out)
@@ -159,7 +164,7 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 				if err != nil {
 					out = fmt.Sprintf("error: %s", err)
 				}
-				st.appendStep(ToolOutputStep, out)
+				st.appendToolOutput(err != nil, "", out)
 
 			default:
 				if opts.Trace {
