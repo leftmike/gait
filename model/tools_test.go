@@ -148,7 +148,9 @@ func TestTypeToSchema(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(scm, jscm) {
-			t.Errorf("typeToSchema(%#v) got %#v want %#v", c, scm, jscm)
+			buf, _ := json.MarshalIndent(scm, "", "    ")
+			jbuf, _ := json.MarshalIndent(jscm, "", "    ")
+			t.Errorf("typeToSchema(%#v) got %s want %s", c, string(buf), string(jbuf))
 		}
 	}
 }
