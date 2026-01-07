@@ -7,7 +7,7 @@ import (
 
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/option"
-	"github.com/openai/openai-go/v2/packages/param"
+	openai_param "github.com/openai/openai-go/v2/packages/param"
 	"github.com/openai/openai-go/v2/responses"
 )
 
@@ -23,27 +23,6 @@ func NewOpenAIModel(name, apiKey string, opts *Options) (Model, error) {
 	}, nil
 }
 
-/*
-	Parameters: map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"city": map[string]any{
-				"type":        "string",
-				"description": "The city to get the weather for",
-			},
-			"state": map[string]any{
-				"type":        "string",
-				"description": "The state of the city",
-			},
-			"country": map[string]any{
-				"type":        "string",
-				"description": "The country of the city",
-			},
-		},
-		"requried": []string{"city", "country"},
-	},
-*/
-
 func toOpenAITools(tools Tools) []responses.ToolUnionParam {
 	var toolParams []responses.ToolUnionParam
 	for _, tl := range tools {
@@ -52,7 +31,7 @@ func toOpenAITools(tools Tools) []responses.ToolUnionParam {
 				OfFunction: &responses.FunctionToolParam{
 					Parameters:  tl.Schema.schema,
 					Name:        tl.Name,
-					Description: param.NewOpt(tl.Description),
+					Description: openai_param.NewOpt(tl.Description),
 				},
 			})
 	}
@@ -107,14 +86,14 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 				Model: m.name,
 				Tools: toolParams,
 				Input: responses.ResponseNewParamsInputUnion{
-					OfString: param.NewOpt(buf.String()),
+					OfString: openai_param.NewOpt(buf.String()),
 				},
 				Reasoning: reasoningParam,
 			})
 		if opts.Trace {
 			fmt.Print(err)
 			if opts.Verbose {
-				fmt.Printf(" input: %d output: %d total: %d", rsp.Usage.InputTokens,
+				fmt.Printf(" tokens: input: %d output: %d total: %d", rsp.Usage.InputTokens,
 					rsp.Usage.OutputTokens, rsp.Usage.TotalTokens)
 			}
 			fmt.Println()
@@ -168,6 +147,7 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 					fmt.Printf("Trace: calling %s(%s)\n", rspItem.Name, rspItem.Arguments)
 				}
 
+				// XXX: use st.appendTool
 				toolCalls = true
 				st.appendStep(ToolCallStep, fmt.Sprintf("%s(%s)", rspItem.Name, rspItem.Arguments))
 				out, err := tools.Call(rspItem.Name, []byte(rspItem.Arguments), opts)

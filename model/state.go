@@ -1,5 +1,7 @@
 package model
 
+import "encoding/json"
+
 type StepType int
 
 const (
@@ -13,6 +15,10 @@ const (
 type Step struct {
 	Type    StepType
 	Content string
+	Name    string
+	ID      string
+	Input   json.RawMessage
+	IsError bool
 }
 
 type State struct {
@@ -25,6 +31,26 @@ func (st *State) appendStep(typ StepType, s string) {
 		Step{
 			Type:    typ,
 			Content: s,
+		})
+}
+
+func (st *State) appendToolCall(name, id string, buf json.RawMessage) {
+	st.Steps = append(st.Steps,
+		Step{
+			Type:  ToolCallStep,
+			Name:  name,
+			ID:    id,
+			Input: buf,
+		})
+}
+
+func (st *State) appendToolOutput(isError bool, id, s string) {
+	st.Steps = append(st.Steps,
+		Step{
+			Type:    ToolOutputStep,
+			ID:      id,
+			Content: s,
+			IsError: isError,
 		})
 }
 
