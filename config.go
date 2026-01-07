@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -62,7 +63,8 @@ func readConfig(filenames []string) (Config, error) {
 func options() (string, string, string, *model.Options, error) {
 	var configFilename string
 	var noConfig bool
-	var provider string
+	var useOpenAI bool
+	var useAnthropic bool
 	var modelName string
 	var apiKey string
 	var summary bool
@@ -73,11 +75,22 @@ func options() (string, string, string, *model.Options, error) {
 	flag.BoolVar(&trace, "t", false, "trace llm interaction")
 	flag.StringVar(&configFilename, "config", "", "config filename")
 	flag.BoolVar(&noConfig, "no-config", false, "do not load config")
-	flag.StringVar(&provider, "provider", "", "generate using this llm `provider`")
+	flag.BoolVar(&useOpenAI, "openai", false, "use openai")
+	flag.BoolVar(&useAnthropic, "anthropic", false, "use anthropic")
 	flag.StringVar(&modelName, "model", "", "generate using this llm `model`")
 	flag.StringVar(&apiKey, "apikey", "", "`api key` to use")
 	flag.BoolVar(&summary, "summary", false, "summarize reasoning")
 	flag.Parse()
+
+	var provider string
+	if useOpenAI {
+		if useAnthropic {
+			return "", "", "", nil, errors.New("both openai and anthropic specified")
+		}
+		provider = "openai"
+	} else if useAnthropic {
+		provider = "anthropic"
+	}
 
 	if !noConfig {
 		var filenames []string

@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/openai/openai-go/v2"
@@ -45,25 +44,6 @@ func NewOpenAIModel(name, apiKey string, opts *Options) (Model, error) {
 	},
 */
 
-var (
-	openAIKind = map[reflect.Kind]string{
-		reflect.Bool:    "boolean",
-		reflect.Int:     "integer",
-		reflect.Int8:    "integer",
-		reflect.Int16:   "integer",
-		reflect.Int32:   "integer",
-		reflect.Int64:   "integer",
-		reflect.Uint:    "integer",
-		reflect.Uint8:   "integer",
-		reflect.Uint16:  "integer",
-		reflect.Uint32:  "integer",
-		reflect.Uint64:  "integer",
-		reflect.Float32: "number",
-		reflect.Float64: "number",
-		reflect.String:  "string",
-	}
-)
-
 func toOpenAITools(tools Tools) []responses.ToolUnionParam {
 	var toolParams []responses.ToolUnionParam
 	for _, tl := range tools {
@@ -98,6 +78,8 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 		}
 	}
 
+	toolParams := toOpenAITools(tools)
+
 	for {
 		var buf strings.Builder
 		if st.SystemPrompt != "" {
@@ -123,7 +105,7 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 		rsp, err := m.client.Responses.New(ctx,
 			responses.ResponseNewParams{
 				Model: m.name,
-				Tools: toOpenAITools(tools),
+				Tools: toolParams,
 				Input: responses.ResponseNewParamsInputUnion{
 					OfString: param.NewOpt(buf.String()),
 				},

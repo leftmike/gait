@@ -132,6 +132,10 @@ func TestTypeToSchema(t *testing.T) {
 			Name  string   `json:"other_name"`
 			Inner *struct1 `json:"inner"`
 		}{},
+		struct {
+			Field  int `json:"field"`
+			Ignore int `json:"-"`
+		}{},
 	}
 
 	for _, c := range cases {

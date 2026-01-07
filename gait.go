@@ -1,3 +1,13 @@
+/*
+To Do:
+- Gemini
+- Anthropic
+-- Streaming support
+-- Turn on thinking (optional?)
+-- Reasoning summaries
+- Enumerate available models
+*/
+
 package main
 
 import (
@@ -34,6 +44,8 @@ func getWeather(buf []byte) (string, error) {
 func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Model, error) {
 	if strings.EqualFold(provider, "openai") {
 		return model.NewOpenAIModel(modelName, apiKey, opts)
+	} else if strings.EqualFold(provider, "anthropic") {
+		return model.NewAnthropicModel(modelName, apiKey, opts)
 	}
 
 	return nil, fmt.Errorf("unknown provider: %s", provider)
