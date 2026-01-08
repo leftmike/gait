@@ -2,7 +2,6 @@
 To Do:
 - Gemini
 - Anthropic
--- Streaming support
 -- Turn on thinking (optional?)
 -- Reasoning summaries
 - Enumerate available models

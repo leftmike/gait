@@ -107,7 +107,7 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 		}
 
 		req := anthropic.MessageNewParams{
-			MaxTokens: 1024 * 8,
+			MaxTokens: 1024 * 64,
 			Messages:  msgParams,
 			Model:     m.name,
 			Tools:     toolParams,
@@ -118,14 +118,28 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 		}
 
 		if opts.Trace {
-			fmt.Print("Trace: Anthropic Messages.New(")
+			fmt.Print("Trace: Anthropic Messages.NewStreaming(")
 			if opts.Verbose {
 				fmt.Printf("%s, %d tools, %d bytes", m.name, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := m.client.Messages.New(ctx, req)
+		strm := m.client.Messages.NewStreaming(ctx, req)
+		defer strm.Close()
+
+		var rsp anthropic.Message
+		for strm.Next() {
+			err := rsp.Accumulate(strm.Current())
+			if err != nil {
+				if opts.Trace {
+					fmt.Println("accumulate:", err)
+				}
+				return err
+			}
+		}
+
+		err := strm.Err()
 		if opts.Trace {
 			fmt.Print(err)
 			if opts.Verbose {
