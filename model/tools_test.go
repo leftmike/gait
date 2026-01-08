@@ -6,35 +6,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/invopop/jsonschema"
 )
-
-func TestFieldNameToJSON(t *testing.T) {
-	cases := []struct {
-		nam, json string
-	}{
-		{"UserID", "user_id"},
-		{"URLValue", "url_value"},
-		{"CreatedAt", "created_at"},
-		{"HTTPRequest", "http_request"},
-		{"Xyz", "xyz"},
-		{"xyz", "xyz"},
-		{"XyZ", "xy_z"},
-		{"xyZ", "xy_z"},
-		{"XYZ", "xyz"},
-		{"abcDef", "abc_def"},
-		{"AbcDef", "abc_def"},
-		{"abcDEFGhi", "abc_def_ghi"},
-		{"AbcDEFGhi", "abc_def_ghi"},
-	}
-
-	for _, c := range cases {
-		json := fieldNameToJSON(c.nam)
-		if json != c.json {
-			t.Errorf("fieldNameToJSON(%s) got %s want %s", c.nam, json, c.json)
-		}
-	}
-}
 
 func walkSchema(scm map[string]any, fn func(scm map[string]any)) {
 	fn(scm)
@@ -58,10 +31,11 @@ func sortRequired(scm map[string]any) {
 }
 
 func jsonSchema(typ reflect.Type) (map[string]any, error) {
-	sc, err := jsonschema.ForType(typ, nil)
-	if err != nil {
-		return nil, err
+	r := jsonschema.Reflector{
+		DoNotReference:            true,
+		AllowAdditionalProperties: true,
 	}
+	sc := r.ReflectFromType(typ)
 
 	buf, err := json.Marshal(sc)
 	if err != nil {
@@ -77,22 +51,9 @@ func jsonSchema(typ reflect.Type) (map[string]any, error) {
 	walkSchema(scm,
 		func(scm map[string]any) {
 			sortRequired(scm)
-			delete(scm, "maximum")
-			delete(scm, "minimum")
-			val, ok := scm["additionalProperties"]
-			if ok && reflect.DeepEqual(val, false) {
-				delete(scm, "additionalProperties")
-			}
+			delete(scm, "$schema")
 		})
 	return scm, nil
-}
-
-func normalizeSchema(scm map[string]any) {
-	walkSchema(scm,
-		func(scm map[string]any) {
-			sortRequired(scm)
-			delete(scm, "format")
-		})
 }
 
 func TestTypeToSchema(t *testing.T) {
@@ -128,23 +89,29 @@ func TestTypeToSchema(t *testing.T) {
 			Inner struct1 `json:"inner"`
 		}{},
 		struct {
-			ID    int      `json:"id,omitzero"`
+			ID    int      `json:"id,omitzero"` // Will still be required.
+			Name  string   `json:"other_name"`
+			Inner *struct1 `json:"inner"`
+		}{},
+		struct {
+			ID    int      `json:"id,omitempty"`
 			Name  string   `json:"other_name"`
 			Inner *struct1 `json:"inner"`
 		}{},
 		struct {
 			Field  int `json:"field"`
-			Ignore int `json:"-"`
+			ID     *int
+			Ignore int            `json:"-"`
+			Dict   map[string]int `json:"dict"`
 		}{},
 	}
 
 	for _, c := range cases {
 		typ := reflect.TypeOf(c)
-		scm, err := typeToSchema(typ, false)
+		scm, err := typeToSchema(typ)
 		if err != nil {
 			t.Errorf("typeToSchema(%#v) failed with %s", c, err)
 		}
-		normalizeSchema(scm)
 
 		jscm, err := jsonSchema(typ)
 		if err != nil {
@@ -154,7 +121,7 @@ func TestTypeToSchema(t *testing.T) {
 		if !reflect.DeepEqual(scm, jscm) {
 			buf, _ := json.MarshalIndent(scm, "", "    ")
 			jbuf, _ := json.MarshalIndent(jscm, "", "    ")
-			t.Errorf("typeToSchema(%#v) got %s want %s", c, string(buf), string(jbuf))
+			t.Errorf("typeToSchema(%#v)\ngot %s\nwant %s", c, string(buf), string(jbuf))
 		}
 	}
 }

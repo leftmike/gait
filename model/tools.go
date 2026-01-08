@@ -3,8 +3,8 @@ package model
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
-	"unicode"
 )
 
 type Tools []Tool
@@ -23,24 +23,7 @@ type ToolSchema struct {
 	typ    reflect.Type
 }
 
-func fieldNameToJSON(s string) string {
-	rs := []rune(s)
-	nam := make([]rune, 0, len(rs))
-	for i, r := range rs {
-		if unicode.IsUpper(r) {
-			if i > 0 && (unicode.IsLower(rs[i-1]) || (i < len(rs)-1 && unicode.IsLower(rs[i+1]))) {
-				nam = append(nam, '_')
-			}
-			nam = append(nam, unicode.ToLower(r))
-		} else {
-			nam = append(nam, r)
-		}
-	}
-
-	return string(nam)
-}
-
-func structToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
+func structToSchema(typ reflect.Type) (map[string]any, error) {
 	var req []any
 	props := map[string]any{}
 	for i := 0; i < typ.NumField(); i += 1 {
@@ -53,7 +36,7 @@ func structToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
 			vals := strings.Split(jt, ",")
 			name = vals[0]
 			for j := 1; j < len(vals); j += 1 {
-				if vals[j] == "omitzero" || vals[j] == "omitempty" {
+				if vals[j] == "omitempty" {
 					optional = true
 				}
 			}
@@ -68,19 +51,17 @@ func structToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
 		}
 
 		ftyp := fld.Type
-		var pointer bool
 		if ftyp.Kind() == reflect.Pointer {
-			pointer = true
 			ftyp = ftyp.Elem()
 		}
 
 		if name == "-" {
 			continue
 		} else if name == "" {
-			name = fieldNameToJSON(fld.Name)
+			name = fld.Name
 		}
 
-		fscm, err := typeToSchema(ftyp, pointer)
+		fscm, err := typeToSchema(ftyp)
 		if err != nil {
 			return nil, err
 		}
@@ -96,14 +77,14 @@ func structToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
 
 	scm := map[string]any{
 		"properties": props,
+		"type":       "object",
 	}
 	if len(req) > 0 {
+		sort.Slice(req,
+			func(i, j int) bool {
+				return req[i].(string) < req[j].(string)
+			})
 		scm["required"] = req
-	}
-	if mayBeNull {
-		scm["type"] = []any{"null", "object"}
-	} else {
-		scm["type"] = "object"
 	}
 	return scm, nil
 }
@@ -125,33 +106,26 @@ var (
 		reflect.Float64: "number",
 		reflect.String:  "string",
 	}
-
-	formats = map[reflect.Kind]string{
-		reflect.Int32:   "int32",
-		reflect.Int64:   "int64",
-		reflect.Float32: "float",
-		reflect.Float64: "double",
-	}
 )
 
-func typeToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
+func typeToSchema(typ reflect.Type) (map[string]any, error) {
 	kind := typ.Kind()
 	switch kind {
 	case reflect.Struct:
-		return structToSchema(typ, mayBeNull)
+		return structToSchema(typ)
 
 	case reflect.Slice:
-		items, err := typeToSchema(typ.Elem(), false)
+		items, err := typeToSchema(typ.Elem())
 		if err != nil {
 			return nil, err
 		}
 		return map[string]any{
-			"type":  []interface{}{"null", "array"},
+			"type":  "array",
 			"items": items,
 		}, nil
 
 	case reflect.Array:
-		items, err := typeToSchema(typ.Elem(), false)
+		items, err := typeToSchema(typ.Elem())
 		if err != nil {
 			return nil, err
 		}
@@ -166,7 +140,7 @@ func typeToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
 		if typ.Key().Kind() != reflect.String {
 			return nil, fmt.Errorf("maps must be string-keyed: %s", typ)
 		}
-		vals, err := typeToSchema(typ.Elem(), false)
+		vals, err := typeToSchema(typ.Elem())
 		if err != nil {
 			return nil, err
 		}
@@ -181,18 +155,9 @@ func typeToSchema(typ reflect.Type, mayBeNull bool) (map[string]any, error) {
 		if !ok {
 			return nil, fmt.Errorf("type not supported: %s", typ)
 		}
-		scm := map[string]any{}
-		if mayBeNull {
-			scm["type"] = []any{"null", jsonType}
-		} else {
-			scm["type"] = jsonType
-		}
-		format, ok := formats[kind]
-		if ok {
-			scm["format"] = format
-		}
-
-		return scm, nil
+		return map[string]any{
+			"type": jsonType,
+		}, nil
 	}
 }
 
@@ -205,7 +170,7 @@ func NewToolSchema[T any]() (*ToolSchema, error) {
 		return nil, fmt.Errorf("tool arguments must be a (pointer to a) struct: %s", typ)
 	}
 
-	scm, err := structToSchema(typ, false)
+	scm, err := structToSchema(typ)
 	if err != nil {
 		return nil, err
 	}
