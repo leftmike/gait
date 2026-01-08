@@ -16,10 +16,8 @@ type anthropicModel struct {
 
 func NewAnthropicModel(name, apiKey string, opts *Options) (Model, error) {
 	return &anthropicModel{
-		client: anthropic.NewClient(
-			option.WithAPIKey(apiKey),
-		),
-		name: anthropic.Model(name),
+		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
+		name:   anthropic.Model(name),
 	}, nil
 }
 
@@ -213,4 +211,22 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 	}
 
 	return nil
+}
+
+func ListAnthropicModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
+	client := anthropic.NewClient(option.WithAPIKey(apiKey))
+	lst, err := client.Models.List(ctx, anthropic.ModelListParams{Limit: anthropic.Int(999)})
+	if err != nil {
+		return nil, err
+	}
+
+	var models []ModelInfo
+	for _, mi := range lst.Data {
+		models = append(models, ModelInfo{
+			Name:    mi.ID,
+			Created: mi.CreatedAt,
+		})
+	}
+
+	return models, nil
 }

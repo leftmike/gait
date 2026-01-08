@@ -4,7 +4,7 @@ To Do:
 - Anthropic
 -- Turn on thinking (optional?)
 -- Reasoning summaries
-- Enumerate available models
+-- StopReason max_tokens
 */
 
 package main
@@ -55,6 +55,16 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	/*
+		infos, err := model.ListOpenAIModels(context.Background(), apiKey)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		for _, info := range infos {
+			fmt.Printf("%s (%s)\n", info.Name, info.Created.Format("02 Jan 2006"))
+		}
+	*/
 
 	mdl, err := newModel(provider, modelName, apiKey, opts)
 	if err != nil {

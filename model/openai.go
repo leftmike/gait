@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/option"
@@ -181,4 +182,22 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 	}
 
 	return nil
+}
+
+func ListOpenAIModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
+	client := openai.NewClient(option.WithAPIKey(apiKey))
+	lst, err := client.Models.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var models []ModelInfo
+	for _, m := range lst.Data {
+		models = append(models, ModelInfo{
+			Name:    m.ID,
+			Created: time.Unix(m.Created, 0),
+		})
+	}
+
+	return models, nil
 }

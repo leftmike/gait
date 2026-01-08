@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"time"
 )
 
 type Model interface {
@@ -12,4 +13,9 @@ type Options struct {
 	Verbose bool
 	Trace   bool
 	Summary bool
+}
+
+type ModelInfo struct {
+	Name    string
+	Created time.Time
 }
