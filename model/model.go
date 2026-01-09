@@ -16,6 +16,7 @@ type Options struct {
 }
 
 type ModelInfo struct {
-	Name    string
-	Created time.Time
+	Name        string
+	DisplayName string    // Optional
+	Created     time.Time // Optional
 }

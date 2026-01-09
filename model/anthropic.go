@@ -223,8 +223,9 @@ func ListAnthropicModels(ctx context.Context, apiKey string) ([]ModelInfo, error
 	var models []ModelInfo
 	for _, mi := range lst.Data {
 		models = append(models, ModelInfo{
-			Name:    mi.ID,
-			Created: mi.CreatedAt,
+			Name:        mi.ID,
+			DisplayName: mi.DisplayName,
+			Created:     mi.CreatedAt,
 		})
 	}
 

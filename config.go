@@ -65,6 +65,7 @@ func options() (string, string, string, *model.Options, error) {
 	var noConfig bool
 	var useOpenAI bool
 	var useAnthropic bool
+	var useGemini bool
 	var modelName string
 	var apiKey string
 	var summary bool
@@ -77,6 +78,7 @@ func options() (string, string, string, *model.Options, error) {
 	flag.BoolVar(&noConfig, "no-config", false, "do not load config")
 	flag.BoolVar(&useOpenAI, "openai", false, "use openai")
 	flag.BoolVar(&useAnthropic, "anthropic", false, "use anthropic")
+	flag.BoolVar(&useGemini, "gemini", false, "use gemini")
 	flag.StringVar(&modelName, "model", "", "generate using this model `model`")
 	flag.StringVar(&apiKey, "apikey", "", "`api key` to use")
 	flag.BoolVar(&summary, "summary", false, "summarize reasoning")
@@ -84,12 +86,19 @@ func options() (string, string, string, *model.Options, error) {
 
 	var provider string
 	if useOpenAI {
-		if useAnthropic {
-			return "", "", "", nil, errors.New("both openai and anthropic specified")
-		}
 		provider = "openai"
-	} else if useAnthropic {
+	}
+	if useAnthropic {
+		if provider != "" {
+			return "", "", "", nil, errors.New("multiple providers specified")
+		}
 		provider = "anthropic"
+	}
+	if useGemini {
+		if provider != "" {
+			return "", "", "", nil, errors.New("multiple providers specified")
+		}
+		provider = "gemini"
 	}
 
 	if !noConfig {

@@ -1,10 +1,14 @@
 /*
 To Do:
+- MaxOutputTokens
 - Gemini
+-- Seed in GenerateContentConfig
+-- Turn on thinking?
 - Anthropic
--- Turn on thinking (optional?)
+-- Turn on thinking?
 -- Reasoning summaries
 -- StopReason max_tokens
+- Test all of the providers
 */
 
 package main
@@ -45,6 +49,8 @@ func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Mo
 		return model.NewOpenAIModel(modelName, apiKey, opts)
 	} else if strings.EqualFold(provider, "anthropic") {
 		return model.NewAnthropicModel(modelName, apiKey, opts)
+	} else if strings.EqualFold(provider, "gemini") {
+		return model.NewGeminiModel(modelName, apiKey, opts)
 	}
 
 	return nil, fmt.Errorf("unknown provider: %s", provider)
@@ -55,17 +61,22 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-
 	/*
-		infos, err := model.ListOpenAIModels(context.Background(), apiKey)
+		infos, err := model.ListGeminiModels(context.Background(), apiKey)
 		if err != nil {
 			log.Fatalln(err)
 		}
 		for _, info := range infos {
-			fmt.Printf("%s (%s)\n", info.Name, info.Created.Format("02 Jan 2006"))
+			fmt.Printf("%s", info.Name)
+			if info.DisplayName != "" {
+				fmt.Printf(" [%s]", info.DisplayName)
+			}
+			if !info.Created.Equal(time.Time{}) {
+				fmt.Printf(" (%s)", info.Created.Format("02 Jan 2006"))
+			}
+			fmt.Println()
 		}
 	*/
-
 	mdl, err := newModel(provider, modelName, apiKey, opts)
 	if err != nil {
 		log.Fatalln(err)
