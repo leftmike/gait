@@ -11,6 +11,7 @@ To Do:
 -- Reasoning summaries
 -- StopReason max_tokens
 - Test all of the providers
+- Pass ctx into functions
 */
 
 package main

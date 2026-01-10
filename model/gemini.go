@@ -253,42 +253,44 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 						thoughts: prt.ThoughtSignature,
 					})
 				} else if prt.FunctionCall != nil {
-					fc := prt.FunctionCall
-					buf, err := json.Marshal(fc.Args)
-					if err != nil {
-						panic(err)
-					}
-
-					if opts.Trace {
-						fmt.Printf("Trace: calling %s(%s)", fc.Name, buf)
-						if opts.Verbose {
-							fmt.Printf(" id: %s", fc.ID)
-						}
-						fmt.Println()
-					}
-
 					toolCalls = true
+
+					buf, err := json.Marshal(prt.FunctionCall.Args)
+
 					st.appendStep(geminiStep{
 						typ:      ToolCallStep,
-						name:     fc.Name,
-						id:       fc.ID,
+						name:     prt.FunctionCall.Name,
+						id:       prt.FunctionCall.ID,
 						input:    buf,
-						args:     fc.Args,
+						args:     prt.FunctionCall.Args,
 						thoughts: prt.ThoughtSignature,
 					})
-					out, err := tools.Call(fc.Name, buf, opts)
-					if opts.Trace {
-						fmt.Printf("Trace: results from %s() -> (%q, ", fc.Name, out)
-						fmt.Print(err)
-						fmt.Println(")")
+
+					var out string
+					if err == nil {
+						if opts.Trace {
+							fmt.Printf("Trace: calling %s(%s)", prt.FunctionCall.Name, buf)
+							if opts.Verbose {
+								fmt.Printf(" id: %s", prt.FunctionCall.ID)
+							}
+							fmt.Println()
+						}
+						out, err = tools.Call(prt.FunctionCall.Name, buf, opts)
+						if opts.Trace {
+							fmt.Printf("Trace: results from %s() -> (%q, ",
+								prt.FunctionCall.Name, out)
+							fmt.Print(err)
+							fmt.Println(")")
+						}
 					}
+
 					if err != nil {
 						out = fmt.Sprintf("error: %s", err)
 					}
 					st.appendStep(geminiStep{
 						typ:     ToolOutputStep,
-						name:    fc.Name,
-						id:      fc.ID,
+						name:    prt.FunctionCall.Name,
+						id:      prt.FunctionCall.ID,
 						content: out,
 						isError: err != nil,
 					})
