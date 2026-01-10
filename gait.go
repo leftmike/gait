@@ -10,7 +10,6 @@ To Do:
 -- Turn on thinking?
 -- Reasoning summaries
 -- StopReason max_tokens
-- Test all of the providers
 */
 
 package main
@@ -22,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"strings"
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
@@ -54,16 +52,31 @@ func getWeather(ctx context.Context, buf []byte) (string, error) {
 	return fmt.Sprintf("It is 75 degrees and sunny in %s.", args.City), nil
 }
 
-func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Model, error) {
-	if strings.EqualFold(provider, "openai") {
-		return model.NewOpenAIModel(modelName, apiKey, opts)
-	} else if strings.EqualFold(provider, "anthropic") {
-		return model.NewAnthropicModel(modelName, apiKey, opts)
-	} else if strings.EqualFold(provider, "gemini") {
-		return model.NewGeminiModel(modelName, apiKey, opts)
+type currentTemperatureArgs struct {
+	Location string `json:"location" jsonschema:"location to get the current temperature for"`
+}
+
+func currentTemperature(ctx context.Context, buf []byte) (string, error) {
+	var args currentTemperatureArgs
+	err := json.Unmarshal(buf, &args)
+	if err != nil {
+		return "", err
 	}
 
-	return nil, fmt.Errorf("unknown provider: %s", provider)
+	return "40", nil
+}
+
+func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Model, error) {
+	switch provider {
+	case "openai":
+		return model.NewOpenAIModel(modelName, apiKey, opts)
+	case "anthropic":
+		return model.NewAnthropicModel(modelName, apiKey, opts)
+	case "gemini":
+		return model.NewGeminiModel(modelName, apiKey, opts)
+	default:
+		return nil, fmt.Errorf("unknown provider: %s", provider)
+	}
 }
 
 func main() {
@@ -116,6 +129,12 @@ func main() {
 			Description: "Gets the current weather for the given city",
 			Func:        getWeather,
 			Schema:      model.MustToolSchema[getWeatherArgs](),
+		},
+		{
+			Name:        "current_temperature",
+			Description: "Gets the current temperature for the given location",
+			Func:        currentTemperature,
+			Schema:      model.MustToolSchema[currentTemperatureArgs](),
 		},
 	}
 
