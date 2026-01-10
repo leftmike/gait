@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -19,6 +20,31 @@ func NewAnthropicModel(name, apiKey string, opts *Options) (Model, error) {
 		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
 		name:   anthropic.Model(name),
 	}, nil
+}
+
+type anthropicStep struct {
+	typ     StepType
+	content string
+	name    string
+	id      string
+	input   json.RawMessage
+	isError bool
+}
+
+func (step anthropicStep) Type() StepType {
+	return step.typ
+}
+
+func (step anthropicStep) Content() string {
+	return step.content
+}
+
+func (step anthropicStep) Name() string {
+	return step.name
+}
+
+func (step anthropicStep) Input() json.RawMessage {
+	return step.input
 }
 
 func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
@@ -68,13 +94,14 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 	for {
 		var txtLen int
 		var msgParams []anthropic.MessageParam
-		for _, step := range st.Steps {
-			switch step.Type {
+		for _, as := range st.Steps {
+			step := as.(anthropicStep)
+			switch step.typ {
 			case PromptStep, ModelResponseStep:
 				msgParams = append(msgParams, anthropic.MessageParam{
-					Role: stepRole[step.Type],
+					Role: stepRole[step.typ],
 					Content: []anthropic.ContentBlockParamUnion{
-						anthropic.NewTextBlock(step.Content),
+						anthropic.NewTextBlock(step.content),
 					},
 				})
 
@@ -83,29 +110,29 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 
 			case ToolCallStep:
 				msgParams = append(msgParams, anthropic.MessageParam{
-					Role: stepRole[step.Type],
+					Role: stepRole[step.typ],
 					Content: []anthropic.ContentBlockParamUnion{
-						anthropic.NewToolUseBlock(step.ID, step.Input, step.Name),
+						anthropic.NewToolUseBlock(step.id, step.input, step.name),
 					},
 				})
 
 			case ToolOutputStep:
 				msgParams = append(msgParams, anthropic.MessageParam{
-					Role: stepRole[step.Type],
+					Role: stepRole[step.typ],
 					Content: []anthropic.ContentBlockParamUnion{
-						anthropic.NewToolResultBlock(step.ID, step.Content, step.IsError),
+						anthropic.NewToolResultBlock(step.id, step.content, step.isError),
 					},
 				})
 
 			default:
-				panic(fmt.Sprintf("unexpected step type: %d", step.Type))
+				panic(fmt.Sprintf("unexpected step type: %d", step.typ))
 			}
 
-			txtLen += len(step.Content) + len(step.Input)
+			txtLen += len(step.content) + len(step.input)
 		}
 
 		req := anthropic.MessageNewParams{
-			MaxTokens: 1024 * 64,
+			MaxTokens: 1024 * 32,
 			Messages:  msgParams,
 			Model:     m.name,
 			Tools:     toolParams,
@@ -170,9 +197,17 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 		for _, blk := range rsp.Content {
 			switch blk.Type {
 			case "text":
-				st.appendStep(ModelResponseStep, blk.Text)
+				st.appendStep(anthropicStep{
+					typ:     ModelResponseStep,
+					content: blk.Text,
+				})
+
 			case "thinking":
-				st.appendStep(ReasoningStep, blk.Text) // XXX: is this right?
+				st.appendStep(anthropicStep{
+					typ:     ReasoningStep,
+					content: blk.Text,
+				}) // XXX: is this right?
+
 			case "tool_use":
 				if opts.Trace {
 					fmt.Printf("Trace: calling %s(%s)", blk.Name, blk.Input)
@@ -183,7 +218,12 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 				}
 
 				toolCalls = true
-				st.appendToolCall(blk.Name, blk.ID, blk.Input, nil)
+				st.appendStep(anthropicStep{
+					typ:   ToolCallStep,
+					name:  blk.Name,
+					id:    blk.ID,
+					input: blk.Input,
+				})
 				out, err := tools.Call(blk.Name, []byte(blk.Input), opts)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%q, ", blk.Name, out)
@@ -193,7 +233,13 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 				if err != nil {
 					out = fmt.Sprintf("error: %s", err)
 				}
-				st.appendToolOutput(err != nil, blk.Name, blk.ID, out)
+				st.appendStep(anthropicStep{
+					typ:     ToolOutputStep,
+					name:    blk.Name,
+					id:      blk.ID,
+					content: out,
+					isError: err != nil,
+				})
 
 			default:
 				// "redacted_thinking", "server_tool_use", "web_search_tool_result"
@@ -211,6 +257,13 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 	}
 
 	return nil
+}
+
+func (_ *anthropicModel) Prompt(st *State, s string) {
+	st.appendStep(anthropicStep{
+		typ:     PromptStep,
+		content: s,
+	})
 }
 
 func ListAnthropicModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {

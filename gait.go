@@ -5,6 +5,7 @@ To Do:
 -- Seed in GenerateContentConfig
 -- Turn on thinking?
 -- Streaming
+-- gemini-3-flash-preview
 - Anthropic
 -- Turn on thinking?
 -- Reasoning summaries
@@ -114,8 +115,9 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		st.Prompt(s)
+		mdl.Prompt(&st, s)
 		n := len(st.Steps)
+
 		err = mdl.Generate(ctx, &st, tools, opts)
 		if err != nil {
 			log.Fatalln(err)
@@ -123,23 +125,22 @@ func main() {
 		for n < len(st.Steps) {
 			step := st.Steps[n]
 
-			switch step.Type {
+			switch step.Type() {
 			case model.PromptStep:
 				panic("did not expect prompt step in model output")
 			case model.ModelResponseStep:
-				fmt.Println(step.Content)
+				fmt.Println(step.Content())
 			case model.ReasoningStep:
 				if opts.Summary {
-					fmt.Printf("[%s]\n", step.Content)
+					fmt.Printf("[%s]\n", step.Content())
 				}
 			case model.ToolCallStep:
 				if opts.Verbose {
-					fmt.Printf("Tool Call: %s(%s)\n", step.Name, string(step.Input))
+					fmt.Printf("Tool Call: %s(%s)\n", step.Name(), string(step.Input()))
 				}
 			case model.ToolOutputStep:
 				if opts.Verbose {
-					// XXX: IsError?
-					fmt.Println("Tool Output: ", step.Content)
+					fmt.Println("Tool Output: ", step.Content())
 				}
 			}
 

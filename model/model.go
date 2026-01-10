@@ -6,6 +6,7 @@ import (
 )
 
 type Model interface {
+	Prompt(st *State, s string)
 	Generate(ctx context.Context, st *State, tools Tools, opts *Options) error
 }
 

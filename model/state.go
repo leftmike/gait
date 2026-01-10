@@ -12,6 +12,14 @@ const (
 	ToolOutputStep
 )
 
+type Step interface {
+	Type() StepType
+	Content() string        // Prompt, ModelResponse, Reasoning, and ToolOutput
+	Name() string           // ToolCall and ToolOutput
+	Input() json.RawMessage // ToolCall
+}
+
+/*
 type Step struct {
 	Type    StepType
 	Content string          // Prompt, ModelResponse, Reasoning, and ToolOutput
@@ -21,20 +29,18 @@ type Step struct {
 	Args    map[string]any  // ToolCall: optional, depending upon the provider
 	IsError bool            // ToolOutput
 }
+*/
 
 type State struct {
 	SystemPrompt string
 	Steps        []Step
 }
 
-func (st *State) appendStep(typ StepType, s string) {
-	st.Steps = append(st.Steps,
-		Step{
-			Type:    typ,
-			Content: s,
-		})
+func (st *State) appendStep(step Step) {
+	st.Steps = append(st.Steps, step)
 }
 
+/*
 func (st *State) appendToolCall(name, id string, buf json.RawMessage, args map[string]any) {
 	st.Steps = append(st.Steps,
 		Step{
@@ -56,7 +62,4 @@ func (st *State) appendToolOutput(isError bool, name, id, s string) {
 			IsError: isError,
 		})
 }
-
-func (st *State) Prompt(s string) {
-	st.appendStep(PromptStep, s)
-}
+*/
