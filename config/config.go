@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"errors"
@@ -9,12 +9,6 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclsimple"
-	"github.com/leftmike/gait/model"
-)
-
-var (
-	verbose bool
-	trace   bool
 )
 
 type Provider struct {
@@ -29,7 +23,7 @@ type Config struct {
 	Providers []Provider `hcl:"provider,block"`
 }
 
-func (cfg *Config) findProvider(name string) *Provider {
+func (cfg *Config) FindProvider(name string) *Provider {
 	for _, provider := range cfg.Providers {
 		if strings.EqualFold(name, provider.Name) {
 			return &provider
@@ -47,7 +41,7 @@ func configFilenames() []string {
 	return []string{"~/.gait/gait.hcl", "~/.gait.hcl", "./gait.hcl"}
 }
 
-func readConfig(filenames []string) (Config, error) {
+func ReadConfig(filenames []string) (Config, error) {
 	for _, name := range filenames {
 		buf, err := os.ReadFile(name)
 		if err == nil {
@@ -60,7 +54,7 @@ func readConfig(filenames []string) (Config, error) {
 	return Config{}, fmt.Errorf("config file not found: %v", filenames)
 }
 
-func options() (string, string, string, *model.Options, error) {
+func Options(fs *flag.FlagSet) (string, string, string, error) {
 	var configFilename string
 	var noConfig bool
 	var useOpenAI bool
@@ -68,21 +62,15 @@ func options() (string, string, string, *model.Options, error) {
 	var useGemini bool
 	var modelName string
 	var apiKey string
-	var summary bool
 
-	flag.BoolVar(&verbose, "verbose", false, "verbose output")
-	flag.BoolVar(&verbose, "v", false, "verbose output")
-	flag.BoolVar(&trace, "trace", false, "trace model interaction")
-	flag.BoolVar(&trace, "t", false, "trace model interaction")
-	flag.StringVar(&configFilename, "config", "", "config filename")
-	flag.BoolVar(&noConfig, "no-config", false, "do not load config")
-	flag.BoolVar(&useOpenAI, "openai", false, "use openai")
-	flag.BoolVar(&useAnthropic, "anthropic", false, "use anthropic")
-	flag.BoolVar(&useGemini, "gemini", false, "use gemini")
-	flag.StringVar(&modelName, "model", "", "generate using this model `model`")
-	flag.StringVar(&apiKey, "apikey", "", "`api key` to use")
-	flag.BoolVar(&summary, "summary", false, "summarize reasoning")
-	flag.Parse()
+	fs.StringVar(&configFilename, "config", "", "config filename")
+	fs.BoolVar(&noConfig, "no-config", false, "do not load config")
+	fs.BoolVar(&useOpenAI, "openai", false, "use openai")
+	fs.BoolVar(&useAnthropic, "anthropic", false, "use anthropic")
+	fs.BoolVar(&useGemini, "gemini", false, "use gemini")
+	fs.StringVar(&modelName, "model", "", "generate using this model `model`")
+	fs.StringVar(&apiKey, "apikey", "", "`api key` to use")
+	fs.Parse(os.Args[1:])
 
 	var provider string
 	if useOpenAI {
@@ -90,13 +78,13 @@ func options() (string, string, string, *model.Options, error) {
 	}
 	if useAnthropic {
 		if provider != "" {
-			return "", "", "", nil, errors.New("multiple providers specified")
+			return "", "", "", errors.New("multiple providers specified")
 		}
 		provider = "anthropic"
 	}
 	if useGemini {
 		if provider != "" {
-			return "", "", "", nil, errors.New("multiple providers specified")
+			return "", "", "", errors.New("multiple providers specified")
 		}
 		provider = "gemini"
 	}
@@ -108,31 +96,27 @@ func options() (string, string, string, *model.Options, error) {
 		} else {
 			filenames = configFilenames()
 		}
-		cfg, err := readConfig(filenames)
+		cfg, err := ReadConfig(filenames)
 		if err != nil {
-			return "", "", "", nil, err
+			return "", "", "", err
 		}
 
 		if provider == "" {
 			provider = cfg.Provider
 		}
 		if modelName == "" {
-			p := cfg.findProvider(provider)
+			p := cfg.FindProvider(provider)
 			if p != nil {
 				modelName = p.Model
 			}
 		}
 		if apiKey == "" {
-			p := cfg.findProvider(provider)
+			p := cfg.FindProvider(provider)
 			if p != nil {
 				apiKey = p.APIKey
 			}
 		}
 	}
 
-	return provider, modelName, apiKey, &model.Options{
-		Verbose: verbose,
-		Trace:   trace,
-		Summary: summary,
-	}, nil
+	return provider, modelName, apiKey, nil
 }

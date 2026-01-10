@@ -18,13 +18,21 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"strings"
 
+	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
+
 	"github.com/peterh/liner"
+)
+
+var (
+	verbose bool
+	trace   bool
 )
 
 type getWeatherArgs struct {
@@ -59,9 +67,23 @@ func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Mo
 }
 
 func main() {
-	provider, modelName, apiKey, opts, err := options()
+	fs := flag.NewFlagSet("gait", flag.ExitOnError)
+
+	var summary bool
+	fs.BoolVar(&verbose, "verbose", false, "verbose output")
+	fs.BoolVar(&verbose, "v", false, "verbose output")
+	fs.BoolVar(&trace, "trace", false, "trace model interaction")
+	fs.BoolVar(&trace, "t", false, "trace model interaction")
+	fs.BoolVar(&summary, "summary", false, "summarize reasoning")
+
+	provider, modelName, apiKey, err := config.Options(fs)
 	if err != nil {
 		log.Fatalln(err)
+	}
+	opts := &model.Options{
+		Verbose: verbose,
+		Trace:   trace,
+		Summary: summary,
 	}
 	/*
 		infos, err := model.ListGeminiModels(context.Background(), apiKey)
