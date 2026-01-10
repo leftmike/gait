@@ -42,20 +42,34 @@ type geminiStep struct {
 	isError  bool
 }
 
-func (step geminiStep) Type() StepType {
-	return step.typ
+type geminiState struct {
+	systemPrompt string
+	steps        []geminiStep
 }
 
-func (step geminiStep) Content() string {
-	return step.content
+func (st *geminiState) SystemPrompt(s string) {
+	st.systemPrompt = s
 }
 
-func (step geminiStep) Name() string {
-	return step.name
+func (st *geminiState) Prompt(s string) {
+	st.steps = append(st.steps, geminiStep{
+		typ:     PromptStep,
+		content: s,
+	})
 }
 
-func (step geminiStep) Input() json.RawMessage {
-	return step.input
+func (st *geminiState) Len() int {
+	return len(st.steps)
+}
+
+func (st *geminiState) Step(n int) Step {
+	step := st.steps[n]
+	return Step{
+		Type:    step.typ,
+		Content: step.content,
+		Name:    step.name,
+		Input:   step.input,
+	}
 }
 
 func toGeminiTools(tools Tools) []*genai.FunctionDeclaration {
@@ -104,12 +118,18 @@ func partType(prt *genai.Part) string {
 	return s
 }
 
-func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
+func (mdl *geminiModel) NewState() State {
+	return &geminiState{}
+}
+
+func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 	opts *Options) error {
 
+	st := ast.(*geminiState)
+
 	var gccfg genai.GenerateContentConfig
-	if st.SystemPrompt != "" {
-		gccfg.SystemInstruction = genai.NewContentFromText(st.SystemPrompt, genai.RoleUser)
+	if st.systemPrompt != "" {
+		gccfg.SystemInstruction = genai.NewContentFromText(st.systemPrompt, genai.RoleUser)
 	}
 	if len(tools) > 0 {
 		gccfg.Tools = []*genai.Tool{
@@ -120,11 +140,10 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 	}
 
 	for {
-		txtLen := len(st.SystemPrompt)
+		txtLen := len(st.systemPrompt)
 
 		var cnts []*genai.Content
-		for _, as := range st.Steps {
-			step := as.(geminiStep)
+		for _, step := range st.steps {
 			switch step.typ {
 			case PromptStep:
 				cnts = append(cnts, &genai.Content{
@@ -193,12 +212,12 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 		if opts.Trace {
 			fmt.Print("Trace: Gemini GenerateContent(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", m.name, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.name, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := m.client.Models.GenerateContent(ctx, m.name, cnts, &gccfg)
+		rsp, err := mdl.client.Models.GenerateContent(ctx, mdl.name, cnts, &gccfg)
 
 		if opts.Trace {
 			fmt.Print(err)
@@ -247,7 +266,7 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 		for _, cnd := range rsp.Candidates {
 			for _, prt := range cnd.Content.Parts {
 				if prt.Text != "" {
-					st.appendStep(geminiStep{
+					st.steps = append(st.steps, geminiStep{
 						typ:      ModelResponseStep,
 						content:  prt.Text,
 						thoughts: prt.ThoughtSignature,
@@ -257,7 +276,7 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 
 					buf, err := json.Marshal(prt.FunctionCall.Args)
 
-					st.appendStep(geminiStep{
+					st.steps = append(st.steps, geminiStep{
 						typ:      ToolCallStep,
 						name:     prt.FunctionCall.Name,
 						id:       prt.FunctionCall.ID,
@@ -287,7 +306,7 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 					if err != nil {
 						out = fmt.Sprintf("error: %s", err)
 					}
-					st.appendStep(geminiStep{
+					st.steps = append(st.steps, geminiStep{
 						typ:     ToolOutputStep,
 						name:    prt.FunctionCall.Name,
 						id:      prt.FunctionCall.ID,
@@ -312,12 +331,6 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 	return nil
 }
 
-func (_ *geminiModel) Prompt(st *State, s string) {
-	st.appendStep(geminiStep{
-		typ:     PromptStep,
-		content: s,
-	})
-}
 func ListGeminiModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,

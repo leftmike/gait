@@ -98,15 +98,11 @@ func main() {
 		},
 	}
 
-	if err != nil {
-		log.Fatalln(err)
-	}
-
 	ctx := context.Background()
 	line := liner.NewLiner()
 	defer line.Close()
 
-	var st model.State
+	st := mdl.NewState()
 	for {
 		s, err := line.Prompt("> ")
 		if err == io.EOF {
@@ -116,32 +112,32 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		mdl.Prompt(&st, s)
-		n := len(st.Steps)
+		st.Prompt(s)
+		n := st.Len()
 
-		err = mdl.Generate(ctx, &st, tools, opts)
+		err = mdl.Generate(ctx, st, tools, opts)
 		if err != nil {
 			log.Fatalln(err)
 		}
-		for n < len(st.Steps) {
-			step := st.Steps[n]
+		for n < st.Len() {
+			step := st.Step(n)
 
-			switch step.Type() {
+			switch step.Type {
 			case model.PromptStep:
 				panic("did not expect prompt step in model output")
 			case model.ModelResponseStep:
-				fmt.Println(step.Content())
+				fmt.Println(step.Content)
 			case model.ReasoningStep:
 				if opts.Summary {
-					fmt.Printf("[%s]\n", step.Content())
+					fmt.Printf("[%s]\n", step.Content)
 				}
 			case model.ToolCallStep:
 				if opts.Verbose {
-					fmt.Printf("Tool Call: %s(%s)\n", step.Name(), string(step.Input()))
+					fmt.Printf("Tool Call: %s(%s)\n", step.Name, string(step.Input))
 				}
 			case model.ToolOutputStep:
 				if opts.Verbose {
-					fmt.Println("Tool Output: ", step.Content())
+					fmt.Println("Tool Output: ", step.Content)
 				}
 			}
 

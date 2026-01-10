@@ -31,20 +31,34 @@ type anthropicStep struct {
 	isError bool
 }
 
-func (step anthropicStep) Type() StepType {
-	return step.typ
+type anthropicState struct {
+	systemPrompt string
+	steps        []anthropicStep
 }
 
-func (step anthropicStep) Content() string {
-	return step.content
+func (st *anthropicState) SystemPrompt(s string) {
+	st.systemPrompt = s
 }
 
-func (step anthropicStep) Name() string {
-	return step.name
+func (st *anthropicState) Prompt(s string) {
+	st.steps = append(st.steps, anthropicStep{
+		typ:     PromptStep,
+		content: s,
+	})
 }
 
-func (step anthropicStep) Input() json.RawMessage {
-	return step.input
+func (st *anthropicState) Len() int {
+	return len(st.steps)
+}
+
+func (st *anthropicState) Step(n int) Step {
+	step := st.steps[n]
+	return Step{
+		Type:    step.typ,
+		Content: step.content,
+		Name:    step.name,
+		Input:   step.input,
+	}
 }
 
 func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
@@ -64,15 +78,14 @@ func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
 func toAnthropicTools(tools Tools) []anthropic.ToolUnionParam {
 	var toolParams []anthropic.ToolUnionParam
 	for _, tl := range tools {
-		toolParams = append(toolParams,
-			anthropic.ToolUnionParam{
-				OfTool: &anthropic.ToolParam{
-					InputSchema: toAnthropicInputSchema(tl.Schema.schema),
-					Name:        tl.Name,
-					Description: anthropic_param.NewOpt(tl.Description),
-					Type:        anthropic.ToolTypeCustom,
-				},
-			})
+		toolParams = append(toolParams, anthropic.ToolUnionParam{
+			OfTool: &anthropic.ToolParam{
+				InputSchema: toAnthropicInputSchema(tl.Schema.schema),
+				Name:        tl.Name,
+				Description: anthropic_param.NewOpt(tl.Description),
+				Type:        anthropic.ToolTypeCustom,
+			},
+		})
 	}
 	return toolParams
 }
@@ -86,16 +99,20 @@ var (
 	}
 )
 
-func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
+func (mdl *anthropicModel) NewState() State {
+	return &anthropicState{}
+}
+
+func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 	opts *Options) error {
 
+	st := ast.(*anthropicState)
 	toolParams := toAnthropicTools(tools)
 
 	for {
 		var txtLen int
 		var msgParams []anthropic.MessageParam
-		for _, as := range st.Steps {
-			step := as.(anthropicStep)
+		for _, step := range st.steps {
 			switch step.typ {
 			case PromptStep, ModelResponseStep:
 				msgParams = append(msgParams, anthropic.MessageParam{
@@ -134,23 +151,23 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 		req := anthropic.MessageNewParams{
 			MaxTokens: 1024 * 32,
 			Messages:  msgParams,
-			Model:     m.name,
+			Model:     mdl.name,
 			Tools:     toolParams,
 		}
-		if st.SystemPrompt != "" {
-			req.System = []anthropic.TextBlockParam{{Text: st.SystemPrompt}}
-			txtLen += len(st.SystemPrompt)
+		if st.systemPrompt != "" {
+			req.System = []anthropic.TextBlockParam{{Text: st.systemPrompt}}
+			txtLen += len(st.systemPrompt)
 		}
 
 		if opts.Trace {
 			fmt.Print("Trace: Anthropic Messages.NewStreaming(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", m.name, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.name, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
-		strm := m.client.Messages.NewStreaming(ctx, req)
+		strm := mdl.client.Messages.NewStreaming(ctx, req)
 		defer strm.Close()
 
 		var rsp anthropic.Message
@@ -197,13 +214,13 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 		for _, blk := range rsp.Content {
 			switch blk.Type {
 			case "text":
-				st.appendStep(anthropicStep{
+				st.steps = append(st.steps, anthropicStep{
 					typ:     ModelResponseStep,
 					content: blk.Text,
 				})
 
 			case "thinking":
-				st.appendStep(anthropicStep{
+				st.steps = append(st.steps, anthropicStep{
 					typ:     ReasoningStep,
 					content: blk.Text,
 				}) // XXX: is this right?
@@ -218,7 +235,7 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 				}
 
 				toolCalls = true
-				st.appendStep(anthropicStep{
+				st.steps = append(st.steps, anthropicStep{
 					typ:   ToolCallStep,
 					name:  blk.Name,
 					id:    blk.ID,
@@ -233,7 +250,7 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 				if err != nil {
 					out = fmt.Sprintf("error: %s", err)
 				}
-				st.appendStep(anthropicStep{
+				st.steps = append(st.steps, anthropicStep{
 					typ:     ToolOutputStep,
 					name:    blk.Name,
 					id:      blk.ID,
@@ -257,13 +274,6 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 	}
 
 	return nil
-}
-
-func (_ *anthropicModel) Prompt(st *State, s string) {
-	st.appendStep(anthropicStep{
-		typ:     PromptStep,
-		content: s,
-	})
 }
 
 func ListAnthropicModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
