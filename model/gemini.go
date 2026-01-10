@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -30,6 +31,7 @@ func NewGeminiModel(name, apiKey string, opts *Options) (Model, error) {
 	}, nil
 }
 
+/*
 func toGeminiSchema(scm map[string]any) *genai.Schema {
 	schema := &genai.Schema{
 		Type: genai.TypeObject,
@@ -77,23 +79,19 @@ func toGeminiSchema(scm map[string]any) *genai.Schema {
 
 	return schema
 }
+*/
 
-func toGeminiTools(tools Tools) []*genai.Tool {
-	var funcDecls []*genai.FunctionDeclaration
+func toGeminiTools(tools Tools) []*genai.FunctionDeclaration {
+	var decls []*genai.FunctionDeclaration
 	for _, tl := range tools {
-		funcDecl := &genai.FunctionDeclaration{
-			Name:        tl.Name,
-			Description: tl.Description,
-			Parameters:  toGeminiSchema(tl.Schema.schema),
-		}
-		funcDecls = append(funcDecls, funcDecl)
+		decls = append(decls, &genai.FunctionDeclaration{
+			Description:          tl.Description,
+			Name:                 tl.Name,
+			ParametersJsonSchema: tl.Schema.schema,
+		})
 	}
 
-	if len(funcDecls) == 0 {
-		return nil
-	}
-
-	return []*genai.Tool{{FunctionDeclarations: funcDecls}}
+	return decls
 }
 
 func partType(prt *genai.Part) string {
@@ -132,16 +130,21 @@ func partType(prt *genai.Part) string {
 func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 	opts *Options) error {
 
-	/*
-		if len(tools) > 0 {
-			req.Tools = toGeminiTools(tools)
+	var gccfg genai.GenerateContentConfig
+	if st.SystemPrompt != "" {
+		gccfg.SystemInstruction = genai.NewContentFromText(st.SystemPrompt, genai.RoleUser)
+	}
+	if len(tools) > 0 {
+		gccfg.Tools = []*genai.Tool{
+			{
+				FunctionDeclarations: toGeminiTools(tools),
+			},
 		}
-	*/
+	}
 
 	for {
-		//var pendingToolResponses []*genai.Part
+		txtLen := len(st.SystemPrompt)
 
-		var txtLen int
 		var cnts []*genai.Content
 		for _, step := range st.Steps {
 			switch step.Type {
@@ -171,25 +174,41 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 				// Gemini doesn't have reasoning blocks, skip
 				continue // XXX: is this right?
 
-			/*
-				case ToolCallStep:
-					var args map[string]any
-					if err := json.Unmarshal([]byte(step.Input), &args); err != nil {
-						args = make(map[string]any)
-					}
-					contents = append(contents, &genai.Content{
-						Role:  "model",
-						Parts: []*genai.Part{genai.NewFunctionCallPart(step.Name, args)},
-					})
+			case ToolCallStep:
+				cnts = append(cnts, &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{
+								ID:   step.ID,
+								Args: step.Args,
+								Name: step.Name,
+							},
+						},
+					},
+					Role: "model",
+				})
 
-				case ToolOutputStep:
-					resp := map[string]any{"content": step.Content}
-					if step.IsError {
-						resp["error"] = true
-					}
-					pendingToolResponses = append(pendingToolResponses,
-						genai.NewFunctionResponsePart(step.ID, resp))
-			*/
+			case ToolOutputStep:
+				rsp := map[string]any{}
+				if step.IsError {
+					rsp["error"] = step.Content
+				} else {
+					rsp["output"] = step.Content
+				}
+
+				cnts = append(cnts, &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionResponse: &genai.FunctionResponse{
+								ID:       step.ID,
+								Name:     step.Name,
+								Response: rsp,
+							},
+						},
+					},
+					Role: "user",
+				})
+
 			default:
 				panic(fmt.Sprintf("unexpected step type: %d", step.Type))
 			}
@@ -207,13 +226,6 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 			}
 		*/
 
-		var gmcft genai.GenerateContentConfig
-		if st.SystemPrompt != "" {
-			gmcft.SystemInstruction = genai.NewContentFromText(st.SystemPrompt, genai.RoleUser)
-
-			txtLen += len(st.SystemPrompt)
-		}
-
 		if opts.Trace {
 			fmt.Print("Trace: Gemini GenerateContent(")
 			if opts.Verbose {
@@ -222,7 +234,7 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := m.client.Models.GenerateContent(ctx, m.name, cnts, &gmcft)
+		rsp, err := m.client.Models.GenerateContent(ctx, m.name, cnts, &gccfg)
 
 		if opts.Trace {
 			fmt.Print(err)
@@ -272,12 +284,39 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 			}
 		}
 
+		var toolCalls bool
 		for _, cnd := range rsp.Candidates {
 			for _, prt := range cnd.Content.Parts {
 				if prt.Text != "" {
 					st.appendStep(ModelResponseStep, prt.Text)
 				} else if prt.FunctionCall != nil {
-					// XXX:					functionCalls = append(functionCalls, part.FunctionCall)
+					fc := prt.FunctionCall
+					buf, err := json.Marshal(fc.Args)
+					if err != nil {
+						// XXX: handle by returning the error to the model
+						panic(err)
+					}
+
+					if opts.Trace {
+						fmt.Printf("Trace: calling %s(%s)", fc.Name, buf)
+						if opts.Verbose {
+							fmt.Printf(" id: %s", fc.ID)
+						}
+						fmt.Println()
+					}
+
+					toolCalls = true
+					st.appendToolCall(fc.Name, fc.ID, buf, fc.Args)
+					out, err := tools.Call(fc.Name, buf, opts)
+					if opts.Trace {
+						fmt.Printf("Trace: results from %s() -> (%q, ", fc.Name, out)
+						fmt.Print(err)
+						fmt.Println(")")
+					}
+					if err != nil {
+						out = fmt.Sprintf("error: %s", err)
+					}
+					st.appendToolOutput(err != nil, fc.Name, fc.ID, out)
 				} else {
 					if opts.Trace {
 						fmt.Printf("Trace: unexpected Part: %s\n", partType(prt))
@@ -287,65 +326,10 @@ func (m *geminiModel) Generate(ctx context.Context, st *State, tools Tools,
 				}
 			}
 		}
-		/*
-			var toolCalls bool
-			var toolResponseParts []*genai.Part
 
-			for _, fc := range functionCalls {
-				argsJSON, _ := json.Marshal(fc.Args)
-
-				if opts.Trace {
-					fmt.Printf("Trace: calling %s(%s)", fc.Name, string(argsJSON))
-					if opts.Verbose {
-						fmt.Printf(" id: %s", fc.Name)
-					}
-					fmt.Println()
-				}
-
-				toolCalls = true
-				st.appendToolCall(fc.Name, fc.Name, string(argsJSON))
-
-				// Add function call to contents
-				contents = append(contents, &genai.Content{
-					Role:  "model",
-					Parts: []*genai.Part{genai.NewFunctionCallPart(fc.Name, fc.Args)},
-				})
-
-				out, err := tools.Call(fc.Name, argsJSON, opts)
-
-				if opts.Trace {
-					fmt.Printf("Trace: results from %s() -> (%q, ", fc.Name, out)
-					fmt.Print(err)
-					fmt.Println(")")
-				}
-
-				if err != nil {
-					out = fmt.Sprintf("error: %s", err)
-				}
-				st.appendToolOutput(err != nil, fc.Name, out)
-
-				// Build tool response
-				resp := map[string]any{"content": out}
-				if err != nil {
-					resp["error"] = true
-				}
-				toolResponseParts = append(toolResponseParts,
-					genai.NewFunctionResponsePart(fc.Name, resp))
-			}
-
-			// Add all tool responses as a single user message
-			if len(toolResponseParts) > 0 {
-				contents = append(contents, &genai.Content{
-					Role:  "user",
-					Parts: toolResponseParts,
-				})
-			}
-
-			if !toolCalls {
-				break
-			}
-		*/
-		break // XXX
+		if !toolCalls {
+			break
+		}
 	}
 
 	return nil

@@ -17,7 +17,8 @@ type Step struct {
 	Content string          // Prompt, ModelResponse, Reasoning, and ToolOutput
 	Name    string          // ToolCall and ToolOutput
 	ID      string          // ToolCall and ToolOutput: optional, depending upon the provider
-	Input   json.RawMessage // ToolCall
+	Input   json.RawMessage // ToolCall, required
+	Args    map[string]any  // ToolCall: optional, depending upon the provider
 	IsError bool            // ToolOutput
 }
 
@@ -34,20 +35,22 @@ func (st *State) appendStep(typ StepType, s string) {
 		})
 }
 
-func (st *State) appendToolCall(name, id string, buf json.RawMessage) {
+func (st *State) appendToolCall(name, id string, buf json.RawMessage, args map[string]any) {
 	st.Steps = append(st.Steps,
 		Step{
 			Type:  ToolCallStep,
 			Name:  name,
 			ID:    id,
 			Input: buf,
+			Args:  args,
 		})
 }
 
-func (st *State) appendToolOutput(isError bool, id, s string) {
+func (st *State) appendToolOutput(isError bool, name, id, s string) {
 	st.Steps = append(st.Steps,
 		Step{
 			Type:    ToolOutputStep,
+			Name:    name,
 			ID:      id,
 			Content: s,
 			IsError: isError,

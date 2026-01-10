@@ -183,7 +183,7 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 				}
 
 				toolCalls = true
-				st.appendToolCall(blk.Name, blk.ID, blk.Input)
+				st.appendToolCall(blk.Name, blk.ID, blk.Input, nil)
 				out, err := tools.Call(blk.Name, []byte(blk.Input), opts)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%q, ", blk.Name, out)
@@ -193,7 +193,7 @@ func (m *anthropicModel) Generate(ctx context.Context, st *State, tools Tools,
 				if err != nil {
 					out = fmt.Sprintf("error: %s", err)
 				}
-				st.appendToolOutput(err != nil, blk.ID, out)
+				st.appendToolOutput(err != nil, blk.Name, blk.ID, out)
 
 			default:
 				// "redacted_thinking", "server_tool_use", "web_search_tool_result"

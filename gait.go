@@ -4,6 +4,7 @@ To Do:
 - Gemini
 -- Seed in GenerateContentConfig
 -- Turn on thinking?
+-- Streaming
 - Anthropic
 -- Turn on thinking?
 -- Reasoning summaries
@@ -137,6 +138,7 @@ func main() {
 				}
 			case model.ToolOutputStep:
 				if opts.Verbose {
+					// XXX: IsError?
 					fmt.Println("Tool Output: ", step.Content)
 				}
 			}

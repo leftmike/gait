@@ -155,7 +155,7 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 				}
 
 				toolCalls = true
-				st.appendToolCall(rspItem.Name, "", json.RawMessage(rspItem.Arguments))
+				st.appendToolCall(rspItem.Name, "", json.RawMessage(rspItem.Arguments), nil)
 				out, err := tools.Call(rspItem.Name, []byte(rspItem.Arguments), opts)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%q, ", rspItem.Name, out)
@@ -165,7 +165,7 @@ func (m *openAIModel) Generate(ctx context.Context, st *State, tools Tools, opts
 				if err != nil {
 					out = fmt.Sprintf("error: %s", err)
 				}
-				st.appendToolOutput(err != nil, "", out)
+				st.appendToolOutput(err != nil, rspItem.Name, "", out)
 
 			default:
 				if opts.Trace {
