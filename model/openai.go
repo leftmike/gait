@@ -210,7 +210,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 					name:  rspItem.Name,
 					input: json.RawMessage(rspItem.Arguments),
 				})
-				out, err := tools.Call(rspItem.Name, []byte(rspItem.Arguments), opts)
+				out, err := tools.Call(ctx, rspItem.Name, []byte(rspItem.Arguments), opts)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%q, ", rspItem.Name, out)
 					fmt.Print(err)

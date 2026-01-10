@@ -294,7 +294,7 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 							}
 							fmt.Println()
 						}
-						out, err = tools.Call(prt.FunctionCall.Name, buf, opts)
+						out, err = tools.Call(ctx, prt.FunctionCall.Name, buf, opts)
 						if opts.Trace {
 							fmt.Printf("Trace: results from %s() -> (%q, ",
 								prt.FunctionCall.Name, out)

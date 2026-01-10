@@ -241,7 +241,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 					id:    blk.ID,
 					input: blk.Input,
 				})
-				out, err := tools.Call(blk.Name, []byte(blk.Input), opts)
+				out, err := tools.Call(ctx, blk.Name, []byte(blk.Input), opts)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%q, ", blk.Name, out)
 					fmt.Print(err)

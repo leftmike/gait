@@ -11,7 +11,6 @@ To Do:
 -- Reasoning summaries
 -- StopReason max_tokens
 - Test all of the providers
-- Pass ctx into functions
 */
 
 package main
@@ -34,7 +33,7 @@ type getWeatherArgs struct {
 	Country string `json:"country" jsonschema:"the country of the city"`
 }
 
-func getWeather(buf []byte) (string, error) {
+func getWeather(ctx context.Context, buf []byte) (string, error) {
 	var args getWeatherArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {

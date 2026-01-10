@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -9,7 +10,7 @@ import (
 
 type Tools []Tool
 
-type ToolFunc func(buf []byte) (string, error)
+type ToolFunc func(ctx context.Context, buf []byte) (string, error)
 
 type Tool struct {
 	Name        string
@@ -189,10 +190,12 @@ func MustToolSchema[T any]() *ToolSchema {
 	return ts
 }
 
-func (tls Tools) Call(name string, args []byte, opts *Options) (string, error) {
+func (tls Tools) Call(ctx context.Context, name string, args []byte,
+	opts *Options) (string, error) {
+
 	for _, tl := range tls {
 		if tl.Name == name {
-			return tl.Func(args)
+			return tl.Func(ctx, args)
 		}
 	}
 
