@@ -4,7 +4,6 @@ To Do:
 - Gemini
 -- Seed in GenerateContentConfig
 -- Turn on thinking?
--- Streaming
 -- gemini-3-flash-preview
 - Anthropic
 -- Turn on thinking?
@@ -159,6 +158,7 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
+
 		for n < st.Len() {
 			step := st.Step(n)
 
