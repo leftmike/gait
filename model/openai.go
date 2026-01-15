@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/openai/openai-go/v3"
@@ -29,7 +28,8 @@ type openAIStep struct {
 	typ     StepType
 	content string
 	name    string
-	input   json.RawMessage
+	id      string
+	input   string
 }
 
 type openAIState struct {
@@ -58,8 +58,81 @@ func (st *openAIState) Step(n int) Step {
 		Type:    step.typ,
 		Content: step.content,
 		Name:    step.name,
-		Input:   step.input,
+		Input:   json.RawMessage(step.input),
 	}
+}
+
+func openAIInputText(role, text string) responses.ResponseInputItemUnionParam {
+	return responses.ResponseInputItemUnionParam{
+		OfInputMessage: &responses.ResponseInputItemMessageParam{
+			Role: role,
+			Content: []responses.ResponseInputContentUnionParam{
+				{
+					OfInputText: &responses.ResponseInputTextParam{
+						Text: text,
+					},
+				},
+			},
+		},
+	}
+}
+
+func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionParam, int) {
+	var lst []responses.ResponseInputItemUnionParam
+	var txtLen int
+
+	if st.systemPrompt != "" {
+		lst = append(lst, openAIInputText("system", st.systemPrompt))
+		txtLen += len(st.systemPrompt)
+	}
+
+	for _, step := range st.steps {
+		switch step.typ {
+		case PromptStep:
+			lst = append(lst, openAIInputText("user", step.content))
+			txtLen += len(step.content)
+
+		case ModelResponseStep:
+			lst = append(lst, responses.ResponseInputItemUnionParam{
+				OfOutputMessage: &responses.ResponseOutputMessageParam{
+					Content: []responses.ResponseOutputMessageContentUnionParam{
+						{
+							OfOutputText: &responses.ResponseOutputTextParam{
+								Text: step.content,
+							},
+						},
+					},
+				},
+			})
+			txtLen += len(step.content)
+
+		case ReasoningStep:
+			continue
+
+		case ToolCallStep:
+			lst = append(lst, responses.ResponseInputItemUnionParam{
+				OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+					Arguments: step.input,
+					CallID:    step.id,
+					Name:      step.name,
+				},
+			})
+			txtLen += len(step.input)
+
+		case ToolOutputStep:
+			lst = append(lst, responses.ResponseInputItemUnionParam{
+				OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+					CallID: step.id,
+					Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+						OfString: openai_param.NewOpt(step.content),
+					},
+				},
+			})
+			txtLen += len(step.content)
+		}
+	}
+
+	return lst, txtLen
 }
 
 func toOpenAITools(tools Tools) []responses.ToolUnionParam {
@@ -73,17 +146,9 @@ func toOpenAITools(tools Tools) []responses.ToolUnionParam {
 			},
 		})
 	}
+
 	return toolParams
 }
-
-var (
-	stepName = [5]string{
-		PromptStep:        "User",
-		ModelResponseStep: "Assistant",
-		ToolCallStep:      "Tool Call",
-		ToolOutputStep:    "Tool Output",
-	}
-)
 
 func (mdl *openAIModel) NewState() State {
 	return &openAIState{}
@@ -106,28 +171,12 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 	toolParams := toOpenAITools(tools)
 
 	for {
-		var buf strings.Builder
-		if st.systemPrompt != "" {
-			fmt.Fprintf(&buf, "System: %s\n", st.systemPrompt)
-		}
-
-		for _, step := range st.steps {
-			switch step.typ {
-			case PromptStep, ModelResponseStep, ToolOutputStep:
-				fmt.Fprintf(&buf, "%s: %s\n", stepName[step.typ], step.content)
-
-			case ReasoningStep:
-				continue
-
-			case ToolCallStep:
-				fmt.Fprintf(&buf, "%s: %s(%s)", stepName[step.typ], step.name, step.input)
-			}
-		}
+		lst, txtLen := st.toInputItemList()
 
 		if opts.Trace {
 			fmt.Print("Trace: OpenAI Responses.New(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.name, len(tools), buf.Len())
+				fmt.Printf("%s, %d tools, %d bytes", mdl.name, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
@@ -137,7 +186,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 				Model: mdl.name,
 				Tools: toolParams,
 				Input: responses.ResponseNewParamsInputUnion{
-					OfString: openai_param.NewOpt(buf.String()),
+					OfInputItemList: lst,
 				},
 				Reasoning: reasoningParam,
 			})
@@ -208,7 +257,8 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 				st.steps = append(st.steps, openAIStep{
 					typ:   ToolCallStep,
 					name:  rspItem.Name,
-					input: json.RawMessage(rspItem.Arguments),
+					id:    rspItem.CallID,
+					input: rspItem.Arguments,
 				})
 				out, err := tools.Call(ctx, rspItem.Name, []byte(rspItem.Arguments), opts)
 				if opts.Trace {
@@ -222,6 +272,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 				st.steps = append(st.steps, openAIStep{
 					typ:     ToolOutputStep,
 					name:    rspItem.Name,
+					id:      rspItem.CallID,
 					content: out,
 				})
 

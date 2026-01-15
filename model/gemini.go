@@ -72,6 +72,78 @@ func (st *geminiState) Step(n int) Step {
 	}
 }
 
+func (st *geminiState) toContents() ([]*genai.Content, int) {
+	var cnts []*genai.Content
+	var txtLen int
+	for _, step := range st.steps {
+		switch step.typ {
+		case PromptStep:
+			cnts = append(cnts, &genai.Content{
+				Role:  "user",
+				Parts: []*genai.Part{genai.NewPartFromText(step.content)},
+			})
+
+		case ModelResponseStep:
+			cnts = append(cnts, &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{
+						Text:             step.content,
+						ThoughtSignature: step.thoughts,
+					},
+				},
+			})
+
+		case ReasoningStep:
+			// Gemini doesn't have reasoning blocks, skip
+			continue // XXX: is this right?
+
+		case ToolCallStep:
+			cnts = append(cnts, &genai.Content{
+				Parts: []*genai.Part{
+					{
+						FunctionCall: &genai.FunctionCall{
+							ID:   step.id,
+							Args: step.args,
+							Name: step.name,
+						},
+						ThoughtSignature: step.thoughts,
+					},
+				},
+				Role: "model",
+			})
+
+		case ToolOutputStep:
+			rsp := map[string]any{}
+			if step.isError {
+				rsp["error"] = step.content
+			} else {
+				rsp["output"] = step.content
+			}
+
+			cnts = append(cnts, &genai.Content{
+				Parts: []*genai.Part{
+					{
+						FunctionResponse: &genai.FunctionResponse{
+							ID:       step.id,
+							Name:     step.name,
+							Response: rsp,
+						},
+					},
+				},
+				Role: "user",
+			})
+
+		default:
+			panic(fmt.Sprintf("unexpected step type: %d", step.typ))
+		}
+
+		txtLen += len(step.content) + len(step.input)
+	}
+
+	return cnts, txtLen
+}
+
 func toGeminiTools(tools Tools) []*genai.FunctionDeclaration {
 	var decls []*genai.FunctionDeclaration
 	for _, tl := range tools {
@@ -140,74 +212,8 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 	}
 
 	for {
-		txtLen := len(st.systemPrompt)
-
-		var cnts []*genai.Content
-		for _, step := range st.steps {
-			switch step.typ {
-			case PromptStep:
-				cnts = append(cnts, &genai.Content{
-					Role:  "user",
-					Parts: []*genai.Part{genai.NewPartFromText(step.content)},
-				})
-
-			case ModelResponseStep:
-				cnts = append(cnts, &genai.Content{
-					Role: "model",
-					Parts: []*genai.Part{
-						{
-							Text:             step.content,
-							ThoughtSignature: step.thoughts,
-						},
-					},
-				})
-
-			case ReasoningStep:
-				// Gemini doesn't have reasoning blocks, skip
-				continue // XXX: is this right?
-
-			case ToolCallStep:
-				cnts = append(cnts, &genai.Content{
-					Parts: []*genai.Part{
-						{
-							FunctionCall: &genai.FunctionCall{
-								ID:   step.id,
-								Args: step.args,
-								Name: step.name,
-							},
-							ThoughtSignature: step.thoughts,
-						},
-					},
-					Role: "model",
-				})
-
-			case ToolOutputStep:
-				rsp := map[string]any{}
-				if step.isError {
-					rsp["error"] = step.content
-				} else {
-					rsp["output"] = step.content
-				}
-
-				cnts = append(cnts, &genai.Content{
-					Parts: []*genai.Part{
-						{
-							FunctionResponse: &genai.FunctionResponse{
-								ID:       step.id,
-								Name:     step.name,
-								Response: rsp,
-							},
-						},
-					},
-					Role: "user",
-				})
-
-			default:
-				panic(fmt.Sprintf("unexpected step type: %d", step.typ))
-			}
-
-			txtLen += len(step.content) + len(step.input)
-		}
+		cnts, txtLen := st.toContents()
+		txtLen += len(st.systemPrompt)
 
 		if opts.Trace {
 			fmt.Print("Trace: Gemini GenerateContent(")

@@ -61,6 +61,57 @@ func (st *anthropicState) Step(n int) Step {
 	}
 }
 
+var (
+	stepRole = [5]anthropic.MessageParamRole{
+		PromptStep:        anthropic.MessageParamRoleUser,
+		ModelResponseStep: anthropic.MessageParamRoleAssistant,
+		ToolCallStep:      anthropic.MessageParamRoleAssistant,
+		ToolOutputStep:    anthropic.MessageParamRoleUser,
+	}
+)
+
+func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
+	var msgParams []anthropic.MessageParam
+	var txtLen int
+	for _, step := range st.steps {
+		switch step.typ {
+		case PromptStep, ModelResponseStep:
+			msgParams = append(msgParams, anthropic.MessageParam{
+				Role: stepRole[step.typ],
+				Content: []anthropic.ContentBlockParamUnion{
+					anthropic.NewTextBlock(step.content),
+				},
+			})
+
+		case ReasoningStep:
+			continue // XXX: is this right?
+
+		case ToolCallStep:
+			msgParams = append(msgParams, anthropic.MessageParam{
+				Role: stepRole[step.typ],
+				Content: []anthropic.ContentBlockParamUnion{
+					anthropic.NewToolUseBlock(step.id, step.input, step.name),
+				},
+			})
+
+		case ToolOutputStep:
+			msgParams = append(msgParams, anthropic.MessageParam{
+				Role: stepRole[step.typ],
+				Content: []anthropic.ContentBlockParamUnion{
+					anthropic.NewToolResultBlock(step.id, step.content, step.isError),
+				},
+			})
+
+		default:
+			panic(fmt.Sprintf("unexpected step type: %d", step.typ))
+		}
+
+		txtLen += len(step.content) + len(step.input)
+	}
+
+	return msgParams, txtLen
+}
+
 func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
 	var req []string
 	if val, ok := scm["required"]; ok {
@@ -90,15 +141,6 @@ func toAnthropicTools(tools Tools) []anthropic.ToolUnionParam {
 	return toolParams
 }
 
-var (
-	stepRole = [5]anthropic.MessageParamRole{
-		PromptStep:        anthropic.MessageParamRoleUser,
-		ModelResponseStep: anthropic.MessageParamRoleAssistant,
-		ToolCallStep:      anthropic.MessageParamRoleAssistant,
-		ToolOutputStep:    anthropic.MessageParamRoleUser,
-	}
-)
-
 func (mdl *anthropicModel) NewState() State {
 	return &anthropicState{}
 }
@@ -110,44 +152,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 	toolParams := toAnthropicTools(tools)
 
 	for {
-		var txtLen int
-		var msgParams []anthropic.MessageParam
-		for _, step := range st.steps {
-			switch step.typ {
-			case PromptStep, ModelResponseStep:
-				msgParams = append(msgParams, anthropic.MessageParam{
-					Role: stepRole[step.typ],
-					Content: []anthropic.ContentBlockParamUnion{
-						anthropic.NewTextBlock(step.content),
-					},
-				})
-
-			case ReasoningStep:
-				continue // XXX: is this right?
-
-			case ToolCallStep:
-				msgParams = append(msgParams, anthropic.MessageParam{
-					Role: stepRole[step.typ],
-					Content: []anthropic.ContentBlockParamUnion{
-						anthropic.NewToolUseBlock(step.id, step.input, step.name),
-					},
-				})
-
-			case ToolOutputStep:
-				msgParams = append(msgParams, anthropic.MessageParam{
-					Role: stepRole[step.typ],
-					Content: []anthropic.ContentBlockParamUnion{
-						anthropic.NewToolResultBlock(step.id, step.content, step.isError),
-					},
-				})
-
-			default:
-				panic(fmt.Sprintf("unexpected step type: %d", step.typ))
-			}
-
-			txtLen += len(step.content) + len(step.input)
-		}
-
+		msgParams, txtLen := st.toMessageParams()
 		req := anthropic.MessageNewParams{
 			MaxTokens: 1024 * 32,
 			Messages:  msgParams,

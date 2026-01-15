@@ -1,16 +1,17 @@
 /*
 To Do:
 - MaxOutputTokens
+- Rename Reasoning to Thinking
+
 - Gemini
 -- Seed in GenerateContentConfig
 -- Turn on thinking?
 -- gemini-3-flash-preview
+
 - Anthropic
 -- Turn on thinking?
 -- Reasoning summaries
 -- StopReason max_tokens
-- OpenAI
--- use ResponseNewParams.Input.OfInputItemList instead of OfString
 */
 
 package main

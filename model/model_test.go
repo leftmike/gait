@@ -3,13 +3,25 @@ package model_test
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
 )
+
+var (
+	provider = flag.String("provider", "", "limit tests to this provider")
+)
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+
+	os.Exit(m.Run())
+}
 
 func testModels(t *testing.T, test func(t *testing.T, mdl model.Model, provider, name string)) {
 	t.Helper()
@@ -26,6 +38,10 @@ func testModels(t *testing.T, test func(t *testing.T, mdl model.Model, provider,
 	}
 
 	for _, m := range models {
+		if *provider != "" && *provider != m.provider {
+			continue
+		}
+
 		p := cfg.FindProvider(m.provider)
 		if p == nil || p.APIKey == "" {
 			t.Fatalf("missing api key for provider: %s", m.provider)
