@@ -85,13 +85,13 @@ func testSimple(t *testing.T, mdl model.Model, provider, name string) {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
 
-	if st.Len() != n+1 {
+	if st.Len() == n {
 		t.Errorf("Generate(%s, %s) missing response: st.Len(): %d n: %d", provider, name, st.Len(),
 			n)
 	} else {
-		step := st.Step(n)
+		step := st.Step(st.Len() - 1)
 		if step.Type != model.ModelResponseStep {
-			t.Errorf("Generate(%s, %s) missing model response; got %d", provider, name, step.Type)
+			t.Errorf("Generate(%s, %s) missing model response; got %s", provider, name, step.Type)
 		}
 	}
 }

@@ -5,7 +5,6 @@ To Do:
 
 - Gemini
 -- Seed in GenerateContentConfig
--- Turn on thinking?
 -- gemini-3-flash-preview
 
 - Anthropic

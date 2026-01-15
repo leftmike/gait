@@ -95,8 +95,15 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 			})
 
 		case ReasoningStep:
-			// Gemini doesn't have reasoning blocks, skip
-			continue // XXX: is this right?
+			cnts = append(cnts, &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{
+						Text:    step.content,
+						Thought: true,
+					},
+				},
+			})
 
 		case ToolCallStep:
 			cnts = append(cnts, &genai.Content{
@@ -158,36 +165,32 @@ func toGeminiTools(tools Tools) []*genai.FunctionDeclaration {
 }
 
 func partType(prt *genai.Part) string {
-	var s string
 	if prt.MediaResolution != nil {
-		s = "media resolution"
+		return "media resolution"
 	} else if prt.CodeExecutionResult != nil {
-		s = "code execution result"
+		return "code execution result"
 	} else if prt.ExecutableCode != nil {
-		s = "executable code"
+		return "executable code"
 	} else if prt.FileData != nil {
-		s = "file data"
+		return "file data"
 	} else if prt.FunctionCall != nil {
-		s = "function call"
+		return "function call"
 	} else if prt.FunctionResponse != nil {
-		s = "function response"
+		return "function response"
 	} else if prt.InlineData != nil {
-		s = "inline data"
+		return "inline data"
 	} else if prt.Text != "" {
-		s = "text"
+		if prt.Thought {
+			return "thought"
+		}
+		return "text"
 	} else if prt.ThoughtSignature != nil {
-		s = "thought signature"
+		return "thought signature"
 	} else if prt.VideoMetadata != nil {
-		s = "video metadata"
-	} else {
-		s = "--empty--"
+		return "video metadata"
 	}
 
-	if prt.Thought {
-		s += " thought"
-	}
-
-	return s
+	return "--empty--"
 }
 
 func (mdl *geminiModel) NewState() State {
@@ -200,6 +203,15 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 	st := ast.(*geminiState)
 
 	var gccfg genai.GenerateContentConfig
+	//if opts.Thinking {
+	gccfg.ThinkingConfig = &genai.ThinkingConfig{
+		IncludeThoughts: true,
+	}
+	/*
+		if opts.ThinkingBudget > 0 {
+			gccfg.ThinkingConfig.BudgetTokenCount = int32(opts.ThinkingBudget)
+		}
+	*/
 	if st.systemPrompt != "" {
 		gccfg.SystemInstruction = genai.NewContentFromText(st.systemPrompt, genai.RoleUser)
 	}
@@ -271,7 +283,12 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 		var toolCalls bool
 		for _, cnd := range rsp.Candidates {
 			for _, prt := range cnd.Content.Parts {
-				if prt.Text != "" {
+				if prt.Thought {
+					st.steps = append(st.steps, geminiStep{
+						typ:     ReasoningStep,
+						content: prt.Text,
+					})
+				} else if prt.Text != "" {
 					st.steps = append(st.steps, geminiStep{
 						typ:      ModelResponseStep,
 						content:  prt.Text,

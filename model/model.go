@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -32,6 +33,23 @@ const (
 	ToolCallStep
 	ToolOutputStep
 )
+
+func (st StepType) String() string {
+	switch st {
+	case PromptStep:
+		return "PromptStep"
+	case ModelResponseStep:
+		return "ModelResponseStep"
+	case ReasoningStep:
+		return "ReasoningStep"
+	case ToolCallStep:
+		return "ToolCallStep"
+	case ToolOutputStep:
+		return "ToolOutputStep"
+	default:
+		return fmt.Sprintf("StepType(%d)", st)
+	}
+}
 
 type Step struct {
 	Type    StepType
