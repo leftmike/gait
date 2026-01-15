@@ -9,6 +9,8 @@ To Do:
 -- Turn on thinking?
 -- Reasoning summaries
 -- StopReason max_tokens
+- OpenAI
+-- use ResponseNewParams.Input.OfInputItemList instead of OfString
 */
 
 package main
