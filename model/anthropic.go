@@ -65,51 +65,55 @@ var (
 	stepRole = [5]anthropic.MessageParamRole{
 		PromptStep:        anthropic.MessageParamRoleUser,
 		ModelResponseStep: anthropic.MessageParamRoleAssistant,
+		ReasoningStep:     anthropic.MessageParamRoleAssistant,
 		ToolCallStep:      anthropic.MessageParamRoleAssistant,
 		ToolOutputStep:    anthropic.MessageParamRoleUser,
 	}
 )
 
 func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
-	var msgParams []anthropic.MessageParam
+	var params []anthropic.MessageParam
 	var txtLen int
 	for _, step := range st.steps {
+		var role anthropic.MessageParamRole
+		var blk anthropic.ContentBlockParamUnion
+
 		switch step.typ {
-		case PromptStep, ModelResponseStep:
-			msgParams = append(msgParams, anthropic.MessageParam{
-				Role: stepRole[step.typ],
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewTextBlock(step.content),
-				},
-			})
+		case PromptStep:
+			role = anthropic.MessageParamRoleUser
+			blk = anthropic.NewTextBlock(step.content)
+
+		case ModelResponseStep:
+			role = anthropic.MessageParamRoleAssistant
+			blk = anthropic.NewTextBlock(step.content)
 
 		case ReasoningStep:
 			continue // XXX: is this right?
 
 		case ToolCallStep:
-			msgParams = append(msgParams, anthropic.MessageParam{
-				Role: stepRole[step.typ],
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewToolUseBlock(step.id, step.input, step.name),
-				},
-			})
+			role = anthropic.MessageParamRoleAssistant
+			blk = anthropic.NewToolUseBlock(step.id, step.input, step.name)
 
 		case ToolOutputStep:
-			msgParams = append(msgParams, anthropic.MessageParam{
-				Role: stepRole[step.typ],
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewToolResultBlock(step.id, step.content, step.isError),
-				},
-			})
+			role = anthropic.MessageParamRoleUser
+			blk = anthropic.NewToolResultBlock(step.id, step.content, step.isError)
 
 		default:
 			panic(fmt.Sprintf("unexpected step type: %d", step.typ))
 		}
 
+		if len(params) == 0 || params[len(params)-1].Role != role {
+			params = append(params, anthropic.MessageParam{
+				Role:    role,
+				Content: []anthropic.ContentBlockParamUnion{blk},
+			})
+		} else {
+			params[len(params)-1].Content = append(params[len(params)-1].Content, blk)
+		}
 		txtLen += len(step.content) + len(step.input)
 	}
 
-	return msgParams, txtLen
+	return params, txtLen
 }
 
 func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {

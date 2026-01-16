@@ -76,8 +76,8 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 	var cnts []*genai.Content
 	var txtLen int
 	for _, step := range st.steps {
-		var prt *genai.Part
 		var role string
+		var prt *genai.Part
 
 		switch step.typ {
 		case PromptStep:
