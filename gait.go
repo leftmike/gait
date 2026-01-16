@@ -1,7 +1,6 @@
 /*
 To Do:
 - MaxOutputTokens
-- Rename Reasoning to Thinking
 - assistant messages can contain multiple content blocks (thinking, text, tool_use); batch those
   together into single assistant messages on requests
 
@@ -169,7 +168,7 @@ func main() {
 				panic("did not expect prompt step in model output")
 			case model.ModelResponseStep:
 				fmt.Println(step.Content)
-			case model.ReasoningStep:
+			case model.ThinkingStep:
 				if opts.Summary {
 					fmt.Printf("[%s]\n", step.Content)
 				}

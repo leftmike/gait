@@ -78,7 +78,7 @@ func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
 			role = anthropic.MessageParamRoleAssistant
 			blk = anthropic.NewTextBlock(step.content)
 
-		case ReasoningStep:
+		case ThinkingStep:
 			role = anthropic.MessageParamRoleAssistant
 			blk = anthropic.NewThinkingBlock(step.signature, step.content)
 
@@ -223,7 +223,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 
 			case "thinking":
 				st.steps = append(st.steps, anthropicStep{
-					typ:       ReasoningStep,
+					typ:       ThinkingStep,
 					content:   blk.Thinking,
 					signature: blk.Signature,
 				})

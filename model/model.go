@@ -29,7 +29,7 @@ type StepType int
 const (
 	PromptStep StepType = iota
 	ModelResponseStep
-	ReasoningStep
+	ThinkingStep
 	ToolCallStep
 	ToolOutputStep
 )
@@ -40,8 +40,8 @@ func (st StepType) String() string {
 		return "PromptStep"
 	case ModelResponseStep:
 		return "ModelResponseStep"
-	case ReasoningStep:
-		return "ReasoningStep"
+	case ThinkingStep:
+		return "ThinkingStep"
 	case ToolCallStep:
 		return "ToolCallStep"
 	case ToolOutputStep:
@@ -53,7 +53,7 @@ func (st StepType) String() string {
 
 type Step struct {
 	Type    StepType
-	Content string          // Prompt, ModelResponse, Reasoning, and ToolOutput
+	Content string          // Prompt, ModelResponse, Thinking, and ToolOutput
 	Name    string          // ToolCall and ToolOutput
 	Input   json.RawMessage // ToolCall
 }

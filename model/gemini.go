@@ -91,7 +91,7 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 				ThoughtSignature: step.thoughts,
 			}
 
-		case ReasoningStep:
+		case ThinkingStep:
 			role = "model"
 			prt = &genai.Part{
 				Text:    step.content,
@@ -278,7 +278,7 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 			for _, prt := range cnd.Content.Parts {
 				if prt.Thought {
 					st.steps = append(st.steps, geminiStep{
-						typ:     ReasoningStep,
+						typ:     ThinkingStep,
 						content: prt.Text,
 					})
 				} else if prt.Text != "" {

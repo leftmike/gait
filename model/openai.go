@@ -106,7 +106,7 @@ func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionPara
 			})
 			txtLen += len(step.content)
 
-		case ReasoningStep:
+		case ThinkingStep:
 			continue
 
 		case ToolCallStep:
@@ -243,7 +243,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 			case "reasoning":
 				for _, smmry := range rspItem.Summary {
 					st.steps = append(st.steps, openAIStep{
-						typ:     ReasoningStep,
+						typ:     ThinkingStep,
 						content: smmry.Text,
 					})
 				}
