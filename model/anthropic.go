@@ -212,7 +212,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 			}
 		}
 
-		var toolCalls bool
+		var toolCalls []anthropic.ContentBlockUnion
 		for _, blk := range rsp.Content {
 			switch blk.Type {
 			case "text":
@@ -229,36 +229,12 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 				})
 
 			case "tool_use":
-				if opts.Trace {
-					fmt.Printf("Trace: calling %s(%s)", blk.Name, blk.Input)
-					if opts.Verbose {
-						fmt.Printf(" id: %s", blk.ID)
-					}
-					fmt.Println()
-				}
-
-				toolCalls = true
+				toolCalls = append(toolCalls, blk)
 				st.steps = append(st.steps, anthropicStep{
 					typ:   ToolCallStep,
 					name:  blk.Name,
 					id:    blk.ID,
 					input: blk.Input,
-				})
-				out, err := tools.Call(ctx, blk.Name, []byte(blk.Input), opts)
-				if opts.Trace {
-					fmt.Printf("Trace: results from %s() -> (%q, ", blk.Name, out)
-					fmt.Print(err)
-					fmt.Println(")")
-				}
-				if err != nil {
-					out = fmt.Sprintf("error: %s", err)
-				}
-				st.steps = append(st.steps, anthropicStep{
-					typ:     ToolOutputStep,
-					name:    blk.Name,
-					id:      blk.ID,
-					content: out,
-					isError: err != nil,
 				})
 
 			default:
@@ -271,8 +247,39 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 			}
 		}
 
-		if !toolCalls {
+		if len(toolCalls) == 0 {
 			break
+		}
+
+		for _, blk := range toolCalls {
+			if blk.Type != "tool_use" {
+				panic(fmt.Sprintf("unexpected block type in tool calls: %s", blk.Type))
+			}
+
+			if opts.Trace {
+				fmt.Printf("Trace: calling %s(%s)", blk.Name, blk.Input)
+				if opts.Verbose {
+					fmt.Printf(" id: %s", blk.ID)
+				}
+				fmt.Println()
+			}
+
+			out, err := tools.Call(ctx, blk.Name, []byte(blk.Input), opts)
+			if opts.Trace {
+				fmt.Printf("Trace: results from %s() -> (%q, ", blk.Name, out)
+				fmt.Print(err)
+				fmt.Println(")")
+			}
+			if err != nil {
+				out = fmt.Sprintf("error: %s", err)
+			}
+			st.steps = append(st.steps, anthropicStep{
+				typ:     ToolOutputStep,
+				name:    blk.Name,
+				id:      blk.ID,
+				content: out,
+				isError: err != nil,
+			})
 		}
 	}
 

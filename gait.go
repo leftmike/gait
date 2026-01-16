@@ -1,8 +1,10 @@
 /*
 To Do:
 - MaxOutputTokens
-- assistant messages can contain multiple content blocks (thinking, text, tool_use); batch those
-  together into single assistant messages on requests
+
+- OpenAI
+-- Assistant messages can contain multiple content blocks (thinking, text, tool_use); batch those
+  together into single assistant messages on requests???
 
 - Gemini
 -- Seed in GenerateContentConfig
@@ -178,7 +180,7 @@ func main() {
 				}
 			case model.ToolOutputStep:
 				if opts.Verbose {
-					fmt.Println("Tool Output: ", step.Content)
+					fmt.Printf("Tool Output: %s: %s\n", step.Name, step.Content)
 				}
 			}
 
