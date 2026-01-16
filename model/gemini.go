@@ -190,6 +190,12 @@ func (mdl *geminiModel) NewState() State {
 	return &geminiState{}
 }
 
+type geminiToolCall struct {
+	buf []byte
+	err error
+	prt *genai.Part
+}
+
 func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 	opts *Options) error {
 
@@ -273,7 +279,7 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 			}
 		}
 
-		var toolCalls bool
+		var toolCalls []geminiToolCall
 		for _, cnd := range rsp.Candidates {
 			for _, prt := range cnd.Content.Parts {
 				if prt.Thought {
@@ -288,8 +294,6 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 						thoughts: prt.ThoughtSignature,
 					})
 				} else if prt.FunctionCall != nil {
-					toolCalls = true
-
 					buf, err := json.Marshal(prt.FunctionCall.Args)
 
 					st.steps = append(st.steps, geminiStep{
@@ -300,34 +304,10 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 						args:     prt.FunctionCall.Args,
 						thoughts: prt.ThoughtSignature,
 					})
-
-					var out string
-					if err == nil {
-						if opts.Trace {
-							fmt.Printf("Trace: calling %s(%s)", prt.FunctionCall.Name, buf)
-							if opts.Verbose {
-								fmt.Printf(" id: %s", prt.FunctionCall.ID)
-							}
-							fmt.Println()
-						}
-						out, err = tools.Call(ctx, prt.FunctionCall.Name, buf, opts)
-						if opts.Trace {
-							fmt.Printf("Trace: results from %s() -> (%q, ",
-								prt.FunctionCall.Name, out)
-							fmt.Print(err)
-							fmt.Println(")")
-						}
-					}
-
-					if err != nil {
-						out = fmt.Sprintf("error: %s", err)
-					}
-					st.steps = append(st.steps, geminiStep{
-						typ:     ToolOutputStep,
-						name:    prt.FunctionCall.Name,
-						id:      prt.FunctionCall.ID,
-						content: out,
-						isError: err != nil,
+					toolCalls = append(toolCalls, geminiToolCall{
+						buf: buf,
+						err: err,
+						prt: prt,
 					})
 				} else {
 					if opts.Trace {
@@ -339,8 +319,39 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 			}
 		}
 
-		if !toolCalls {
+		if len(toolCalls) == 0 {
 			break
+		}
+
+		for _, tc := range toolCalls {
+			var out string
+			err := tc.err
+			if err == nil {
+				if opts.Trace {
+					fmt.Printf("Trace: calling %s(%s)", tc.prt.FunctionCall.Name, tc.buf)
+					if opts.Verbose {
+						fmt.Printf(" id: %s", tc.prt.FunctionCall.ID)
+					}
+					fmt.Println()
+				}
+				out, err = tools.Call(ctx, tc.prt.FunctionCall.Name, tc.buf, opts)
+				if opts.Trace {
+					fmt.Printf("Trace: results from %s() -> (%q, ", tc.prt.FunctionCall.Name, out)
+					fmt.Print(err)
+					fmt.Println(")")
+				}
+			}
+
+			if err != nil {
+				out = fmt.Sprintf("error: %s", err)
+			}
+			st.steps = append(st.steps, geminiStep{
+				typ:     ToolOutputStep,
+				name:    tc.prt.FunctionCall.Name,
+				id:      tc.prt.FunctionCall.ID,
+				content: out,
+				isError: err != nil,
+			})
 		}
 	}
 
