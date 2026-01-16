@@ -76,49 +76,38 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 	var cnts []*genai.Content
 	var txtLen int
 	for _, step := range st.steps {
+		var prt *genai.Part
+		var role string
+
 		switch step.typ {
 		case PromptStep:
-			cnts = append(cnts, &genai.Content{
-				Role:  "user",
-				Parts: []*genai.Part{genai.NewPartFromText(step.content)},
-			})
+			role = "user"
+			prt = genai.NewPartFromText(step.content) // XXX
 
 		case ModelResponseStep:
-			cnts = append(cnts, &genai.Content{
-				Role: "model",
-				Parts: []*genai.Part{
-					{
-						Text:             step.content,
-						ThoughtSignature: step.thoughts,
-					},
-				},
-			})
+			role = "model"
+			prt = &genai.Part{
+				Text:             step.content,
+				ThoughtSignature: step.thoughts,
+			}
 
 		case ReasoningStep:
-			cnts = append(cnts, &genai.Content{
-				Role: "model",
-				Parts: []*genai.Part{
-					{
-						Text:    step.content,
-						Thought: true,
-					},
-				},
-			})
+			role = "model"
+			prt = &genai.Part{
+				Text:    step.content,
+				Thought: true,
+			}
 
 		case ToolCallStep:
-			cnts = append(cnts, &genai.Content{
-				Parts: []*genai.Part{
-					{
-						FunctionCall: &genai.FunctionCall{
-							ID:   step.id,
-							Args: step.args,
-							Name: step.name,
-						},
-						ThoughtSignature: step.thoughts,
-					},
+			role = "model"
+			prt = &genai.Part{
+				FunctionCall: &genai.FunctionCall{
+					ID:   step.id,
+					Args: step.args,
+					Name: step.name,
 				},
-				Role: "model",
-			})
+				ThoughtSignature: step.thoughts,
+			}
 
 		case ToolOutputStep:
 			rsp := map[string]any{}
@@ -128,23 +117,27 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 				rsp["output"] = step.content
 			}
 
-			cnts = append(cnts, &genai.Content{
-				Parts: []*genai.Part{
-					{
-						FunctionResponse: &genai.FunctionResponse{
-							ID:       step.id,
-							Name:     step.name,
-							Response: rsp,
-						},
-					},
+			role = "user"
+			prt = &genai.Part{
+				FunctionResponse: &genai.FunctionResponse{
+					ID:       step.id,
+					Name:     step.name,
+					Response: rsp,
 				},
-				Role: "user",
-			})
+			}
 
 		default:
 			panic(fmt.Sprintf("unexpected step type: %d", step.typ))
 		}
 
+		if len(cnts) == 0 || cnts[len(cnts)-1].Role != role {
+			cnts = append(cnts, &genai.Content{
+				Role:  role,
+				Parts: []*genai.Part{prt},
+			})
+		} else {
+			cnts[len(cnts)-1].Parts = append(cnts[len(cnts)-1].Parts, prt)
+		}
 		txtLen += len(step.content) + len(step.input)
 	}
 

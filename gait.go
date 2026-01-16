@@ -2,6 +2,8 @@
 To Do:
 - MaxOutputTokens
 - Rename Reasoning to Thinking
+- assistant messages can contain multiple content blocks (thinking, text, tool_use); batch those
+  together into single assistant messages on requests
 
 - Gemini
 -- Seed in GenerateContentConfig
