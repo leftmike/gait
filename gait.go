@@ -10,8 +10,6 @@ To Do:
 -- gemini-3-flash-preview
 
 - Anthropic
--- Turn on thinking?
--- Reasoning summaries
 -- StopReason max_tokens
 */
 

@@ -23,12 +23,13 @@ func NewAnthropicModel(name, apiKey string, opts *Options) (Model, error) {
 }
 
 type anthropicStep struct {
-	typ     StepType
-	content string
-	name    string
-	id      string
-	input   json.RawMessage
-	isError bool
+	typ       StepType
+	content   string
+	name      string
+	id        string
+	signature string
+	input     json.RawMessage
+	isError   bool
 }
 
 type anthropicState struct {
@@ -61,16 +62,6 @@ func (st *anthropicState) Step(n int) Step {
 	}
 }
 
-var (
-	stepRole = [5]anthropic.MessageParamRole{
-		PromptStep:        anthropic.MessageParamRoleUser,
-		ModelResponseStep: anthropic.MessageParamRoleAssistant,
-		ReasoningStep:     anthropic.MessageParamRoleAssistant,
-		ToolCallStep:      anthropic.MessageParamRoleAssistant,
-		ToolOutputStep:    anthropic.MessageParamRoleUser,
-	}
-)
-
 func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
 	var params []anthropic.MessageParam
 	var txtLen int
@@ -88,7 +79,8 @@ func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
 			blk = anthropic.NewTextBlock(step.content)
 
 		case ReasoningStep:
-			continue // XXX: is this right?
+			role = anthropic.MessageParamRoleAssistant
+			blk = anthropic.NewThinkingBlock(step.signature, step.content)
 
 		case ToolCallStep:
 			role = anthropic.MessageParamRoleAssistant
@@ -162,6 +154,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 			Messages:  msgParams,
 			Model:     mdl.name,
 			Tools:     toolParams,
+			Thinking:  anthropic.ThinkingConfigParamOfEnabled(1024 * 8),
 		}
 		if st.systemPrompt != "" {
 			req.System = []anthropic.TextBlockParam{{Text: st.systemPrompt}}
@@ -230,9 +223,10 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 
 			case "thinking":
 				st.steps = append(st.steps, anthropicStep{
-					typ:     ReasoningStep,
-					content: blk.Text,
-				}) // XXX: is this right?
+					typ:       ReasoningStep,
+					content:   blk.Thinking,
+					signature: blk.Signature,
+				})
 
 			case "tool_use":
 				if opts.Trace {
