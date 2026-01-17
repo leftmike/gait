@@ -103,7 +103,8 @@ func TestSimple(t *testing.T) {
 }
 
 var (
-	location string
+	temperatureLocation string
+	weatherLocation     string
 )
 
 type currentTemperatureArgs struct {
@@ -117,9 +118,25 @@ func currentTemperature(ctx context.Context, buf []byte) (string, error) {
 		return "", err
 	}
 
-	location = args.Location
+	temperatureLocation = args.Location
 
 	return "40", nil
+}
+
+type currentWeatherArgs struct {
+	Location string `json:"location" jsonschema:"location to get the current weather for"`
+}
+
+func currentWeather(ctx context.Context, buf []byte) (string, error) {
+	var args currentWeatherArgs
+	err := json.Unmarshal(buf, &args)
+	if err != nil {
+		return "", err
+	}
+
+	weatherLocation = args.Location
+
+	return "sunny and 70", nil
 }
 
 func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
@@ -139,16 +156,17 @@ func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *
 	st.Prompt("what is the current temperature for seattle?")
 	n := st.Len()
 
-	location = ""
+	temperatureLocation = ""
 	err := mdl.Generate(ctx, st, tools, opts)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
 
-	if location == "" {
-		t.Errorf("Generate(%s, %s) current weather not called", provider, name)
-	} else if !strings.Contains(strings.ToLower(location), "seattle") {
-		t.Errorf("Generate(%s %s) argument did not include seattle: %s", provider, name, location)
+	if temperatureLocation == "" {
+		t.Errorf("Generate(%s, %s) current temperature not called", provider, name)
+	} else if !strings.Contains(strings.ToLower(temperatureLocation), "seattle") {
+		t.Errorf("Generate(%s %s) argument did not include seattle: %s", provider, name,
+			temperatureLocation)
 	}
 
 	var toolCall, toolOutput bool
@@ -174,6 +192,72 @@ func TestSimpleTool(t *testing.T) {
 	testModels(t, testSimpleTool, &model.Options{})
 }
 
-func TestSimpleToolThinking(t *testing.T) {
-	testModels(t, testSimpleTool, &model.Options{Thinking: true})
+func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
+	fmt.Println(provider, name)
+
+	tools := model.Tools{
+		{
+			Name:        "current_temperature",
+			Description: "Gets the current temperature for the given location",
+			Func:        currentTemperature,
+			Schema:      model.MustToolSchema[currentTemperatureArgs](),
+		},
+		{
+			Name:        "current_weather",
+			Description: "Gets the current weather for the given location",
+			Func:        currentWeather,
+			Schema:      model.MustToolSchema[currentWeatherArgs](),
+		},
+	}
+
+	ctx := context.Background()
+	st := mdl.NewState()
+	st.Prompt("what is the current temperature and weather for seattle?")
+	n := st.Len()
+
+	temperatureLocation = ""
+	weatherLocation = ""
+	err := mdl.Generate(ctx, st, tools, opts)
+	if err != nil {
+		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
+	}
+
+	if temperatureLocation == "" {
+		t.Errorf("Generate(%s, %s) current temperature not called", provider, name)
+	} else if !strings.Contains(strings.ToLower(temperatureLocation), "seattle") {
+		t.Errorf("Generate(%s %s) argument did not include seattle: %s", provider, name,
+			temperatureLocation)
+	}
+
+	if weatherLocation == "" {
+		t.Errorf("Generate(%s, %s) current weather not called", provider, name)
+	} else if !strings.Contains(strings.ToLower(weatherLocation), "seattle") {
+		t.Errorf("Generate(%s %s) argument did not include seattle: %s", provider, name,
+			weatherLocation)
+	}
+	var toolCalls, toolOutputs int
+	for n < st.Len() {
+		step := st.Step(n)
+		n += 1
+
+		if step.Type == model.ToolCallStep {
+			toolCalls += 1
+		} else if step.Type == model.ToolOutputStep {
+			toolOutputs += 1
+		}
+	}
+	if toolCalls != 2 {
+		t.Errorf("Generate(%s %s) tool call steps: got %d want 2", provider, name, toolCalls)
+	}
+	if toolOutputs != 2 {
+		t.Errorf("Generate(%s %s) tool output steps: got %d want 2", provider, name, toolOutputs)
+	}
+}
+
+func TestMultiTool(t *testing.T) {
+	testModels(t, testMultiTool, &model.Options{})
+}
+
+func TestMultiToolThinking(t *testing.T) {
+	testModels(t, testMultiTool, &model.Options{Thinking: true})
 }

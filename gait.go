@@ -1,7 +1,6 @@
 /*
 To Do:
 - MaxOutputTokens
-- Add test(s) with multiple tool calls (simultaneously)
 
 - Gemini
 -- Seed in GenerateContentConfig
