@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go/v3"
@@ -229,19 +230,28 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 			}
 		}
 
-		var toolCalls bool
-		for _, rspItem := range rsp.Output {
-			switch rspItem.Type {
+		var toolCalls []responses.ResponseOutputItemUnion
+		for _, item := range rsp.Output {
+			switch item.Type {
 			case "message":
-				for _, cnt := range rspItem.Content {
-					st.steps = append(st.steps, openAIStep{
-						typ:     ModelResponseStep,
-						content: cnt.Text,
-					})
+				var cnt string
+				if len(item.Content) == 1 {
+					cnt = item.Content[0].Text
+				} else {
+					var buf strings.Builder
+					for _, cnt := range item.Content {
+						buf.WriteString(cnt.Text)
+					}
+					cnt = buf.String()
 				}
 
+				st.steps = append(st.steps, openAIStep{
+					typ:     ModelResponseStep,
+					content: cnt,
+				})
+
 			case "reasoning":
-				for _, smmry := range rspItem.Summary {
+				for _, smmry := range item.Summary {
 					st.steps = append(st.steps, openAIStep{
 						typ:     ThinkingStep,
 						content: smmry.Text,
@@ -249,44 +259,47 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 				}
 
 			case "function_call":
-				if opts.Trace {
-					fmt.Printf("Trace: calling %s(%s)\n", rspItem.Name, rspItem.Arguments)
-				}
-
-				toolCalls = true
 				st.steps = append(st.steps, openAIStep{
 					typ:   ToolCallStep,
-					name:  rspItem.Name,
-					id:    rspItem.CallID,
-					input: rspItem.Arguments,
+					name:  item.Name,
+					id:    item.CallID,
+					input: item.Arguments,
 				})
-				out, err := tools.Call(ctx, rspItem.Name, []byte(rspItem.Arguments), opts)
-				if opts.Trace {
-					fmt.Printf("Trace: results from %s() -> (%q, ", rspItem.Name, out)
-					fmt.Print(err)
-					fmt.Println(")")
-				}
-				if err != nil {
-					out = fmt.Sprintf("error: %s", err)
-				}
-				st.steps = append(st.steps, openAIStep{
-					typ:     ToolOutputStep,
-					name:    rspItem.Name,
-					id:      rspItem.CallID,
-					content: out,
-				})
+				toolCalls = append(toolCalls, item)
 
 			default:
 				if opts.Trace {
-					fmt.Printf("Trace: unexpected ResponseItem.Type: %s\n", rspItem.Type)
+					fmt.Printf("Trace: unexpected ResponseItem.Type: %s\n", item.Type)
 				} else if opts.Verbose {
-					fmt.Printf("[%s]\n", rspItem.Type)
+					fmt.Printf("[%s]\n", item.Type)
 				}
 			}
 		}
 
-		if !toolCalls {
+		if len(toolCalls) == 0 {
 			break
+		}
+
+		for _, item := range toolCalls {
+			if opts.Trace {
+				fmt.Printf("Trace: calling %s(%s)\n", item.Name, item.Arguments)
+			}
+
+			out, err := tools.Call(ctx, item.Name, []byte(item.Arguments), opts)
+			if opts.Trace {
+				fmt.Printf("Trace: results from %s() -> (%q, ", item.Name, out)
+				fmt.Print(err)
+				fmt.Println(")")
+			}
+			if err != nil {
+				out = fmt.Sprintf("error: %s", err)
+			}
+			st.steps = append(st.steps, openAIStep{
+				typ:     ToolOutputStep,
+				name:    item.Name,
+				id:      item.CallID,
+				content: out,
+			})
 		}
 	}
 

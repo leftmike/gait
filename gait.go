@@ -1,10 +1,7 @@
 /*
 To Do:
 - MaxOutputTokens
-
-- OpenAI
--- Assistant messages can contain multiple content blocks (thinking, text, tool_use); batch those
-  together into single assistant messages on requests???
+- Add test(s) with multiple tool calls (simultaneously)
 
 - Gemini
 -- Seed in GenerateContentConfig
