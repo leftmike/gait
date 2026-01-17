@@ -202,17 +202,18 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 	st := ast.(*geminiState)
 
 	var gccfg genai.GenerateContentConfig
-	//if opts.Thinking {
-	gccfg.ThinkingConfig = &genai.ThinkingConfig{
-		IncludeThoughts: true,
-	}
-	/*
-		if opts.ThinkingBudget > 0 {
-			gccfg.ThinkingConfig.BudgetTokenCount = int32(opts.ThinkingBudget)
-		}
-	*/
 	if st.systemPrompt != "" {
 		gccfg.SystemInstruction = genai.NewContentFromText(st.systemPrompt, genai.RoleUser)
+	}
+	if opts.Thinking {
+		gccfg.ThinkingConfig = &genai.ThinkingConfig{
+			IncludeThoughts: true,
+		}
+		/*
+			if opts.ThinkingBudget > 0 {
+				gccfg.ThinkingConfig.BudgetTokenCount = int32(opts.ThinkingBudget)
+			}
+		*/
 	}
 	if len(tools) > 0 {
 		gccfg.Tools = []*genai.Tool{

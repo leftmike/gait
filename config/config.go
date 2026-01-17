@@ -12,10 +12,10 @@ import (
 )
 
 type Provider struct {
-	Name    string `hcl:"name,label"`
-	Model   string `hcl:"model,optional"`
-	APIKey  string `hcl:"api_key,optional"`
-	Summary *bool  `hcl:"summary,optional"`
+	Name     string `hcl:"name,label"`
+	Model    string `hcl:"model,optional"`
+	APIKey   string `hcl:"api_key,optional"`
+	Thinking *bool  `hcl:"thinking,optional"`
 }
 
 type Config struct {

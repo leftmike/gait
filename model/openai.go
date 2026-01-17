@@ -160,7 +160,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 	st := ast.(*openAIState)
 
 	var reasoningParam responses.ReasoningParam
-	if opts != nil && opts.Summary {
+	if opts.Thinking {
 		if opts.Verbose {
 			reasoningParam.Summary = "detailed"
 		} else {

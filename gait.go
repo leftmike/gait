@@ -84,21 +84,21 @@ func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Mo
 func main() {
 	fs := flag.NewFlagSet("gait", flag.ExitOnError)
 
-	var summary bool
+	var thinking bool
 	fs.BoolVar(&verbose, "verbose", false, "verbose output")
 	fs.BoolVar(&verbose, "v", false, "verbose output")
 	fs.BoolVar(&trace, "trace", false, "trace model interaction")
 	fs.BoolVar(&trace, "t", false, "trace model interaction")
-	fs.BoolVar(&summary, "summary", false, "summarize reasoning")
+	fs.BoolVar(&thinking, "thinking", false, "turn on and show thinking")
 
 	provider, modelName, apiKey, err := config.Options(fs)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	opts := &model.Options{
-		Verbose: verbose,
-		Trace:   trace,
-		Summary: summary,
+		Verbose:  verbose,
+		Trace:    trace,
+		Thinking: thinking,
 	}
 	/*
 		infos, err := model.ListGeminiModels(context.Background(), apiKey)
@@ -171,7 +171,7 @@ func main() {
 			case model.ModelResponseStep:
 				fmt.Println(step.Content)
 			case model.ThinkingStep:
-				if opts.Summary {
+				if opts.Thinking {
 					fmt.Printf("[%s]\n", step.Content)
 				}
 			case model.ToolCallStep:

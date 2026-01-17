@@ -154,11 +154,13 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 			Messages:  msgParams,
 			Model:     mdl.name,
 			Tools:     toolParams,
-			Thinking:  anthropic.ThinkingConfigParamOfEnabled(1024 * 8),
 		}
 		if st.systemPrompt != "" {
 			req.System = []anthropic.TextBlockParam{{Text: st.systemPrompt}}
 			txtLen += len(st.systemPrompt)
+		}
+		if opts.Thinking {
+			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(1024 * 8)
 		}
 
 		if opts.Trace {

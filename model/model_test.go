@@ -23,7 +23,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func testModels(t *testing.T, test func(t *testing.T, mdl model.Model, provider, name string)) {
+type testModelFunc func(t *testing.T, mdl model.Model, provider, name string, opts *model.Options)
+
+func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 	t.Helper()
 
 	cfg, err := config.ReadConfig([]string{"../gait.hcl"})
@@ -68,11 +70,11 @@ func testModels(t *testing.T, test func(t *testing.T, mdl model.Model, provider,
 			t.Fatalf("unknown provider: %s", m.provider)
 		}
 
-		test(t, mdl, m.provider, m.name)
+		test(t, mdl, m.provider, m.name, opts)
 	}
 }
 
-func testSimple(t *testing.T, mdl model.Model, provider, name string) {
+func testSimple(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
 	fmt.Println(provider, name)
 
 	ctx := context.Background()
@@ -80,7 +82,7 @@ func testSimple(t *testing.T, mdl model.Model, provider, name string) {
 	st.Prompt("Hello")
 	n := st.Len()
 
-	err := mdl.Generate(ctx, st, nil, &model.Options{})
+	err := mdl.Generate(ctx, st, nil, opts)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -97,7 +99,7 @@ func testSimple(t *testing.T, mdl model.Model, provider, name string) {
 }
 
 func TestSimple(t *testing.T) {
-	testModels(t, testSimple)
+	testModels(t, testSimple, &model.Options{})
 }
 
 var (
@@ -120,7 +122,7 @@ func currentTemperature(ctx context.Context, buf []byte) (string, error) {
 	return "40", nil
 }
 
-func testSimpleTool(t *testing.T, mdl model.Model, provider, name string) {
+func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
 	fmt.Println(provider, name)
 
 	tools := model.Tools{
@@ -138,7 +140,7 @@ func testSimpleTool(t *testing.T, mdl model.Model, provider, name string) {
 	n := st.Len()
 
 	location = ""
-	err := mdl.Generate(ctx, st, tools, &model.Options{})
+	err := mdl.Generate(ctx, st, tools, opts)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -169,5 +171,9 @@ func testSimpleTool(t *testing.T, mdl model.Model, provider, name string) {
 }
 
 func TestSimpleTool(t *testing.T) {
-	testModels(t, testSimpleTool)
+	testModels(t, testSimpleTool, &model.Options{})
+}
+
+func TestSimpleToolThinking(t *testing.T) {
+	testModels(t, testSimpleTool, &model.Options{Thinking: true})
 }

@@ -13,9 +13,9 @@ type Model interface {
 }
 
 type Options struct {
-	Verbose bool
-	Trace   bool
-	Summary bool
+	Verbose  bool
+	Trace    bool
+	Thinking bool
 }
 
 type ModelInfo struct {
