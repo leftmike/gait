@@ -18,9 +18,32 @@ type Provider struct {
 	Thinking *bool  `hcl:"thinking,optional"`
 }
 
+/*
+"mcpServers": {
+        "remote-http-files": {
+          "type": "http",
+          "url": "https://localhost:8443/mcp"
+        },
+        "remote-sse-files": {
+          "type": "sse",
+          "url": "https://localhost:8443/sse"
+        }
+      },
+*/
+
+type MCPServer struct {
+	Name    string   `hcl:"name,label"`
+	Type    string   `hcl:"type,optional"`    // stdio, http, sse
+	Command string   `hcl:"command,optional"` // stdio
+	Args    []string `hcl:"args,optional"`    // stdio
+	URL     string   `hcl:"url,optional"`     // http, sse
+	// Headers
+}
+
 type Config struct {
-	Provider  string     `hcl:"provider,optional"`
-	Providers []Provider `hcl:"provider,block"`
+	Provider   string      `hcl:"provider,optional"`
+	Providers  []Provider  `hcl:"provider,block"`
+	MCPServers []MCPServer `hcl:"mcpserver,block"`
 }
 
 func (cfg *Config) FindProvider(name string) *Provider {
@@ -41,20 +64,20 @@ func configFilenames() []string {
 	return []string{"~/.gait/gait.hcl", "~/.gait.hcl", "./gait.hcl"}
 }
 
-func ReadConfig(filenames []string) (Config, error) {
+func ReadConfig(filenames []string) (*Config, error) {
 	for _, name := range filenames {
 		buf, err := os.ReadFile(name)
 		if err == nil {
 			var cfg Config
 			err := hclsimple.Decode(name, buf, nil, &cfg)
-			return cfg, err
+			return &cfg, err
 		}
 	}
 
-	return Config{}, fmt.Errorf("config file not found: %v", filenames)
+	return nil, fmt.Errorf("config file not found: %v", filenames)
 }
 
-func Options(fs *flag.FlagSet) (string, string, string, error) {
+func Options(fs *flag.FlagSet) (string, string, string, *Config, error) {
 	var configFilename string
 	var noConfig bool
 	var useOpenAI bool
@@ -78,17 +101,18 @@ func Options(fs *flag.FlagSet) (string, string, string, error) {
 	}
 	if useAnthropic {
 		if provider != "" {
-			return "", "", "", errors.New("multiple providers specified")
+			return "", "", "", nil, errors.New("multiple providers specified")
 		}
 		provider = "anthropic"
 	}
 	if useGemini {
 		if provider != "" {
-			return "", "", "", errors.New("multiple providers specified")
+			return "", "", "", nil, errors.New("multiple providers specified")
 		}
 		provider = "gemini"
 	}
 
+	var cfg *Config
 	if !noConfig {
 		var filenames []string
 		if configFilename != "" {
@@ -96,9 +120,11 @@ func Options(fs *flag.FlagSet) (string, string, string, error) {
 		} else {
 			filenames = configFilenames()
 		}
-		cfg, err := ReadConfig(filenames)
+
+		var err error
+		cfg, err = ReadConfig(filenames)
 		if err != nil {
-			return "", "", "", err
+			return "", "", "", nil, err
 		}
 
 		if provider == "" {
@@ -118,5 +144,5 @@ func Options(fs *flag.FlagSet) (string, string, string, error) {
 		}
 	}
 
-	return provider, modelName, apiKey, nil
+	return provider, modelName, apiKey, cfg, nil
 }

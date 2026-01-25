@@ -1,6 +1,13 @@
 /*
 To Do:
 - MaxOutputTokens
+- Slash commands
+-- /clear -- clear the context window
+
+- Read Claude desktop config file
+- Read Claude code config file
+- Read OpenAI config file (if possible)
+- Read Gemini config file (if possible)
 
 - Gemini
 -- Seed in GenerateContentConfig
@@ -19,6 +26,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
@@ -64,6 +73,52 @@ func currentTemperature(ctx context.Context, buf []byte) (string, error) {
 	return "40", nil
 }
 
+func slashList(provider, apiKey string) {
+	var infos []model.ModelInfo
+	var err error
+
+	ctx := context.Background()
+	switch provider {
+	case "openai":
+		infos, err = model.ListOpenAIModels(ctx, apiKey)
+	case "anthropic":
+		infos, err = model.ListAnthropicModels(ctx, apiKey)
+	case "gemini":
+		infos, err = model.ListGeminiModels(ctx, apiKey)
+	default:
+		panic(fmt.Sprintf("unknown provider: %s", provider))
+	}
+
+	if err != nil {
+		fmt.Printf("list models: %s: %s\n", provider, err)
+		return
+	}
+
+	for _, info := range infos {
+		fmt.Printf("%s", info.Name)
+		if info.DisplayName != "" {
+			fmt.Printf(" [%s]", info.DisplayName)
+		}
+		if !info.Created.Equal(time.Time{}) {
+			fmt.Printf(" (%s)", info.Created.Format("02 Jan 2006"))
+		}
+		fmt.Println()
+	}
+}
+
+func parseSlash(s string) (string, []string) {
+	args := strings.Split(s, " ")
+	i := 0
+	for _, arg := range args {
+		if arg != "" {
+			args[i] = arg
+			i += 1
+		}
+	}
+
+	return args[0], args[1:i]
+}
+
 func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Model, error) {
 	switch provider {
 	case "openai":
@@ -87,31 +142,17 @@ func main() {
 	fs.BoolVar(&trace, "t", false, "trace model interaction")
 	fs.BoolVar(&thinking, "thinking", false, "turn on and show thinking")
 
-	provider, modelName, apiKey, err := config.Options(fs)
+	provider, modelName, apiKey, cfg, err := config.Options(fs)
 	if err != nil {
 		log.Fatalln(err)
 	}
+	_ = cfg // cfg.MCPServers
 	opts := &model.Options{
 		Verbose:  verbose,
 		Trace:    trace,
 		Thinking: thinking,
 	}
-	/*
-		infos, err := model.ListGeminiModels(context.Background(), apiKey)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		for _, info := range infos {
-			fmt.Printf("%s", info.Name)
-			if info.DisplayName != "" {
-				fmt.Printf(" [%s]", info.DisplayName)
-			}
-			if !info.Created.Equal(time.Time{}) {
-				fmt.Printf(" (%s)", info.Created.Format("02 Jan 2006"))
-			}
-			fmt.Println()
-		}
-	*/
+
 	mdl, err := newModel(provider, modelName, apiKey, opts)
 	if err != nil {
 		log.Fatalln(err)
@@ -148,6 +189,24 @@ func main() {
 			break
 		} else if err != nil {
 			log.Fatalln(err)
+		}
+
+		s = strings.TrimSpace(s)
+		if strings.HasPrefix(s, "/") {
+			cmd, args := parseSlash(s)
+			switch cmd {
+			case "/list":
+				if len(args) == 0 {
+					slashList(provider, apiKey)
+				} else {
+					fmt.Println("/list has no arguments")
+				}
+
+			default:
+				fmt.Println("slash command must be /list")
+			}
+
+			continue
 		}
 
 		st.Prompt(s)

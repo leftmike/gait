@@ -377,7 +377,7 @@ func ListGeminiModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
 	for _, m := range pg.Items {
 		if slices.Contains(m.SupportedActions, "generateContent") {
 			name := strings.SplitN(m.Name, "/", 2)
-			if name[0] != "model" || len(name) != 2 {
+			if name[0] != "models" || len(name) != 2 {
 				continue
 			}
 
