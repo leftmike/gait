@@ -147,6 +147,7 @@ func main() {
 		log.Fatalln(err)
 	}
 	_ = cfg // cfg.MCPServers
+
 	opts := &model.Options{
 		Verbose:  verbose,
 		Trace:    trace,
@@ -195,6 +196,9 @@ func main() {
 		if strings.HasPrefix(s, "/") {
 			cmd, args := parseSlash(s)
 			switch cmd {
+			case "/exit", "/quit":
+				return
+
 			case "/list":
 				if len(args) == 0 {
 					slashList(provider, apiKey)
@@ -203,7 +207,7 @@ func main() {
 				}
 
 			default:
-				fmt.Println("slash command must be /list")
+				fmt.Println("slash command must be /exit or /list")
 			}
 
 			continue
