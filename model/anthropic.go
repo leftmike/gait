@@ -127,7 +127,7 @@ func toAnthropicTools(tools Tools) []anthropic.ToolUnionParam {
 	for _, tl := range tools {
 		toolParams = append(toolParams, anthropic.ToolUnionParam{
 			OfTool: &anthropic.ToolParam{
-				InputSchema: toAnthropicInputSchema(tl.Schema.schema),
+				InputSchema: toAnthropicInputSchema(tl.Schema),
 				Name:        tl.Name,
 				Description: anthropic_param.NewOpt(tl.Description),
 				Type:        anthropic.ToolTypeCustom,

@@ -3,7 +3,10 @@ To Do:
 - MaxOutputTokens
 - Slash commands
 -- /clear -- clear the context window
+-- /tools -- list tools
+-- /mcp -- list mcp server including type and status
 
+- mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
 - Read Claude code config file
 - Read OpenAI config file (if possible)
@@ -30,6 +33,7 @@ import (
 	"time"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/mcpclient"
 	"github.com/leftmike/gait/model"
 
 	"github.com/peterh/liner"
@@ -146,21 +150,23 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	_ = cfg // cfg.MCPServers
 
-	opts := &model.Options{
-		Verbose:  verbose,
-		Trace:    trace,
-		Thinking: thinking,
-	}
+	ctx := context.Background()
+	var clnts []*mcpclient.Client
+	for _, svrCfg := range cfg.MCPServers {
+		clnt, err := mcpclient.NewClient(ctx, svrCfg, verbose)
+		if err != nil {
+			if verbose {
+				fmt.Printf("mcp server %v failed: %s", svrCfg, err)
+			}
+			continue
+		}
 
-	mdl, err := newModel(provider, modelName, apiKey, opts)
-	if err != nil {
-		log.Fatalln(err)
-	}
+		if verbose {
+			fmt.Printf("mcp server: %s\n", svrCfg.Name)
+		}
 
-	if verbose {
-		fmt.Println(provider, modelName)
+		clnts = append(clnts, clnt)
 	}
 
 	tools := model.Tools{
@@ -178,7 +184,28 @@ func main() {
 		},
 	}
 
-	ctx := context.Background()
+	for _, clnt := range clnts {
+		tools, err = clnt.AddTools(tools)
+		if err != nil {
+			log.Fatalf("%s: %s\n", clnt.Name(), err)
+		}
+	}
+
+	opts := &model.Options{
+		Verbose:  verbose,
+		Trace:    trace,
+		Thinking: thinking,
+	}
+
+	mdl, err := newModel(provider, modelName, apiKey, opts)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	if verbose {
+		fmt.Println(provider, modelName)
+	}
+
 	line := liner.NewLiner()
 	defer line.Close()
 

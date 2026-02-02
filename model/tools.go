@@ -16,13 +16,10 @@ type Tool struct {
 	Name        string
 	Description string
 	Func        ToolFunc
-	Schema      *ToolSchema
+	Schema      ToolSchema
 }
 
-type ToolSchema struct {
-	schema map[string]any
-	typ    reflect.Type
-}
+type ToolSchema map[string]any
 
 func structToSchema(typ reflect.Type) (map[string]any, error) {
 	var req []any
@@ -162,7 +159,7 @@ func typeToSchema(typ reflect.Type) (map[string]any, error) {
 	}
 }
 
-func NewToolSchema[T any]() (*ToolSchema, error) {
+func NewToolSchema[T any]() (ToolSchema, error) {
 	typ := reflect.TypeFor[T]()
 	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
@@ -171,17 +168,10 @@ func NewToolSchema[T any]() (*ToolSchema, error) {
 		return nil, fmt.Errorf("tool arguments must be a (pointer to a) struct: %s", typ)
 	}
 
-	scm, err := structToSchema(typ)
-	if err != nil {
-		return nil, err
-	}
-	return &ToolSchema{
-		schema: scm,
-		typ:    typ,
-	}, nil
+	return structToSchema(typ)
 }
 
-func MustToolSchema[T any]() *ToolSchema {
+func MustToolSchema[T any]() ToolSchema {
 	ts, err := NewToolSchema[T]()
 	if err != nil {
 		var v T

@@ -150,7 +150,7 @@ func toGeminiTools(tools Tools) []*genai.FunctionDeclaration {
 		decls = append(decls, &genai.FunctionDeclaration{
 			Description:          tl.Description,
 			Name:                 tl.Name,
-			ParametersJsonSchema: tl.Schema.schema,
+			ParametersJsonSchema: tl.Schema,
 		})
 	}
 

@@ -141,7 +141,7 @@ func toOpenAITools(tools Tools) []responses.ToolUnionParam {
 	for _, tl := range tools {
 		toolParams = append(toolParams, responses.ToolUnionParam{
 			OfFunction: &responses.FunctionToolParam{
-				Parameters:  tl.Schema.schema,
+				Parameters:  tl.Schema,
 				Name:        tl.Name,
 				Description: openai_param.NewOpt(tl.Description),
 			},
