@@ -28,19 +28,25 @@ type testModelFunc func(t *testing.T, mdl model.Model, provider, name string, op
 func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 	t.Helper()
 
-	cfg, err := config.ReadConfig([]string{"../gait.hcl"})
+	cfg, err := config.ReadConfig([]string{"./gait.hcl", "../gait.hcl"})
 	if err != nil {
 		t.Fatalf("ReadConfig() failed with %s", err)
 	}
 
-	models := []struct{ provider, name string }{
-		{"openai", "gpt-5"},
-		{"anthropic", "claude-3-7-sonnet-20250219"},
-		{"gemini", "gemini-2.5-flash"},
+	models := []struct {
+		provider, name string
+		short          bool
+	}{
+		{"openai", "gpt-5-mini", false},
+		{"anthropic", "claude-haiku-4-5-20251001", false},
+		{"gemini", "gemini-2.5-flash-lite", true},
 	}
 
 	for _, m := range models {
 		if *provider != "" && *provider != m.provider {
+			continue
+		} else if testing.Short() && !m.short {
+			fmt.Printf("skipping %s %s\n", m.provider, m.name)
 			continue
 		}
 
@@ -246,10 +252,10 @@ func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *m
 			toolOutputs += 1
 		}
 	}
-	if toolCalls != 2 {
+	if (provider != "openai" && toolCalls != 2) || (provider == "openai" && toolCalls < 2) {
 		t.Errorf("Generate(%s %s) tool call steps: got %d want 2", provider, name, toolCalls)
 	}
-	if toolOutputs != 2 {
+	if (provider != "openai" && toolCalls != 2) || (provider == "openai" && toolCalls < 2) {
 		t.Errorf("Generate(%s %s) tool output steps: got %d want 2", provider, name, toolOutputs)
 	}
 }

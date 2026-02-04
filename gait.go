@@ -2,9 +2,19 @@
 To Do:
 - MaxOutputTokens
 - Slash commands
--- /clear -- clear the context window
+-- /clear: clear conversation history and free up context
+-- /cost: show token usage statistics
+-- /exit (quit): exit the REPL
+-- /export: export the current conversation to a file or clipboard
+-- /help: show help and available commands
+-- /mcp: manage mcp servers / list configured mcp tools
+-- /model: set the AI model to use / choose what model and reasoning effort to use
+-- /skills: list available skills / use skills to improve how specific tasks are performed
+-- /status: show current session configuration and token usage
+
+-- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
--- /mcp -- list mcp server including type and status
+-- change /list to /models
 
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
@@ -250,6 +260,7 @@ func main() {
 
 		for n < st.Len() {
 			step := st.Step(n)
+			n += 1
 
 			switch step.Type {
 			case model.PromptStep:
@@ -269,8 +280,6 @@ func main() {
 					fmt.Printf("Tool Output: %s: %s\n", step.Name, step.Content)
 				}
 			}
-
-			n += 1
 		}
 	}
 }
