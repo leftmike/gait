@@ -4,9 +4,7 @@ To Do:
 - Slash commands
 -- /clear: clear conversation history and free up context
 -- /cost: show token usage statistics
--- /exit (quit): exit the REPL
 -- /export: export the current conversation to a file or clipboard
--- /help: show help and available commands
 -- /mcp: manage mcp servers / list configured mcp tools
 -- /model: set the AI model to use / choose what model and reasoning effort to use
 -- /status: show current session configuration and token usage
@@ -15,6 +13,7 @@ To Do:
 -- /tools -- list tools
 
 - add filesys to manage permitted file system access
+- leverage filesys for the agent reading skill files
 
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
@@ -88,6 +87,19 @@ func currentTemperature(ctx context.Context, buf []byte) (string, error) {
 	}
 
 	return "40", nil
+}
+
+func slashHelp(args []string) {
+	if len(args) > 0 {
+		fmt.Println("/help: no arguments allowed")
+		return
+	}
+
+	fmt.Print(`/exit (quit): exit the REPL
+/help: show help and available commands
+/models: list available models
+/skills: list available skills or show skill details
+`)
 }
 
 func slashModels(args []string, provider, apiKey string) {
@@ -297,15 +309,14 @@ func main() {
 			switch cmd {
 			case "/exit", "/quit":
 				return
-
+			case "/help":
+				slashHelp(args)
 			case "/models":
 				slashModels(args, provider, apiKey)
-
 			case "/skills":
 				slashSkills(args, skills)
-
 			default:
-				fmt.Println("slash command must be /exit, /models, or /skills")
+				fmt.Println("slash command must be /exit, /help, /models, or /skills")
 			}
 
 			continue
