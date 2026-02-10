@@ -9,18 +9,20 @@ To Do:
 -- /help: show help and available commands
 -- /mcp: manage mcp servers / list configured mcp tools
 -- /model: set the AI model to use / choose what model and reasoning effort to use
--- /skills: list available skills / use skills to improve how specific tasks are performed
 -- /status: show current session configuration and token usage
 
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
--- change /list to /models
+
+- add filesys to manage permitted file system access
 
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
 - Read Claude code config file
 - Read OpenAI config file (if possible)
 - Read Gemini config file (if possible)
+
+- mcp servers: at startup, load them in separate go routines and don't wait on them
 
 - Gemini
 -- Seed in GenerateContentConfig
@@ -45,6 +47,7 @@ import (
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/mcpclient"
 	"github.com/leftmike/gait/model"
+	"github.com/leftmike/gait/skill"
 
 	"github.com/peterh/liner"
 )
@@ -87,7 +90,12 @@ func currentTemperature(ctx context.Context, buf []byte) (string, error) {
 	return "40", nil
 }
 
-func slashList(provider, apiKey string) {
+func slashModels(args []string, provider, apiKey string) {
+	if len(args) > 0 {
+		fmt.Println("/models: no arguments allowed")
+		return
+	}
+
 	var infos []model.ModelInfo
 	var err error
 
@@ -117,6 +125,42 @@ func slashList(provider, apiKey string) {
 			fmt.Printf(" (%s)", info.Created.Format("02 Jan 2006"))
 		}
 		fmt.Println()
+	}
+}
+
+func slashSkills(args []string, skills []*skill.Skill) {
+	if len(args) == 0 {
+		for _, sk := range skills {
+			fmt.Println(sk.Name)
+		}
+	} else {
+		for _, arg := range args {
+			sk := skill.FindSkill(skills, arg)
+			if sk == nil {
+				fmt.Printf("skill not found: %s\n\n", arg)
+				continue
+			}
+
+			fmt.Printf("name: %s\n", sk.Name)
+			fmt.Printf("description: %s\n", sk.Description)
+			fmt.Printf("directory: %s\n", sk.Dir)
+			if sk.License != "" {
+				fmt.Printf("license: %s\n", sk.License)
+			}
+			if sk.Compatibility != "" {
+				fmt.Printf("compatibility: %s\n", sk.Compatibility)
+			}
+			if sk.AllowedTools != "" {
+				fmt.Printf("allowed tools: %s\n", sk.AllowedTools)
+			}
+			if len(sk.Metadata) > 0 {
+				fmt.Println("metadata:")
+				for k, v := range sk.Metadata {
+					fmt.Printf("    %s: %s\n", k, v)
+				}
+			}
+			fmt.Println()
+		}
 	}
 }
 
@@ -162,6 +206,19 @@ func main() {
 	}
 
 	ctx := context.Background()
+
+	var skills []*skill.Skill
+	for _, dir := range cfg.Skills {
+		dirSkills, err := skill.ReadDir(dir)
+		if err != nil {
+			if verbose {
+				fmt.Printf("%s: %s\n", dir, err)
+			}
+		} else {
+			skills = append(skills, dirSkills...)
+		}
+	}
+
 	var clnts []*mcpclient.Client
 	for _, svrCfg := range cfg.MCPServers {
 		clnt, err := mcpclient.NewClient(ctx, svrCfg, verbose)
@@ -220,6 +277,11 @@ func main() {
 	defer line.Close()
 
 	st := mdl.NewState()
+
+	if len(skills) > 0 {
+		st.SystemPrompt(skill.SystemPrompt(skills))
+	}
+
 	for {
 		s, err := line.Prompt("> ")
 		if err == io.EOF {
@@ -236,15 +298,14 @@ func main() {
 			case "/exit", "/quit":
 				return
 
-			case "/list":
-				if len(args) == 0 {
-					slashList(provider, apiKey)
-				} else {
-					fmt.Println("/list has no arguments")
-				}
+			case "/models":
+				slashModels(args, provider, apiKey)
+
+			case "/skills":
+				slashSkills(args, skills)
 
 			default:
-				fmt.Println("slash command must be /exit or /list")
+				fmt.Println("slash command must be /exit, /models, or /skills")
 			}
 
 			continue

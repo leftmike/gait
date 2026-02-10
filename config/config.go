@@ -12,10 +12,9 @@ import (
 )
 
 type Provider struct {
-	Name     string `hcl:"name,label"`
-	Model    string `hcl:"model,optional"`
-	APIKey   string `hcl:"api_key,optional"`
-	Thinking *bool  `hcl:"thinking,optional"`
+	Name   string `hcl:"name,label"`
+	Model  string `hcl:"model,optional"`
+	APIKey string `hcl:"api_key,optional"`
 }
 
 /*
@@ -44,6 +43,7 @@ type Config struct {
 	Provider   string      `hcl:"provider,optional"`
 	Providers  []Provider  `hcl:"provider,block"`
 	MCPServers []MCPServer `hcl:"mcpserver,block"`
+	Skills     []string    `hcl:"skills,optional"`
 }
 
 func (cfg *Config) FindProvider(name string) *Provider {
