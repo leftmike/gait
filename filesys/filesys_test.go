@@ -1,6 +1,7 @@
 package filesys
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -10,13 +11,14 @@ import (
 )
 
 type filterTestCase struct {
-	op       string
-	dir      string
-	filename string
-	writable bool
-	ok       bool
-	lst      []FilterPath
-	fail     bool
+	op         string
+	dir        string
+	filename   string
+	writable   bool
+	ok         bool
+	permission bool
+	lst        []FilterPath
+	fail       bool
 }
 
 func filenameToContent(filename string) string {
@@ -137,6 +139,32 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 				t.Errorf("Stat(%s) failed with %s", c.dir, err)
 			} else if !fi.IsDir() {
 				t.Errorf("Stat(%s) not directory", c.dir)
+			}
+
+		case "Mkdir":
+			err := ffs.Mkdir(c.dir, 0755)
+			if c.fail {
+				if err == nil {
+					t.Errorf("Mkdir(%s) did not fail", c.dir)
+				} else if os.IsPermission(err) != c.permission {
+					t.Errorf("Mkdir(%s) permission error: got %v want %v", c.dir,
+						os.IsPermission(err), c.permission)
+				}
+			} else if err != nil {
+				t.Errorf("Mkdir(%s) failed with %s", c.dir, err)
+			}
+
+		case "MkdirAll":
+			err := ffs.MkdirAll(c.dir, 0755)
+			if c.fail {
+				if err == nil {
+					t.Errorf("MkdirAll(%s) did not fail", c.dir)
+				} else if os.IsPermission(err) != c.permission {
+					t.Errorf("MkdirAll(%s) permission error: got %v want %v", c.dir,
+						os.IsPermission(err), c.permission)
+				}
+			} else if err != nil {
+				t.Errorf("MkdirAll(%s) failed with %s", c.dir, err)
 			}
 
 		default:
@@ -346,5 +374,22 @@ func TestReadFileAccess(t *testing.T) {
 		{op: "ReadFile", filename: "/home/fred/src/README.md"},
 		{op: "ReadFile", filename: "/home/fred/src/main.go"},
 		{op: "ReadFile", filename: "/etc/passwd", fail: true},
+	})
+}
+
+func TestMkdir(t *testing.T) {
+	testFilter(t, []string{
+		"/home/mike/src/main.go",
+	}, []filterTestCase{
+		{op: "AddDir", dir: "/home/mike", writable: true},
+		{op: "AddDir", dir: "/home"},
+		{op: "Mkdir", dir: "/home/mike/newdir"},
+		{op: "Stat", dir: "/home/mike/newdir"},
+		{op: "Mkdir", dir: "/home/newdir", fail: true},
+		{op: "Mkdir", dir: "/etc/newdir", fail: true, permission: true},
+		{op: "MkdirAll", dir: "/home/mike/a/b/c"},
+		{op: "Stat", dir: "/home/mike/a/b/c"},
+		{op: "MkdirAll", dir: "/home/a/b/c", fail: true, permission, true},
+		{op: "MkdirAll", dir: "/etc/a/b/c", fail: true},
 	})
 }
