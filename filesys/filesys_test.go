@@ -17,6 +17,7 @@ type filterTestCase struct {
 	dir      string
 	filename string
 	newname  string
+	flag     int
 	writable bool
 	ok       bool
 	lst      []FilterPath
@@ -136,6 +137,38 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 						t.Errorf("Stat(%s) got directory", c.filename)
 					}
 				}
+			}
+
+		case "OpenFile":
+			f, err := ffs.OpenFile(c.filename, c.flag, 0644)
+			if c.fail {
+				if err == nil {
+					f.Close()
+					t.Errorf("OpenFile(%s, %d) did not fail", c.filename, c.flag)
+				}
+			} else if err != nil {
+				t.Errorf("OpenFile(%s, %d) failed with %s", c.filename, c.flag, err)
+			} else {
+				if c.flag == os.O_RDONLY {
+					cnt, err := io.ReadAll(f)
+					if err != nil {
+						t.Errorf("OpenFile(%s, %d) ReadAll failed with %s", c.filename, c.flag,
+							err)
+					} else {
+						want := filenameToContent(c.filename)
+						if string(cnt) != want {
+							t.Errorf("OpenFile(%s, %d) got %s want %s", c.filename, c.flag, cnt,
+								want)
+						}
+					}
+				} else {
+					want := filenameToContent(c.filename)
+					_, err := f.Write([]byte(want))
+					if err != nil {
+						t.Errorf("OpenFile(%s, %d) Write failed with %s", c.filename, c.flag, err)
+					}
+				}
+				f.Close()
 			}
 
 		case "Stat":
@@ -567,6 +600,39 @@ func TestCreate(t *testing.T) {
 		{op: "Create", filename: "/etc/passwd", fail: true},
 		{op: "Create", filename: "/home/fred/src/main.go"},
 		{op: "Create", filename: "/home/fred/index.html", fail: true},
+	})
+}
+
+func TestOpenFile(t *testing.T) {
+	testFilter(t, []string{
+		"/home/mike/src/main.go",
+		"/home/mike/index.html",
+		"/home/fred/src/main.go",
+		"/home/fred/index.html",
+	}, []filterTestCase{
+		{op: "AddDir", dir: "/home/mike/src", writable: true},
+		{op: "AddDir", dir: "/home/mike"},
+		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
+		{op: "AddFilename", filename: "/home/fred/index.html"},
+		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_RDONLY},
+		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_RDONLY},
+		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_WRONLY},
+		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_RDWR},
+		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_APPEND | os.O_WRONLY},
+		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_TRUNC | os.O_WRONLY},
+		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_WRONLY, fail: true},
+		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_RDWR, fail: true},
+		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_APPEND | os.O_WRONLY,
+			fail: true},
+		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_TRUNC | os.O_WRONLY,
+			fail: true},
+		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_CREATE, fail: true},
+		{op: "OpenFile", filename: "/etc/passwd", flag: os.O_RDONLY, fail: true},
+		{op: "OpenFile", filename: "/home/fred/src/main.go", flag: os.O_RDONLY},
+		{op: "OpenFile", filename: "/home/fred/src/main.go", flag: os.O_WRONLY},
+		{op: "OpenFile", filename: "/home/fred/index.html", flag: os.O_RDONLY},
+		{op: "OpenFile", filename: "/home/fred/index.html", flag: os.O_WRONLY, fail: true},
+		{op: "OpenFile", filename: "/home/fred/index.html", flag: os.O_RDWR, fail: true},
 	})
 }
 
