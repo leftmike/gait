@@ -1,6 +1,7 @@
 package filesys
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -102,18 +103,25 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 					writable, ok, c.writable, c.ok)
 			}
 
-		case "ReadFile":
-			cnt, err := afero.ReadFile(ffs, c.filename)
+		case "Open":
+			f, err := ffs.Open(c.filename)
 			if c.fail {
 				if err == nil {
-					t.Errorf("ReadFile(%s) did not fail", c.filename)
+					f.Close()
+					t.Errorf("Open(%s) did not fail", c.filename)
 				}
 			} else if err != nil {
-				t.Errorf("ReadFile(%s) failed with %s", c.filename, err)
+				t.Errorf("Open(%s) failed with %s", c.filename, err)
 			} else {
-				want := filenameToContent(c.filename)
-				if string(cnt) != want {
-					t.Errorf("ReadFile(%s) got %s want %s", c.filename, cnt, want)
+				cnt, err := io.ReadAll(f)
+				f.Close()
+				if err != nil {
+					t.Errorf("Open(%s) ReadAll failed with %s", c.filename, err)
+				} else {
+					want := filenameToContent(c.filename)
+					if string(cnt) != want {
+						t.Errorf("Open(%s) got %s want %s", c.filename, cnt, want)
+					}
 				}
 
 				fi, err := ffs.Stat(c.filename)
@@ -440,7 +448,7 @@ func TestAccessibleFilename(t *testing.T) {
 	})
 }
 
-func TestReadFileAccess(t *testing.T) {
+func TestOpenAccess(t *testing.T) {
 	testFilter(t, []string{
 		"/home/mike/index.html",
 		"/home/mike/src/main.go",
@@ -454,13 +462,13 @@ func TestReadFileAccess(t *testing.T) {
 		{op: "AddDir", dir: "/home/mike"},
 		{op: "AddDir", dir: "/home/mike/src", writable: true},
 		{op: "AddFilename", filename: "/home/fred/src/README.md"},
-		{op: "ReadFile", filename: "/home/mike/index.html"},
-		{op: "ReadFile", filename: "/home/mike/src/main.go"},
-		{op: "ReadFile", filename: "/home/mike/bin/command.sh"},
-		{op: "ReadFile", filename: "/home/fred/index.html", fail: true},
-		{op: "ReadFile", filename: "/home/fred/src/README.md"},
-		{op: "ReadFile", filename: "/home/fred/src/main.go", fail: true},
-		{op: "ReadFile", filename: "/etc/passwd", fail: true},
+		{op: "Open", filename: "/home/mike/index.html"},
+		{op: "Open", filename: "/home/mike/src/main.go"},
+		{op: "Open", filename: "/home/mike/bin/command.sh"},
+		{op: "Open", filename: "/home/fred/index.html", fail: true},
+		{op: "Open", filename: "/home/fred/src/README.md"},
+		{op: "Open", filename: "/home/fred/src/main.go", fail: true},
+		{op: "Open", filename: "/etc/passwd", fail: true},
 		{op: "Stat", dir: "/", fail: true},
 		{op: "Stat", dir: "/etc", fail: true},
 		{op: "Stat", dir: "/home", fail: true},
@@ -468,10 +476,10 @@ func TestReadFileAccess(t *testing.T) {
 		{op: "Stat", dir: "/home/mike/src"},
 		{op: "Stat", dir: "/home/mike/bin"},
 		{op: "AddDir", dir: "/home/fred/src"},
-		{op: "ReadFile", filename: "/home/fred/index.html", fail: true},
-		{op: "ReadFile", filename: "/home/fred/src/README.md"},
-		{op: "ReadFile", filename: "/home/fred/src/main.go"},
-		{op: "ReadFile", filename: "/etc/passwd", fail: true},
+		{op: "Open", filename: "/home/fred/index.html", fail: true},
+		{op: "Open", filename: "/home/fred/src/README.md"},
+		{op: "Open", filename: "/home/fred/src/main.go"},
+		{op: "Open", filename: "/etc/passwd", fail: true},
 	})
 }
 
@@ -505,14 +513,14 @@ func TestRemove(t *testing.T) {
 		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
 		{op: "AddFilename", filename: "/home/fred/index.html"},
 		{op: "Remove", filename: "/home/mike/src/main.go"},
-		{op: "ReadFile", filename: "/home/mike/src/main.go", fail: true},
+		{op: "Open", filename: "/home/mike/src/main.go", fail: true},
 		{op: "Remove", filename: "/home/mike/index.html", fail: true},
 		{op: "Remove", filename: "/etc/passwd", fail: true},
 		{op: "Remove", filename: "/home/fred/src/main.go"},
-		{op: "ReadFile", filename: "/home/fred/src/main.go", fail: true},
+		{op: "Open", filename: "/home/fred/src/main.go", fail: true},
 		{op: "Remove", filename: "/home/fred/index.html", fail: true},
 		{op: "RemoveAll", filename: "/home/mike/src/util.go"},
-		{op: "ReadFile", filename: "/home/mike/src/util.go", fail: true},
+		{op: "Open", filename: "/home/mike/src/util.go", fail: true},
 		{op: "RemoveAll", filename: "/home/mike/index.html", fail: true},
 		{op: "RemoveAll", filename: "/etc/passwd", fail: true},
 	})
@@ -531,7 +539,7 @@ func TestRename(t *testing.T) {
 		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
 		{op: "AddFilename", filename: "/home/fred/index.html"},
 		{op: "Rename", filename: "/home/mike/src/main.go", newname: "/home/mike/src/app.go"},
-		{op: "ReadFile", filename: "/home/mike/src/main.go", fail: true},
+		{op: "Open", filename: "/home/mike/src/main.go", fail: true},
 		{op: "Rename", filename: "/home/mike/index.html", newname: "/home/mike/home.html",
 			fail: true},
 		{op: "Rename", filename: "/etc/passwd", newname: "/etc/shadow", fail: true},
