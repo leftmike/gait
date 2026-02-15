@@ -192,6 +192,31 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 				t.Errorf("Rename(%s, %s) failed with %s", c.filename, c.newname, err)
 			}
 
+		case "Create":
+			f, err := ffs.Create(c.filename)
+			if c.fail {
+				if err == nil {
+					f.Close()
+					t.Errorf("Create(%s) did not fail", c.filename)
+				}
+			} else if err != nil {
+				t.Errorf("Create(%s) failed with %s", c.filename, err)
+			} else {
+				want := filenameToContent(c.filename)
+				_, err := f.Write([]byte(want))
+				f.Close()
+				if err != nil {
+					t.Errorf("Create(%s) WriteString failed with %s", c.filename, err)
+				} else {
+					cnt, err := afero.ReadFile(ffs, c.filename)
+					if err != nil {
+						t.Errorf("Create(%s) ReadFile failed with %s", c.filename, err)
+					} else if string(cnt) != want {
+						t.Errorf("Create(%s) got %s want %s", c.filename, cnt, want)
+					}
+				}
+			}
+
 		case "Chmod":
 			err := ffs.Chmod(c.filename, 0755)
 			if c.fail {
@@ -515,6 +540,25 @@ func TestRename(t *testing.T) {
 		{op: "Rename", filename: "/home/fred/index.html", newname: "/home/fred/src/main.go",
 			fail: true},
 		{op: "Rename", filename: "/home/mike/src/util.go", newname: "/etc/util.go", fail: true},
+	})
+}
+
+func TestCreate(t *testing.T) {
+	testFilter(t, []string{
+		"/home/mike/src/main.go",
+		"/home/mike/index.html",
+		"/home/fred/src/main.go",
+		"/home/fred/index.html",
+	}, []filterTestCase{
+		{op: "AddDir", dir: "/home/mike/src", writable: true},
+		{op: "AddDir", dir: "/home/mike"},
+		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
+		{op: "AddFilename", filename: "/home/fred/index.html"},
+		{op: "Create", filename: "/home/mike/src/new.go"},
+		{op: "Create", filename: "/home/mike/index.html", fail: true},
+		{op: "Create", filename: "/etc/passwd", fail: true},
+		{op: "Create", filename: "/home/fred/src/main.go"},
+		{op: "Create", filename: "/home/fred/index.html", fail: true},
 	})
 }
 
