@@ -102,32 +102,6 @@ func (ffs *filterFs) ListFilenames() []FilterPath {
 	return filenames
 }
 
-func (ffs *filterFs) allowed(name string) bool {
-	/* XXX
-	name = filepath.Clean(name)
-	if ffs.files[name] {
-		return true
-	}
-	if ffs.dirs[name] {
-		return true
-	}
-	for d, wf := range ffs.dirs {
-		if !wf {
-			continue
-		}
-		prefix := d
-		if !strings.HasSuffix(prefix, string(filepath.Separator)) {
-			prefix += string(filepath.Separator)
-		}
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
-	}
-	return false
-	*/
-	return false
-}
-
 func (ffs *filterFs) accessibleDir(dir string) (writable bool, ok bool) {
 	dir = filepath.Clean(dir)
 	for _, fp := range ffs.dirs {
@@ -153,54 +127,6 @@ func (ffs *filterFs) accessibleFilename(filename string) (writable bool, ok bool
 	}
 
 	return false, false
-}
-
-func (ffs *filterFs) visible(name string) bool {
-	/*
-		name = filepath.Clean(name)
-		// Exact match in files or dirs (any writable flag).
-		if _, ok := ffs.files[name]; ok {
-			return true
-		}
-		if _, ok := ffs.dirs[name]; ok {
-			return true
-		}
-		// Child of any dir (any writable flag).
-		for d := range ffs.dirs {
-			prefix := d
-			if !strings.HasSuffix(prefix, string(filepath.Separator)) {
-				prefix += string(filepath.Separator)
-			}
-			if strings.HasPrefix(name, prefix) {
-				return true
-			}
-		}
-		// Ancestor of any dir or file.
-		prefix := name
-		if !strings.HasSuffix(prefix, string(filepath.Separator)) {
-			prefix += string(filepath.Separator)
-		}
-		for d := range ffs.dirs {
-			if strings.HasPrefix(d, prefix) {
-				return true
-			}
-		}
-		for p := range ffs.files {
-			if strings.HasPrefix(p, prefix) {
-				return true
-			}
-		}
-		return false
-	*/
-	return false
-}
-
-func (ffs *filterFs) pathErr(op, name string) *os.PathError {
-	err := os.ErrPermission
-	if !ffs.visible(name) {
-		err = os.ErrNotExist
-	}
-	return &os.PathError{Op: op, Path: name, Err: err}
 }
 
 func (ffs *filterFs) Name() string {
@@ -247,13 +173,6 @@ func (ffs *filterFs) Open(filename string) (afero.File, error) {
 	}
 
 	return ffs.fs.Open(filename)
-	/*
-		file, err := ffs.fs.Open(filename)
-		if err != nil {
-			return nil, err
-		}
-		return &filteredFile{File: file, fs: ffs}, nil
-	*/
 }
 
 func (ffs *filterFs) OpenFile(filename string, flag int, perm os.FileMode) (afero.File, error) {
@@ -265,13 +184,6 @@ func (ffs *filterFs) OpenFile(filename string, flag int, perm os.FileMode) (afer
 	}
 
 	return ffs.fs.OpenFile(filename, flag, perm)
-	/*
-		file, err := ffs.fs.OpenFile(filename, flag, perm)
-		if err != nil {
-			return nil, err
-		}
-		return &filteredFile{File: file, fs: ffs}, nil
-	*/
 }
 
 func (ffs *filterFs) Remove(filename string) error {
@@ -347,7 +259,6 @@ func (ffs *filterFs) Chown(filename string, uid, gid int) error {
 func (ffs *filterFs) Chtimes(filename string, atime time.Time, mtime time.Time) error {
 	writable, ok := ffs.accessibleFilename(filename)
 	if !ok {
-		// XXX: check all os.PathError for the current Op
 		return &os.PathError{Op: "chtimes", Path: filename, Err: os.ErrNotExist}
 	} else if !writable {
 		return &os.PathError{Op: "chtimes", Path: filename, Err: os.ErrPermission}
@@ -355,67 +266,3 @@ func (ffs *filterFs) Chtimes(filename string, atime time.Time, mtime time.Time) 
 
 	return ffs.fs.Chtimes(filename, atime, mtime)
 }
-
-/*
-type filteredFile struct {
-	afero.File
-	fs      *filterFs
-	entries []fs.FileInfo
-	loaded  bool
-	pos     int
-}
-
-func (d *filteredFile) loadEntries() error {
-	if d.loaded {
-		return nil
-	}
-	all, err := d.File.Readdir(-1)
-	if err != nil {
-		return err
-	}
-	dir := d.File.Name()
-	for _, info := range all {
-		if d.fs.visible(filepath.Join(dir, info.Name())) {
-			d.entries = append(d.entries, info)
-		}
-	}
-	d.loaded = true
-	return nil
-}
-
-func (d *filteredFile) Readdir(count int) ([]fs.FileInfo, error) {
-	if err := d.loadEntries(); err != nil {
-		return nil, err
-	}
-	if count <= 0 {
-		if d.pos >= len(d.entries) {
-			return nil, nil
-		}
-		result := d.entries[d.pos:]
-		d.pos = len(d.entries)
-		return result, nil
-	}
-	if d.pos >= len(d.entries) {
-		return nil, io.EOF
-	}
-	end := d.pos + count
-	if end > len(d.entries) {
-		end = len(d.entries)
-	}
-	result := d.entries[d.pos:end]
-	d.pos = end
-	return result, nil
-}
-
-func (d *filteredFile) Readdirnames(count int) ([]string, error) {
-	entries, err := d.Readdir(count)
-	if err != nil && len(entries) == 0 {
-		return nil, err
-	}
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
-	}
-	return names, err
-}
-*/
