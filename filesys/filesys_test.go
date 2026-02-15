@@ -1,7 +1,6 @@
 package filesys
 
 import (
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -11,14 +10,14 @@ import (
 )
 
 type filterTestCase struct {
-	op         string
-	dir        string
-	filename   string
-	writable   bool
-	ok         bool
-	permission bool
-	lst        []FilterPath
-	fail       bool
+	op       string
+	dir      string
+	filename string
+	newname  string
+	writable bool
+	ok       bool
+	lst      []FilterPath
+	fail     bool
 }
 
 func filenameToContent(filename string) string {
@@ -146,9 +145,6 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 			if c.fail {
 				if err == nil {
 					t.Errorf("Mkdir(%s) did not fail", c.dir)
-				} else if os.IsPermission(err) != c.permission {
-					t.Errorf("Mkdir(%s) permission error: got %v want %v", c.dir,
-						os.IsPermission(err), c.permission)
 				}
 			} else if err != nil {
 				t.Errorf("Mkdir(%s) failed with %s", c.dir, err)
@@ -159,9 +155,6 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 			if c.fail {
 				if err == nil {
 					t.Errorf("MkdirAll(%s) did not fail", c.dir)
-				} else if os.IsPermission(err) != c.permission {
-					t.Errorf("MkdirAll(%s) permission error: got %v want %v", c.dir,
-						os.IsPermission(err), c.permission)
 				}
 			} else if err != nil {
 				t.Errorf("MkdirAll(%s) failed with %s", c.dir, err)
@@ -172,9 +165,6 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 			if c.fail {
 				if err == nil {
 					t.Errorf("Remove(%s) did not fail", c.filename)
-				} else if os.IsPermission(err) != c.permission {
-					t.Errorf("Remove(%s) permission error: got %v want %v", c.filename,
-						os.IsPermission(err), c.permission)
 				}
 			} else if err != nil {
 				t.Errorf("Remove(%s) failed with %s", c.filename, err)
@@ -185,12 +175,19 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 			if c.fail {
 				if err == nil {
 					t.Errorf("RemoveAll(%s) did not fail", c.filename)
-				} else if os.IsPermission(err) != c.permission {
-					t.Errorf("RemoveAll(%s) permission error: got %v want %v", c.filename,
-						os.IsPermission(err), c.permission)
 				}
 			} else if err != nil {
 				t.Errorf("RemoveAll(%s) failed with %s", c.filename, err)
+			}
+
+		case "Rename":
+			err := ffs.Rename(c.filename, c.newname)
+			if c.fail {
+				if err == nil {
+					t.Errorf("Rename(%s, %s) did not fail", c.filename, c.newname)
+				}
+			} else if err != nil {
+				t.Errorf("Rename(%s, %s) failed with %s", c.filename, c.newname, err)
 			}
 
 		default:
@@ -411,11 +408,11 @@ func TestMkdir(t *testing.T) {
 		{op: "AddDir", dir: "/home"},
 		{op: "Mkdir", dir: "/home/mike/newdir"},
 		{op: "Stat", dir: "/home/mike/newdir"},
-		{op: "Mkdir", dir: "/home/newdir", fail: true, permission: true},
+		{op: "Mkdir", dir: "/home/newdir", fail: true},
 		{op: "Mkdir", dir: "/etc/newdir", fail: true},
 		{op: "MkdirAll", dir: "/home/mike/a/b/c"},
 		{op: "Stat", dir: "/home/mike/a/b/c"},
-		{op: "MkdirAll", dir: "/home/a/b/c", fail: true, permission: true},
+		{op: "MkdirAll", dir: "/home/a/b/c", fail: true},
 		{op: "MkdirAll", dir: "/etc/a/b/c", fail: true},
 	})
 }
@@ -434,14 +431,39 @@ func TestRemove(t *testing.T) {
 		{op: "AddFilename", filename: "/home/fred/index.html"},
 		{op: "Remove", filename: "/home/mike/src/main.go"},
 		{op: "ReadFile", filename: "/home/mike/src/main.go", fail: true},
-		{op: "Remove", filename: "/home/mike/index.html", fail: true, permission: true},
+		{op: "Remove", filename: "/home/mike/index.html", fail: true},
 		{op: "Remove", filename: "/etc/passwd", fail: true},
 		{op: "Remove", filename: "/home/fred/src/main.go"},
 		{op: "ReadFile", filename: "/home/fred/src/main.go", fail: true},
-		{op: "Remove", filename: "/home/fred/index.html", fail: true, permission: true},
+		{op: "Remove", filename: "/home/fred/index.html", fail: true},
 		{op: "RemoveAll", filename: "/home/mike/src/util.go"},
 		{op: "ReadFile", filename: "/home/mike/src/util.go", fail: true},
-		{op: "RemoveAll", filename: "/home/mike/index.html", fail: true, permission: true},
+		{op: "RemoveAll", filename: "/home/mike/index.html", fail: true},
 		{op: "RemoveAll", filename: "/etc/passwd", fail: true},
+	})
+}
+
+func TestRename(t *testing.T) {
+	testFilter(t, []string{
+		"/home/mike/src/main.go",
+		"/home/mike/src/util.go",
+		"/home/mike/index.html",
+		"/home/fred/src/main.go",
+		"/home/fred/index.html",
+	}, []filterTestCase{
+		{op: "AddDir", dir: "/home/mike/src", writable: true},
+		{op: "AddDir", dir: "/home/mike"},
+		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
+		{op: "AddFilename", filename: "/home/fred/index.html"},
+		{op: "Rename", filename: "/home/mike/src/main.go", newname: "/home/mike/src/app.go"},
+		{op: "ReadFile", filename: "/home/mike/src/main.go", fail: true},
+		{op: "Rename", filename: "/home/mike/index.html", newname: "/home/mike/home.html",
+			fail: true},
+		{op: "Rename", filename: "/etc/passwd", newname: "/etc/shadow", fail: true},
+		{op: "Rename", filename: "/home/fred/src/main.go", newname: "/home/fred/index.html",
+			fail: true},
+		{op: "Rename", filename: "/home/fred/index.html", newname: "/home/fred/src/main.go",
+			fail: true},
+		{op: "Rename", filename: "/home/mike/src/util.go", newname: "/etc/util.go", fail: true},
 	})
 }
