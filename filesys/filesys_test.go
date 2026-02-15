@@ -167,6 +167,32 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 				t.Errorf("MkdirAll(%s) failed with %s", c.dir, err)
 			}
 
+		case "Remove":
+			err := ffs.Remove(c.filename)
+			if c.fail {
+				if err == nil {
+					t.Errorf("Remove(%s) did not fail", c.filename)
+				} else if os.IsPermission(err) != c.permission {
+					t.Errorf("Remove(%s) permission error: got %v want %v", c.filename,
+						os.IsPermission(err), c.permission)
+				}
+			} else if err != nil {
+				t.Errorf("Remove(%s) failed with %s", c.filename, err)
+			}
+
+		case "RemoveAll":
+			err := ffs.RemoveAll(c.filename)
+			if c.fail {
+				if err == nil {
+					t.Errorf("RemoveAll(%s) did not fail", c.filename)
+				} else if os.IsPermission(err) != c.permission {
+					t.Errorf("RemoveAll(%s) permission error: got %v want %v", c.filename,
+						os.IsPermission(err), c.permission)
+				}
+			} else if err != nil {
+				t.Errorf("RemoveAll(%s) failed with %s", c.filename, err)
+			}
+
 		default:
 			t.Fatalf("unexpected op: %s", c.op)
 		}
@@ -385,11 +411,37 @@ func TestMkdir(t *testing.T) {
 		{op: "AddDir", dir: "/home"},
 		{op: "Mkdir", dir: "/home/mike/newdir"},
 		{op: "Stat", dir: "/home/mike/newdir"},
-		{op: "Mkdir", dir: "/home/newdir", fail: true},
-		{op: "Mkdir", dir: "/etc/newdir", fail: true, permission: true},
+		{op: "Mkdir", dir: "/home/newdir", fail: true, permission: true},
+		{op: "Mkdir", dir: "/etc/newdir", fail: true},
 		{op: "MkdirAll", dir: "/home/mike/a/b/c"},
 		{op: "Stat", dir: "/home/mike/a/b/c"},
-		{op: "MkdirAll", dir: "/home/a/b/c", fail: true, permission, true},
+		{op: "MkdirAll", dir: "/home/a/b/c", fail: true, permission: true},
 		{op: "MkdirAll", dir: "/etc/a/b/c", fail: true},
+	})
+}
+
+func TestRemove(t *testing.T) {
+	testFilter(t, []string{
+		"/home/mike/src/main.go",
+		"/home/mike/src/util.go",
+		"/home/mike/index.html",
+		"/home/fred/src/main.go",
+		"/home/fred/index.html",
+	}, []filterTestCase{
+		{op: "AddDir", dir: "/home/mike/src", writable: true},
+		{op: "AddDir", dir: "/home/mike"},
+		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
+		{op: "AddFilename", filename: "/home/fred/index.html"},
+		{op: "Remove", filename: "/home/mike/src/main.go"},
+		{op: "ReadFile", filename: "/home/mike/src/main.go", fail: true},
+		{op: "Remove", filename: "/home/mike/index.html", fail: true, permission: true},
+		{op: "Remove", filename: "/etc/passwd", fail: true},
+		{op: "Remove", filename: "/home/fred/src/main.go"},
+		{op: "ReadFile", filename: "/home/fred/src/main.go", fail: true},
+		{op: "Remove", filename: "/home/fred/index.html", fail: true, permission: true},
+		{op: "RemoveAll", filename: "/home/mike/src/util.go"},
+		{op: "ReadFile", filename: "/home/mike/src/util.go", fail: true},
+		{op: "RemoveAll", filename: "/home/mike/index.html", fail: true, permission: true},
+		{op: "RemoveAll", filename: "/etc/passwd", fail: true},
 	})
 }
