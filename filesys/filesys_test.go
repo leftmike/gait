@@ -1,10 +1,12 @@
 package filesys
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/afero"
 )
@@ -188,6 +190,54 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 				}
 			} else if err != nil {
 				t.Errorf("Rename(%s, %s) failed with %s", c.filename, c.newname, err)
+			}
+
+		case "Chmod":
+			err := ffs.Chmod(c.filename, 0755)
+			if c.fail {
+				if err == nil {
+					t.Errorf("Chmod(%s) did not fail", c.filename)
+				}
+			} else if err != nil {
+				t.Errorf("Chmod(%s) failed with %s", c.filename, err)
+			} else {
+				fi, err := ffs.Stat(c.filename)
+				if err != nil {
+					t.Errorf("Stat(%s) failed with %s", c.filename, err)
+				} else if fi.Mode().Perm() != os.FileMode(0755) {
+					t.Errorf("Chmod(%s) got %v want %v", c.filename,
+						fi.Mode().Perm(), os.FileMode(0755))
+				}
+			}
+
+		case "Chown":
+			err := ffs.Chown(c.filename, 1000, 1000)
+			if c.fail {
+				if err == nil {
+					t.Errorf("Chown(%s) did not fail", c.filename)
+				}
+			} else if err != nil {
+				t.Errorf("Chown(%s) failed with %s", c.filename, err)
+			}
+
+		case "Chtimes":
+			atime := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+			mtime := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+			err := ffs.Chtimes(c.filename, atime, mtime)
+			if c.fail {
+				if err == nil {
+					t.Errorf("Chtimes(%s) did not fail", c.filename)
+				}
+			} else if err != nil {
+				t.Errorf("Chtimes(%s) failed with %s", c.filename, err)
+			} else {
+				fi, err := ffs.Stat(c.filename)
+				if err != nil {
+					t.Errorf("Stat(%s) failed with %s", c.filename, err)
+				} else if !fi.ModTime().Equal(mtime) {
+					t.Errorf("Chtimes(%s) got %v want %v", c.filename,
+						fi.ModTime(), mtime)
+				}
 			}
 
 		default:
@@ -465,5 +515,62 @@ func TestRename(t *testing.T) {
 		{op: "Rename", filename: "/home/fred/index.html", newname: "/home/fred/src/main.go",
 			fail: true},
 		{op: "Rename", filename: "/home/mike/src/util.go", newname: "/etc/util.go", fail: true},
+	})
+}
+
+func TestChmod(t *testing.T) {
+	testFilter(t, []string{
+		"/home/mike/src/main.go",
+		"/home/mike/index.html",
+		"/home/fred/src/main.go",
+		"/home/fred/index.html",
+	}, []filterTestCase{
+		{op: "AddDir", dir: "/home/mike/src", writable: true},
+		{op: "AddDir", dir: "/home/mike"},
+		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
+		{op: "AddFilename", filename: "/home/fred/index.html"},
+		{op: "Chmod", filename: "/home/mike/src/main.go"},
+		{op: "Chmod", filename: "/home/mike/index.html", fail: true},
+		{op: "Chmod", filename: "/etc/passwd", fail: true},
+		{op: "Chmod", filename: "/home/fred/src/main.go"},
+		{op: "Chmod", filename: "/home/fred/index.html", fail: true},
+	})
+}
+
+func TestChown(t *testing.T) {
+	testFilter(t, []string{
+		"/home/mike/src/main.go",
+		"/home/mike/index.html",
+		"/home/fred/src/main.go",
+		"/home/fred/index.html",
+	}, []filterTestCase{
+		{op: "AddDir", dir: "/home/mike/src", writable: true},
+		{op: "AddDir", dir: "/home/mike"},
+		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
+		{op: "AddFilename", filename: "/home/fred/index.html"},
+		{op: "Chown", filename: "/home/mike/src/main.go"},
+		{op: "Chown", filename: "/home/mike/index.html", fail: true},
+		{op: "Chown", filename: "/etc/passwd", fail: true},
+		{op: "Chown", filename: "/home/fred/src/main.go"},
+		{op: "Chown", filename: "/home/fred/index.html", fail: true},
+	})
+}
+
+func TestChtimes(t *testing.T) {
+	testFilter(t, []string{
+		"/home/mike/src/main.go",
+		"/home/mike/index.html",
+		"/home/fred/src/main.go",
+		"/home/fred/index.html",
+	}, []filterTestCase{
+		{op: "AddDir", dir: "/home/mike/src", writable: true},
+		{op: "AddDir", dir: "/home/mike"},
+		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
+		{op: "AddFilename", filename: "/home/fred/index.html"},
+		{op: "Chtimes", filename: "/home/mike/src/main.go"},
+		{op: "Chtimes", filename: "/home/mike/index.html", fail: true},
+		{op: "Chtimes", filename: "/etc/passwd", fail: true},
+		{op: "Chtimes", filename: "/home/fred/src/main.go"},
+		{op: "Chtimes", filename: "/home/fred/index.html", fail: true},
 	})
 }
