@@ -107,6 +107,16 @@ func testForest(t *testing.T, filenames []string, cases []forestTestCase) {
 				t.Errorf("WriteFile(%s) failed with %s", c.filename, err)
 			}
 
+		case "Mkdir":
+			err := ffs.Mkdir(filepath.Join(tmp, c.dir), 0755)
+			if c.fail {
+				if err == nil {
+					t.Errorf("Mkdir(%s) did not fail", c.dir)
+				}
+			} else if err != nil {
+				t.Errorf("Mkdir(%s) failed with %s", c.dir, err)
+			}
+
 		case "ReadDir":
 			entries, err := ffs.ReadDir(filepath.Join(tmp, c.dir))
 			if c.fail {
@@ -291,6 +301,32 @@ func TestWriteFile(t *testing.T) {
 			{op: "ReadFile", filename: "/home/john.txt"},
 			{op: "WriteFile", filename: "/var/readme.txt", fail: true},
 			{op: "WriteFile", filename: "/kernel/readme.txt", fail: true},
+		})
+}
+
+func TestMkdir(t *testing.T) {
+	testForest(t,
+		[]string{
+			"/home/home.txt",
+			"/home/mike/mike.txt",
+			"/home/mik/mik.txt",
+			"/home/mikem/mikem.txt",
+			"/var/readme.txt",
+			"/usr/readme.txt",
+		},
+		[]forestTestCase{
+			{op: "AddTree", path: "/home/mike", writable: true},
+			{op: "AddTree", path: "/var"},
+			{op: "ReadDir", dir: "/home/mike/src", fail: true},
+			{op: "Mkdir", dir: "/home/mike/src"},
+			{op: "ReadDir", dir: "/home/mike/src"},
+			{op: "WriteFile", filename: "/home/mike/src/file.txt"},
+			{op: "ReadDir", dir: "/home/mike/src", dirs: []string{"file.txt"}},
+			{op: "Mkdir", dir: "/home/mike/src", fail: true},
+			{op: "Mkdir", dir: "/home/mik/src", fail: true},
+			{op: "Mkdir", dir: "/home/mikem/src", fail: true},
+			{op: "Mkdir", dir: "/var/newdir", fail: true},
+			{op: "Mkdir", dir: "/usr/newdir", fail: true},
 		})
 }
 

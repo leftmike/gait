@@ -142,6 +142,18 @@ func (ffs *ForestFS) WriteFile(filename string, buf []byte, perm os.FileMode) er
 	return tr.root.WriteFile(resolved, buf, perm)
 }
 
+func (ffs *ForestFS) Mkdir(dir string, perm os.FileMode) error {
+	tr, resolved, ok := ffs.resolvePath(dir)
+	if !ok {
+		return &os.PathError{Op: "mkdir", Path: dir, Err: os.ErrNotExist}
+	}
+
+	if !tr.writable {
+		return &os.PathError{Op: "mkdir", Path: dir, Err: os.ErrPermission}
+	}
+	return tr.root.Mkdir(resolved, perm)
+}
+
 func (ffs *ForestFS) ReadDir(dir string) ([]os.DirEntry, error) {
 	tr, resolved, ok := ffs.resolvePath(dir)
 	if !ok {
