@@ -13,7 +13,6 @@ To Do:
 -- /tools -- list tools
 
 - leverage filesys for the agent reading skill files
-- rename fileys* to forestfs*
 
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
