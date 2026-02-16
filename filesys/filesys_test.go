@@ -1,26 +1,24 @@
 package filesys
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/spf13/afero"
 )
 
-type filterTestCase struct {
+type forestTestCase struct {
 	op       string
+	path     string
 	dir      string
 	filename string
-	newname  string
-	flag     int
+	resolved string
 	writable bool
 	ok       bool
-	lst      []FilterPath
+	lst      []Tree
+	dirs     []string
 	fail     bool
 }
 
@@ -28,281 +26,108 @@ func filenameToContent(filename string) string {
 	return strings.ReplaceAll(filename, "/", " ")
 }
 
-func memMapFs(t *testing.T, filenames []string) afero.Fs {
-	t.Helper()
-
-	if len(filenames) == 0 {
-		return nil
-	}
-
-	fs := afero.NewMemMapFs()
+func newForestFS(t *testing.T, tmp string, filenames []string) *ForestFS {
 	for _, filename := range filenames {
-		err := afero.WriteFile(fs, filename, []byte(filenameToContent(filename)), 0644)
+		tmpname := filepath.Join(tmp, filename)
+		err := os.MkdirAll(filepath.Dir(tmpname), 0755)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.WriteFile(tmpname, []byte(filenameToContent(filename)),
+			0644)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	return fs
+
+	return NewForestFS()
 }
 
-func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
+func testForest(t *testing.T, filenames []string, cases []forestTestCase) {
 	t.Helper()
 
-	ffs := NewFs(memMapFs(t, filenames))
+	tmp := t.TempDir()
+	ffs := newForestFS(t, tmp, filenames)
+	defer ffs.Close()
 
 	for _, c := range cases {
 		switch c.op {
-		case "AddDir":
-			err := ffs.AddDir(c.dir, c.writable)
+		case "AddTree":
+			err := ffs.AddTree(filepath.Join(tmp, c.path), c.writable)
 			if c.fail {
 				if err == nil {
-					t.Errorf("AddDir(%s) did not fail", c.dir)
+					t.Errorf("AddTree(%s) did not fail", c.path)
 				}
 			} else if err != nil {
-				t.Errorf("AddDir(%s) failed with %s", c.dir, err)
+				t.Errorf("AddTree(%s) failed with %s", c.path, err)
 			}
 
-		case "RemoveDir":
-			ffs.RemoveDir(c.dir)
+		case "RemoveTree":
+			ffs.RemoveTree(filepath.Join(tmp, c.path))
 
-		case "ListDirs":
-			lst := ffs.ListDirs()
+		case "ListTrees":
+			lst := ffs.ListTrees()
+			for i := range c.lst {
+				c.lst[i].Path = filepath.Join(tmp, c.lst[i].Path)
+			}
 			if !reflect.DeepEqual(lst, c.lst) {
-				t.Errorf("ListDirs() got %v want %v", lst, c.lst)
+				t.Errorf("ListTrees() got %v want %v", lst, c.lst)
 			}
 
-		case "AddFilename":
-			err := ffs.AddFilename(c.filename, c.writable)
+		case "resolvePath":
+			_, s, ok := ffs.resolvePath(filepath.Join(tmp, c.path))
+			if c.resolved != s || c.ok != ok {
+				t.Errorf("resolvePath(%s) got (%s, %v) want (%s, %v)", c.path, s, ok,
+					c.resolved, c.ok)
+			}
+
+		case "ReadFile":
+			cnt, err := ffs.ReadFile(filepath.Join(tmp, c.filename))
 			if c.fail {
 				if err == nil {
-					t.Errorf("AddFilename(%s) did not fail", c.filename)
+					t.Errorf("ReadFile(%s) did not fail", c.filename)
 				}
 			} else if err != nil {
-				t.Errorf("AddFilename(%s) failed with %s", c.filename, err)
-			}
-
-		case "RemoveFilename":
-			ffs.RemoveFilename(c.filename)
-
-		case "ListFilenames":
-			lst := ffs.ListFilenames()
-			if !reflect.DeepEqual(lst, c.lst) {
-				t.Errorf("ListFilenames() got %v want %v", lst, c.lst)
-			}
-
-		case "accessibleDir":
-			writable, ok := ffs.accessibleDir(c.dir)
-			if writable != c.writable || ok != c.ok {
-				t.Errorf("accessibleDir(%s) got (%v, %v) want (%v, %v)", c.dir,
-					writable, ok, c.writable, c.ok)
-			}
-
-		case "accessibleFilename":
-			writable, ok := ffs.accessibleFilename(c.filename)
-			if writable != c.writable || ok != c.ok {
-				t.Errorf("accessibleFilename(%s) got (%v, %v) want (%v, %v)", c.filename,
-					writable, ok, c.writable, c.ok)
-			}
-
-		case "Open":
-			f, err := ffs.Open(c.filename)
-			if c.fail {
-				if err == nil {
-					f.Close()
-					t.Errorf("Open(%s) did not fail", c.filename)
-				}
-			} else if err != nil {
-				t.Errorf("Open(%s) failed with %s", c.filename, err)
-			} else {
-				cnt, err := io.ReadAll(f)
-				f.Close()
-				if err != nil {
-					t.Errorf("Open(%s) ReadAll failed with %s", c.filename, err)
-				} else {
-					want := filenameToContent(c.filename)
-					if string(cnt) != want {
-						t.Errorf("Open(%s) got %s want %s", c.filename, cnt, want)
-					}
-				}
-
-				fi, err := ffs.Stat(c.filename)
-				if err != nil {
-					t.Errorf("Stat(%s) failed with %s", c.filename, err)
-				} else {
-					if fi.Name() != filepath.Base(c.filename) {
-						t.Errorf("Stat(%s) got %s want %s", c.filename, fi.Name(),
-							filepath.Base(c.filename))
-					}
-					if fi.IsDir() {
-						t.Errorf("Stat(%s) got directory", c.filename)
-					}
-				}
-			}
-
-		case "OpenFile":
-			f, err := ffs.OpenFile(c.filename, c.flag, 0644)
-			if c.fail {
-				if err == nil {
-					f.Close()
-					t.Errorf("OpenFile(%s, %d) did not fail", c.filename, c.flag)
-				}
-			} else if err != nil {
-				t.Errorf("OpenFile(%s, %d) failed with %s", c.filename, c.flag, err)
-			} else {
-				if c.flag == os.O_RDONLY {
-					cnt, err := io.ReadAll(f)
-					if err != nil {
-						t.Errorf("OpenFile(%s, %d) ReadAll failed with %s", c.filename, c.flag,
-							err)
-					} else {
-						want := filenameToContent(c.filename)
-						if string(cnt) != want {
-							t.Errorf("OpenFile(%s, %d) got %s want %s", c.filename, c.flag, cnt,
-								want)
-						}
-					}
-				} else {
-					want := filenameToContent(c.filename)
-					_, err := f.Write([]byte(want))
-					if err != nil {
-						t.Errorf("OpenFile(%s, %d) Write failed with %s", c.filename, c.flag, err)
-					}
-				}
-				f.Close()
-			}
-
-		case "Stat":
-			fi, err := ffs.Stat(c.dir)
-			if c.fail {
-				if err == nil {
-					t.Errorf("Stat(%s) did not fail", c.dir)
-				}
-			} else if err != nil {
-				t.Errorf("Stat(%s) failed with %s", c.dir, err)
-			} else if !fi.IsDir() {
-				t.Errorf("Stat(%s) not directory", c.dir)
-			}
-
-		case "Mkdir":
-			err := ffs.Mkdir(c.dir, 0755)
-			if c.fail {
-				if err == nil {
-					t.Errorf("Mkdir(%s) did not fail", c.dir)
-				}
-			} else if err != nil {
-				t.Errorf("Mkdir(%s) failed with %s", c.dir, err)
-			}
-
-		case "MkdirAll":
-			err := ffs.MkdirAll(c.dir, 0755)
-			if c.fail {
-				if err == nil {
-					t.Errorf("MkdirAll(%s) did not fail", c.dir)
-				}
-			} else if err != nil {
-				t.Errorf("MkdirAll(%s) failed with %s", c.dir, err)
-			}
-
-		case "Remove":
-			err := ffs.Remove(c.filename)
-			if c.fail {
-				if err == nil {
-					t.Errorf("Remove(%s) did not fail", c.filename)
-				}
-			} else if err != nil {
-				t.Errorf("Remove(%s) failed with %s", c.filename, err)
-			}
-
-		case "RemoveAll":
-			err := ffs.RemoveAll(c.filename)
-			if c.fail {
-				if err == nil {
-					t.Errorf("RemoveAll(%s) did not fail", c.filename)
-				}
-			} else if err != nil {
-				t.Errorf("RemoveAll(%s) failed with %s", c.filename, err)
-			}
-
-		case "Rename":
-			err := ffs.Rename(c.filename, c.newname)
-			if c.fail {
-				if err == nil {
-					t.Errorf("Rename(%s, %s) did not fail", c.filename, c.newname)
-				}
-			} else if err != nil {
-				t.Errorf("Rename(%s, %s) failed with %s", c.filename, c.newname, err)
-			}
-
-		case "Create":
-			f, err := ffs.Create(c.filename)
-			if c.fail {
-				if err == nil {
-					f.Close()
-					t.Errorf("Create(%s) did not fail", c.filename)
-				}
-			} else if err != nil {
-				t.Errorf("Create(%s) failed with %s", c.filename, err)
+				t.Errorf("ReadFile(%s) failed with %s", c.filename, err)
 			} else {
 				want := filenameToContent(c.filename)
-				_, err := f.Write([]byte(want))
-				f.Close()
-				if err != nil {
-					t.Errorf("Create(%s) WriteString failed with %s", c.filename, err)
-				} else {
-					cnt, err := afero.ReadFile(ffs, c.filename)
-					if err != nil {
-						t.Errorf("Create(%s) ReadFile failed with %s", c.filename, err)
-					} else if string(cnt) != want {
-						t.Errorf("Create(%s) got %s want %s", c.filename, cnt, want)
+				if string(cnt) != want {
+					t.Errorf("ReadFile(%s) got %s want %s", c.filename, cnt, want)
+				}
+			}
+
+		case "WriteFile":
+			err := ffs.WriteFile(filepath.Join(tmp, c.filename),
+				[]byte(filenameToContent(c.filename)), 0644)
+			if c.fail {
+				if err == nil {
+					t.Errorf("WriteFile(%s) did not fail", c.filename)
+				}
+			} else if err != nil {
+				t.Errorf("WriteFile(%s) failed with %s", c.filename, err)
+			}
+
+		case "ReadDir":
+			entries, err := ffs.ReadDir(filepath.Join(tmp, c.dir))
+			if c.fail {
+				if err == nil {
+					t.Errorf("ReadDir(%s) did not fail", c.dir)
+				}
+			} else if err != nil {
+				t.Errorf("ReadDir(%s) failed with %s", c.dir, err)
+			} else {
+				var dirs []string
+				for _, e := range entries {
+					name := e.Name()
+					if e.IsDir() {
+						name = name + "/"
 					}
+					dirs = append(dirs, name)
 				}
-			}
+				sort.Strings(dirs)
 
-		case "Chmod":
-			err := ffs.Chmod(c.filename, 0755)
-			if c.fail {
-				if err == nil {
-					t.Errorf("Chmod(%s) did not fail", c.filename)
-				}
-			} else if err != nil {
-				t.Errorf("Chmod(%s) failed with %s", c.filename, err)
-			} else {
-				fi, err := ffs.Stat(c.filename)
-				if err != nil {
-					t.Errorf("Stat(%s) failed with %s", c.filename, err)
-				} else if fi.Mode().Perm() != os.FileMode(0755) {
-					t.Errorf("Chmod(%s) got %v want %v", c.filename,
-						fi.Mode().Perm(), os.FileMode(0755))
-				}
-			}
-
-		case "Chown":
-			err := ffs.Chown(c.filename, 1000, 1000)
-			if c.fail {
-				if err == nil {
-					t.Errorf("Chown(%s) did not fail", c.filename)
-				}
-			} else if err != nil {
-				t.Errorf("Chown(%s) failed with %s", c.filename, err)
-			}
-
-		case "Chtimes":
-			atime := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
-			mtime := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
-			err := ffs.Chtimes(c.filename, atime, mtime)
-			if c.fail {
-				if err == nil {
-					t.Errorf("Chtimes(%s) did not fail", c.filename)
-				}
-			} else if err != nil {
-				t.Errorf("Chtimes(%s) failed with %s", c.filename, err)
-			} else {
-				fi, err := ffs.Stat(c.filename)
-				if err != nil {
-					t.Errorf("Stat(%s) failed with %s", c.filename, err)
-				} else if !fi.ModTime().Equal(mtime) {
-					t.Errorf("Chtimes(%s) got %v want %v", c.filename,
-						fi.ModTime(), mtime)
+				if !reflect.DeepEqual(dirs, c.dirs) {
+					t.Errorf("ReadDir(%s) got %v want %v", c.dir, dirs, c.dirs)
 				}
 			}
 
@@ -312,383 +137,184 @@ func testFilter(t *testing.T, filenames []string, cases []filterTestCase) {
 	}
 }
 
-func TestFilterDirs(t *testing.T) {
-	testFilter(t, nil, []filterTestCase{
-		{op: "AddDir", dir: "home", fail: true},
-		{op: "AddDir", dir: "home/mike", fail: true},
-		{op: "AddDir", dir: "/home"},
-		{op: "AddDir", dir: "/home/mike", writable: true},
-		{op: "AddDir", dir: "/usr", writable: true},
-		{
-			op: "ListDirs",
-			lst: []FilterPath{
-				{"/home/mike", true},
-				{"/home", false},
-				{"/usr", true},
-			},
+func TestAddRemoveListTrees(t *testing.T) {
+	testForest(t,
+		[]string{
+			"/usr/usr.txt",
+			"/home/home.txt",
+			"/etc/etc.txt",
+			"/home/mike/home.mike.txt",
+			"/home/mikemon/home.mikemon.txt",
+			"/home/mik/home.mik.txt",
+			"/var/readme.txt",
 		},
-		{op: "AddDir", dir: "/usr", writable: false},
-		{
-			op: "ListDirs",
-			lst: []FilterPath{
-				{"/home/mike", true},
-				{"/home", false},
-				{"/usr", false},
+		[]forestTestCase{
+			{op: "AddTree", path: "/usr"},
+			{op: "AddTree", path: "/home"},
+			{op: "AddTree", path: "/etc/", writable: true},
+			{
+				op: "ListTrees",
+				lst: []Tree{
+					{"/home", false},
+					{"/etc", true},
+					{"/usr", false},
+				},
 			},
-		},
-		{op: "RemoveDir", dir: "home"},
-		{op: "RemoveDir", dir: "home/mike"},
-		{
-			op: "ListDirs",
-			lst: []FilterPath{
-				{"/home/mike", true},
-				{"/home", false},
-				{"/usr", false},
+			{op: "AddTree", path: "kernel", fail: true},
+			{op: "AddTree", path: "/kernel", fail: true},
+			{op: "AddTree", path: "/home/mike", fail: true},
+			{op: "AddTree", path: "/home", writable: true, fail: true},
+			{
+				op: "ListTrees",
+				lst: []Tree{
+					{"/home", false},
+					{"/etc", true},
+					{"/usr", false},
+				},
 			},
-		},
-		{op: "RemoveDir", dir: "/home"},
-		{
-			op: "ListDirs",
-			lst: []FilterPath{
-				{"/home/mike", true},
-				{"/usr", false},
+			{op: "RemoveTree", path: "/home/mike"},
+			{
+				op: "ListTrees",
+				lst: []Tree{
+					{"/home", false},
+					{"/etc", true},
+					{"/usr", false},
+				},
 			},
-		},
-		{op: "RemoveDir", dir: "/home"},
-		{
-			op: "ListDirs",
-			lst: []FilterPath{
-				{"/home/mike", true},
-				{"/usr", false},
+			{op: "RemoveTree", path: "/home"},
+			{
+				op: "ListTrees",
+				lst: []Tree{
+					{"/etc", true},
+					{"/usr", false},
+				},
 			},
-		},
-		{op: "RemoveDir", dir: "/home/mike"},
-		{op: "RemoveDir", dir: "/usr"},
-		{op: "ListDirs", lst: []FilterPath{}},
-	})
+			{op: "AddTree", path: "/home/mike", writable: true},
+			{
+				op: "ListTrees",
+				lst: []Tree{
+					{"/home/mike", true},
+					{"/etc", true},
+					{"/usr", false},
+				},
+			},
+			{op: "AddTree", path: "/home/mikemon"},
+			{op: "AddTree", path: "/home/mik", writable: true},
+			{
+				op: "ListTrees",
+				lst: []Tree{
+					{"/home/mikemon", false},
+					{"/home/mike", true},
+					{"/home/mik", true},
+					{"/etc", true},
+					{"/usr", false},
+				},
+			},
+			{op: "RemoveTree", path: "/home/mike"},
+			{op: "RemoveTree", path: "/kernel"},
+			{op: "RemoveTree", path: "kernel"},
+			{op: "RemoveTree", path: "/etc"},
+			{op: "RemoveTree", path: "/usr"},
+			{
+				op: "ListTrees",
+				lst: []Tree{
+					{"/home/mikemon", false},
+					{"/home/mik", true},
+				},
+			},
+		})
 }
 
-func TestFilterFilenames(t *testing.T) {
-	testFilter(t, nil, []filterTestCase{
-		{op: "AddFilename", filename: "home/mike/README.md", fail: true},
-		{op: "AddFilename", filename: "home/mike/list.txt", fail: true},
-		{op: "AddFilename", filename: "/home/mike/README.md"},
-		{op: "AddFilename", filename: "/home/mike/list.txt", writable: true},
-		{op: "AddFilename", filename: "/usr/hosts.txt", writable: true},
-		{
-			op: "ListFilenames",
-			lst: []FilterPath{
-				{"/home/mike/README.md", false},
-				{"/home/mike/list.txt", true},
-				{"/usr/hosts.txt", true},
-			},
+func TestResolvePath(t *testing.T) {
+	testForest(t,
+		[]string{
+			"/usr/usr.txt",
+			"/home/home.txt",
+			"/etc/etc.txt",
+			"/home/mike/home.mike.txt",
+			"/home/mikemon/home.mikemon.txt",
+			"/home/mik/home.mik.txt",
+			"/var/readme.txt",
 		},
-		{op: "AddFilename", filename: "/usr/hosts.txt", writable: false},
-		{
-			op: "ListFilenames",
-			lst: []FilterPath{
-				{"/home/mike/README.md", false},
-				{"/home/mike/list.txt", true},
-				{"/usr/hosts.txt", false},
-			},
+		[]forestTestCase{
+			{op: "AddTree", path: "/usr"},
+			{op: "AddTree", path: "/home"},
+			{op: "AddTree", path: "/etc/", writable: true},
+			{op: "resolvePath", path: "/home", resolved: ".", ok: true},
+			{op: "resolvePath", path: "/home/README.md", resolved: "README.md", ok: true},
+			{op: "resolvePath", path: "home/README.md", resolved: "README.md", ok: true},
+			{op: "resolvePath", path: "/home/mike/.bash", resolved: "mike/.bash", ok: true},
+			{op: "resolvePath", path: "/kernel"},
+			{op: "resolvePath", path: "/hom"},
+			{op: "resolvePath", path: "/homes"},
+		})
+}
+
+func TestReadFile(t *testing.T) {
+	testForest(t,
+		[]string{
+			"/usr/usr.txt",
+			"/home/home.txt",
+			"/etc/etc.txt",
+			"/home/mike/home.mike.txt",
+			"/home/mikemon/home.mikemon.txt",
+			"/home/mik/home.mik.txt",
+			"/var/readme.txt",
 		},
-		{op: "RemoveFilename", filename: "home/README.md"},
-		{op: "RemoveFilename", filename: "home/mike/list.txt"},
-		{
-			op: "ListFilenames",
-			lst: []FilterPath{
-				{"/home/mike/README.md", false},
-				{"/home/mike/list.txt", true},
-				{"/usr/hosts.txt", false},
-			},
+		[]forestTestCase{
+			{op: "AddTree", path: "/usr"},
+			{op: "AddTree", path: "/home"},
+			{op: "AddTree", path: "/etc/", writable: true},
+			{op: "ReadFile", filename: "/home/home.txt"},
+			{op: "ReadFile", filename: "/var/readme.txt", fail: true},
+		})
+}
+
+func TestWriteFile(t *testing.T) {
+	testForest(t,
+		[]string{
+			"/usr/usr.txt",
+			"/home/home.txt",
+			"/etc/etc.txt",
+			"/home/mike/mike.txt",
+			"/home/mikemon/mikemon.txt",
+			"/home/mik/mik.txt",
+			"/var/readme.txt",
 		},
-		{op: "RemoveFilename", filename: "/home/mike/list.txt"},
-		{
-			op: "ListFilenames",
-			lst: []FilterPath{
-				{"/home/mike/README.md", false},
-				{"/usr/hosts.txt", false},
-			},
+		[]forestTestCase{
+			{op: "AddTree", path: "/usr"},
+			{op: "AddTree", path: "/home", writable: true},
+			{op: "AddTree", path: "/etc/"},
+			{op: "ReadFile", filename: "/home/mike/mike.txt"},
+			{op: "ReadFile", filename: "/home/john.txt", fail: true},
+			{op: "WriteFile", filename: "/home/john.txt"},
+			{op: "ReadFile", filename: "/home/john.txt"},
+			{op: "WriteFile", filename: "/var/readme.txt", fail: true},
+			{op: "WriteFile", filename: "/kernel/readme.txt", fail: true},
+		})
+}
+
+func TestReadDir(t *testing.T) {
+	testForest(t,
+		[]string{
+			"/home/home.txt",
+			"/home/mike/mike.txt",
+			"/home/mikemon/mikemon.txt",
+			"/home/mik/mik.txt",
+			"/home/mike.txt",
+			"/var/readme.txt",
 		},
-		{op: "RemoveFilename", filename: "/home/mike/list.txt"},
-		{
-			op: "ListFilenames",
-			lst: []FilterPath{
-				{"/home/mike/README.md", false},
-				{"/usr/hosts.txt", false},
-			},
-		},
-		{op: "RemoveFilename", filename: "/home/mike/README.md"},
-		{op: "RemoveFilename", filename: "/usr/hosts.txt"},
-		{op: "ListFilenames"},
-	})
-}
-
-func TestAccessibleDir(t *testing.T) {
-	testFilter(t, nil, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike", writable: true},
-		{op: "AddDir", dir: "/home"},
-		{op: "AddDir", dir: "/home/john/src", writable: true},
-		{
-			op: "ListDirs",
-			lst: []FilterPath{
-				{"/home/john/src", true},
-				{"/home/mike", true},
-				{"/home", false},
-			},
-		},
-		{op: "accessibleDir", dir: "/etc", writable: false, ok: false},
-		{op: "accessibleDir", dir: "/home", writable: false, ok: true},
-		{op: "accessibleDir", dir: "/home/mike", writable: true, ok: true},
-		{op: "accessibleDir", dir: "/home/mike/bin", writable: true, ok: true},
-		{op: "accessibleDir", dir: "/home/mike/src", writable: true, ok: true},
-		{op: "accessibleDir", dir: "/home/john", writable: false, ok: true},
-		{op: "accessibleDir", dir: "/home/john/bin", writable: false, ok: true},
-		{op: "accessibleDir", dir: "/home/john/src", writable: true, ok: true},
-		{op: "accessibleDir", dir: "/home/fred", writable: false, ok: true},
-		{op: "accessibleDir", dir: "/home/fred/bin", writable: false, ok: true},
-		{op: "accessibleDir", dir: "/home/fred/src", writable: false, ok: true},
-		{op: "AddFilename", filename: "/home/fred/src", writable: true},
-		{op: "accessibleDir", dir: "/home/fred/src", writable: false, ok: true},
-		{op: "AddFilename", filename: "/usr/bin"},
-		{op: "accessibleDir", dir: "/usr/bin", writable: false, ok: false},
-	})
-}
-
-func TestAccessibleFilename(t *testing.T) {
-	testFilter(t, nil, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike", writable: true},
-		{op: "AddDir", dir: "/home"},
-		{op: "AddDir", dir: "/home/john/src", writable: true},
-		{
-			op: "ListDirs",
-			lst: []FilterPath{
-				{"/home/john/src", true},
-				{"/home/mike", true},
-				{"/home", false},
-			},
-		},
-		{op: "AddFilename", filename: "/home/fred/README.md", writable: true},
-		{op: "AddFilename", filename: "/etc/passwd"},
-		{op: "AddFilename", filename: "/etc/hosts", writable: true},
-		{op: "accessibleFilename", filename: "/home/fred/README.md", writable: true, ok: true},
-		{op: "accessibleFilename", filename: "/etc/passwd", writable: false, ok: true},
-		{op: "accessibleFilename", filename: "/etc/hosts", writable: true, ok: true},
-		{op: "accessibleFilename", filename: "/etc/sudoers", writable: false, ok: false},
-		{op: "accessibleFilename", filename: "/home/fred/src/README.md", ok: true},
-		{op: "accessibleFilename", filename: "/home/john/README.md", writable: false, ok: true},
-		{op: "accessibleFilename", filename: "/home/john/src/README.md", writable: true, ok: true},
-	})
-}
-
-func TestOpenAccess(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/index.html",
-		"/home/mike/src/main.go",
-		"/home/mike/src/README.md",
-		"/home/mike/bin/command.sh",
-		"/home/fred/index.html",
-		"/home/fred/src/main.go",
-		"/home/fred/src/README.md",
-		"/home/fred/bin/command.sh",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike"},
-		{op: "AddDir", dir: "/home/mike/src", writable: true},
-		{op: "AddFilename", filename: "/home/fred/src/README.md"},
-		{op: "Open", filename: "/home/mike/index.html"},
-		{op: "Open", filename: "/home/mike/src/main.go"},
-		{op: "Open", filename: "/home/mike/bin/command.sh"},
-		{op: "Open", filename: "/home/fred/index.html", fail: true},
-		{op: "Open", filename: "/home/fred/src/README.md"},
-		{op: "Open", filename: "/home/fred/src/main.go", fail: true},
-		{op: "Open", filename: "/etc/passwd", fail: true},
-		{op: "Stat", dir: "/", fail: true},
-		{op: "Stat", dir: "/etc", fail: true},
-		{op: "Stat", dir: "/home", fail: true},
-		// XXX: {op: "Stat", dir: "/home/mike"},
-		{op: "Stat", dir: "/home/mike/src"},
-		{op: "Stat", dir: "/home/mike/bin"},
-		{op: "AddDir", dir: "/home/fred/src"},
-		{op: "Open", filename: "/home/fred/index.html", fail: true},
-		{op: "Open", filename: "/home/fred/src/README.md"},
-		{op: "Open", filename: "/home/fred/src/main.go"},
-		{op: "Open", filename: "/etc/passwd", fail: true},
-	})
-}
-
-func TestMkdir(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/src/main.go",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike", writable: true},
-		{op: "AddDir", dir: "/home"},
-		{op: "Mkdir", dir: "/home/mike/newdir"},
-		{op: "Stat", dir: "/home/mike/newdir"},
-		{op: "Mkdir", dir: "/home/newdir", fail: true},
-		{op: "Mkdir", dir: "/etc/newdir", fail: true},
-		{op: "MkdirAll", dir: "/home/mike/a/b/c"},
-		{op: "Stat", dir: "/home/mike/a/b/c"},
-		{op: "MkdirAll", dir: "/home/a/b/c", fail: true},
-		{op: "MkdirAll", dir: "/etc/a/b/c", fail: true},
-	})
-}
-
-func TestRemove(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/src/main.go",
-		"/home/mike/src/util.go",
-		"/home/mike/index.html",
-		"/home/fred/src/main.go",
-		"/home/fred/index.html",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike/src", writable: true},
-		{op: "AddDir", dir: "/home/mike"},
-		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
-		{op: "AddFilename", filename: "/home/fred/index.html"},
-		{op: "Remove", filename: "/home/mike/src/main.go"},
-		{op: "Open", filename: "/home/mike/src/main.go", fail: true},
-		{op: "Remove", filename: "/home/mike/index.html", fail: true},
-		{op: "Remove", filename: "/etc/passwd", fail: true},
-		{op: "Remove", filename: "/home/fred/src/main.go"},
-		{op: "Open", filename: "/home/fred/src/main.go", fail: true},
-		{op: "Remove", filename: "/home/fred/index.html", fail: true},
-		{op: "RemoveAll", filename: "/home/mike/src/util.go"},
-		{op: "Open", filename: "/home/mike/src/util.go", fail: true},
-		{op: "RemoveAll", filename: "/home/mike/index.html", fail: true},
-		{op: "RemoveAll", filename: "/etc/passwd", fail: true},
-	})
-}
-
-func TestRename(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/src/main.go",
-		"/home/mike/src/util.go",
-		"/home/mike/index.html",
-		"/home/fred/src/main.go",
-		"/home/fred/index.html",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike/src", writable: true},
-		{op: "AddDir", dir: "/home/mike"},
-		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
-		{op: "AddFilename", filename: "/home/fred/index.html"},
-		{op: "Rename", filename: "/home/mike/src/main.go", newname: "/home/mike/src/app.go"},
-		{op: "Open", filename: "/home/mike/src/main.go", fail: true},
-		{op: "Rename", filename: "/home/mike/index.html", newname: "/home/mike/home.html",
-			fail: true},
-		{op: "Rename", filename: "/etc/passwd", newname: "/etc/shadow", fail: true},
-		{op: "Rename", filename: "/home/fred/src/main.go", newname: "/home/fred/index.html",
-			fail: true},
-		{op: "Rename", filename: "/home/fred/index.html", newname: "/home/fred/src/main.go",
-			fail: true},
-		{op: "Rename", filename: "/home/mike/src/util.go", newname: "/etc/util.go", fail: true},
-	})
-}
-
-func TestCreate(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/src/main.go",
-		"/home/mike/index.html",
-		"/home/fred/src/main.go",
-		"/home/fred/index.html",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike/src", writable: true},
-		{op: "AddDir", dir: "/home/mike"},
-		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
-		{op: "AddFilename", filename: "/home/fred/index.html"},
-		{op: "Create", filename: "/home/mike/src/new.go"},
-		{op: "Create", filename: "/home/mike/index.html", fail: true},
-		{op: "Create", filename: "/etc/passwd", fail: true},
-		{op: "Create", filename: "/home/fred/src/main.go"},
-		{op: "Create", filename: "/home/fred/index.html", fail: true},
-	})
-}
-
-func TestOpenFile(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/src/main.go",
-		"/home/mike/index.html",
-		"/home/fred/src/main.go",
-		"/home/fred/index.html",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike/src", writable: true},
-		{op: "AddDir", dir: "/home/mike"},
-		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
-		{op: "AddFilename", filename: "/home/fred/index.html"},
-		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_RDONLY},
-		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_RDONLY},
-		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_WRONLY},
-		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_RDWR},
-		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_APPEND | os.O_WRONLY},
-		{op: "OpenFile", filename: "/home/mike/src/main.go", flag: os.O_TRUNC | os.O_WRONLY},
-		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_WRONLY, fail: true},
-		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_RDWR, fail: true},
-		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_APPEND | os.O_WRONLY,
-			fail: true},
-		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_TRUNC | os.O_WRONLY,
-			fail: true},
-		{op: "OpenFile", filename: "/home/mike/index.html", flag: os.O_CREATE, fail: true},
-		{op: "OpenFile", filename: "/etc/passwd", flag: os.O_RDONLY, fail: true},
-		{op: "OpenFile", filename: "/home/fred/src/main.go", flag: os.O_RDONLY},
-		{op: "OpenFile", filename: "/home/fred/src/main.go", flag: os.O_WRONLY},
-		{op: "OpenFile", filename: "/home/fred/index.html", flag: os.O_RDONLY},
-		{op: "OpenFile", filename: "/home/fred/index.html", flag: os.O_WRONLY, fail: true},
-		{op: "OpenFile", filename: "/home/fred/index.html", flag: os.O_RDWR, fail: true},
-	})
-}
-
-func TestChmod(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/src/main.go",
-		"/home/mike/index.html",
-		"/home/fred/src/main.go",
-		"/home/fred/index.html",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike/src", writable: true},
-		{op: "AddDir", dir: "/home/mike"},
-		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
-		{op: "AddFilename", filename: "/home/fred/index.html"},
-		{op: "Chmod", filename: "/home/mike/src/main.go"},
-		{op: "Chmod", filename: "/home/mike/index.html", fail: true},
-		{op: "Chmod", filename: "/etc/passwd", fail: true},
-		{op: "Chmod", filename: "/home/fred/src/main.go"},
-		{op: "Chmod", filename: "/home/fred/index.html", fail: true},
-	})
-}
-
-func TestChown(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/src/main.go",
-		"/home/mike/index.html",
-		"/home/fred/src/main.go",
-		"/home/fred/index.html",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike/src", writable: true},
-		{op: "AddDir", dir: "/home/mike"},
-		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
-		{op: "AddFilename", filename: "/home/fred/index.html"},
-		{op: "Chown", filename: "/home/mike/src/main.go"},
-		{op: "Chown", filename: "/home/mike/index.html", fail: true},
-		{op: "Chown", filename: "/etc/passwd", fail: true},
-		{op: "Chown", filename: "/home/fred/src/main.go"},
-		{op: "Chown", filename: "/home/fred/index.html", fail: true},
-	})
-}
-
-func TestChtimes(t *testing.T) {
-	testFilter(t, []string{
-		"/home/mike/src/main.go",
-		"/home/mike/index.html",
-		"/home/fred/src/main.go",
-		"/home/fred/index.html",
-	}, []filterTestCase{
-		{op: "AddDir", dir: "/home/mike/src", writable: true},
-		{op: "AddDir", dir: "/home/mike"},
-		{op: "AddFilename", filename: "/home/fred/src/main.go", writable: true},
-		{op: "AddFilename", filename: "/home/fred/index.html"},
-		{op: "Chtimes", filename: "/home/mike/src/main.go"},
-		{op: "Chtimes", filename: "/home/mike/index.html", fail: true},
-		{op: "Chtimes", filename: "/etc/passwd", fail: true},
-		{op: "Chtimes", filename: "/home/fred/src/main.go"},
-		{op: "Chtimes", filename: "/home/fred/index.html", fail: true},
-	})
+		[]forestTestCase{
+			{op: "AddTree", path: "/home", writable: true},
+			{op: "ReadDir", dir: "/home/mike", dirs: []string{"mike.txt"}},
+			{op: "ReadDir", dir: "/home",
+				dirs: []string{"home.txt", "mik/", "mike.txt", "mike/", "mikemon/"}},
+			{op: "WriteFile", filename: "/home/john.txt"},
+			{op: "ReadDir", dir: "/home",
+				dirs: []string{"home.txt", "john.txt", "mik/", "mike.txt", "mike/", "mikemon/"}},
+			{op: "WriteFile", filename: "/home/mike/fred.txt"},
+			{op: "ReadDir", dir: "/home/mike", dirs: []string{"fred.txt", "mike.txt"}},
+			{op: "ReadDir", dir: "/var", fail: true},
+			{op: "ReadDir", dir: "/etc", fail: true},
+		})
 }

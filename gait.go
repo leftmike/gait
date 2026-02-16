@@ -13,6 +13,7 @@ To Do:
 -- /tools -- list tools
 
 - leverage filesys for the agent reading skill files
+- rename fileys* to forestfs*
 
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
@@ -49,7 +50,6 @@ import (
 	"github.com/leftmike/gait/skill"
 
 	"github.com/peterh/liner"
-	"github.com/spf13/afero"
 )
 
 var (
@@ -253,7 +253,9 @@ func main() {
 		clnts = append(clnts, clnt)
 	}
 
-	ffs := filesys.NewFs(afero.NewOsFs())
+	ffs := filesys.NewForestFS()
+	defer ffs.Close()
+
 	readFile := func(ctx context.Context, buf []byte) (string, error) {
 		var args readFileArgs
 		err := json.Unmarshal(buf, &args)
@@ -261,7 +263,7 @@ func main() {
 			return "", err
 		}
 
-		buf, err = afero.ReadFile(ffs, args.Path)
+		buf, err = ffs.ReadFile(args.Path)
 		if err != nil {
 			return "", err
 		}
