@@ -12,7 +12,6 @@ To Do:
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
 
-- add filesys to manage permitted file system access
 - leverage filesys for the agent reading skill files
 
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
@@ -44,11 +43,13 @@ import (
 	"time"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/filesys"
 	"github.com/leftmike/gait/mcpclient"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
 
 	"github.com/peterh/liner"
+	"github.com/spf13/afero"
 )
 
 var (
@@ -202,6 +203,10 @@ func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Mo
 	}
 }
 
+type readFileArgs struct {
+	Path string `json:"path" gait:"the path of the file to read"`
+}
+
 func main() {
 	fs := flag.NewFlagSet("gait", flag.ExitOnError)
 
@@ -248,18 +253,39 @@ func main() {
 		clnts = append(clnts, clnt)
 	}
 
+	ffs := filesys.NewFs(afero.NewOsFs())
+	readFile := func(ctx context.Context, buf []byte) (string, error) {
+		var args readFileArgs
+		err := json.Unmarshal(buf, &args)
+		if err != nil {
+			return "", err
+		}
+
+		buf, err = afero.ReadFile(ffs, args.Path)
+		if err != nil {
+			return "", err
+		}
+		return string(buf), nil
+	}
+
 	tools := model.Tools{
 		{
 			Name:        "get_weather",
-			Description: "Gets the current weather for the given city",
+			Description: "gets the current weather for the given city",
 			Func:        getWeather,
 			Schema:      model.MustToolSchema[getWeatherArgs](),
 		},
 		{
 			Name:        "current_temperature",
-			Description: "Gets the current temperature for the given location",
+			Description: "gets the current temperature for the given location",
 			Func:        currentTemperature,
 			Schema:      model.MustToolSchema[currentTemperatureArgs](),
+		},
+		{
+			Name:        "read_file",
+			Description: "reads the contents of a file",
+			Func:        readFile,
+			Schema:      model.MustToolSchema[readFileArgs](),
 		},
 	}
 
