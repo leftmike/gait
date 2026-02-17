@@ -42,9 +42,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
-	"github.com/leftmike/gait/filesys"
-	"github.com/leftmike/gait/mcpclient"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
 
@@ -140,14 +139,14 @@ func slashModels(args []string, provider, apiKey string) {
 	}
 }
 
-func slashSkills(args []string, skills []*skill.Skill) {
+func slashSkills(args []string, ag *agent.Agent) {
 	if len(args) == 0 {
-		for _, sk := range skills {
+		for _, sk := range ag.Skills() {
 			fmt.Println(sk.Name)
 		}
 	} else {
 		for _, arg := range args {
-			sk := skill.FindSkill(skills, arg)
+			sk := skill.FindSkill(ag.Skills(), arg)
 			if sk == nil {
 				fmt.Printf("skill not found: %s\n\n", arg)
 				continue
@@ -223,80 +222,6 @@ func main() {
 
 	ctx := context.Background()
 
-	var skills []*skill.Skill
-	for _, dir := range cfg.Skills {
-		dirSkills, err := skill.ReadDir(dir)
-		if err != nil {
-			if verbose {
-				fmt.Printf("%s: %s\n", dir, err)
-			}
-		} else {
-			skills = append(skills, dirSkills...)
-		}
-	}
-
-	var clnts []*mcpclient.Client
-	for _, svrCfg := range cfg.MCPServers {
-		clnt, err := mcpclient.NewClient(ctx, svrCfg, verbose)
-		if err != nil {
-			if verbose {
-				fmt.Printf("mcp server %v failed: %s", svrCfg, err)
-			}
-			continue
-		}
-
-		if verbose {
-			fmt.Printf("mcp server: %s\n", svrCfg.Name)
-		}
-
-		clnts = append(clnts, clnt)
-	}
-
-	ffs := filesys.NewForestFS()
-	defer ffs.Close()
-
-	readFile := func(ctx context.Context, buf []byte) (string, error) {
-		var args readFileArgs
-		err := json.Unmarshal(buf, &args)
-		if err != nil {
-			return "", err
-		}
-
-		buf, err = ffs.ReadFile(args.Path)
-		if err != nil {
-			return "", err
-		}
-		return string(buf), nil
-	}
-
-	tools := model.Tools{
-		{
-			Name:        "get_weather",
-			Description: "gets the current weather for the given city",
-			Func:        getWeather,
-			Schema:      model.MustToolSchema[getWeatherArgs](),
-		},
-		{
-			Name:        "current_temperature",
-			Description: "gets the current temperature for the given location",
-			Func:        currentTemperature,
-			Schema:      model.MustToolSchema[currentTemperatureArgs](),
-		},
-		{
-			Name:        "read_file",
-			Description: "reads the contents of a file",
-			Func:        readFile,
-			Schema:      model.MustToolSchema[readFileArgs](),
-		},
-	}
-
-	for _, clnt := range clnts {
-		tools, err = clnt.AddTools(tools)
-		if err != nil {
-			log.Fatalf("%s: %s\n", clnt.Name(), err)
-		}
-	}
-
 	opts := &model.Options{
 		Verbose:  verbose,
 		Trace:    trace,
@@ -312,15 +237,55 @@ func main() {
 		fmt.Println(provider, modelName)
 	}
 
+	ag := agent.NewAgent(mdl)
+	defer ag.Close()
+
+	for _, dir := range cfg.Skills {
+		err := ag.AddSkill(dir)
+		if err != nil && verbose {
+			fmt.Printf("%s: %s\n", dir, err)
+		}
+	}
+
+	for _, svrCfg := range cfg.MCPServers {
+		err := ag.AddServer(ctx, svrCfg, verbose)
+		if verbose {
+			if err != nil {
+				fmt.Printf("mcp server %v failed: %s", svrCfg, err)
+			} else {
+				fmt.Printf("mcp server: %s\n", svrCfg.Name)
+			}
+		}
+	}
+
+	readFile := func(ctx context.Context, buf []byte) (string, error) {
+		var args readFileArgs
+		err := json.Unmarshal(buf, &args)
+		if err != nil {
+			return "", err
+		}
+
+		buf, err = ag.FS.ReadFile(args.Path)
+		if err != nil {
+			return "", err
+		}
+		return string(buf), nil
+	}
+
+	ag.AddTool("get_weather", "gets the current weather for the given city", getWeather,
+		model.MustToolSchema[getWeatherArgs]())
+	ag.AddTool("current_temperature", "gets the current temperature for the given location",
+		currentTemperature, model.MustToolSchema[currentTemperatureArgs]())
+
+	// XXX: move to agent
+	ag.AddTool("read_file", "reads the contents of a file", readFile,
+		model.MustToolSchema[readFileArgs]())
+
 	line := liner.NewLiner()
 	defer line.Close()
 
 	st := mdl.NewState()
-
-	if len(skills) > 0 {
-		st.SystemPrompt(skill.SystemPrompt(skills))
-	}
-
+	ag.SystemPrompt(st)
 	for {
 		s, err := line.Prompt("> ")
 		if err == io.EOF {
@@ -341,7 +306,7 @@ func main() {
 			case "/models":
 				slashModels(args, provider, apiKey)
 			case "/skills":
-				slashSkills(args, skills)
+				slashSkills(args, ag)
 			default:
 				fmt.Println("slash command must be /exit, /help, /models, or /skills")
 			}
@@ -352,7 +317,7 @@ func main() {
 		st.Prompt(s)
 		n := st.Len()
 
-		err = mdl.Generate(ctx, st, tools, opts)
+		err = ag.Generate(ctx, st, opts)
 		if err != nil {
 			log.Fatalln(err)
 		}
