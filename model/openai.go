@@ -136,7 +136,7 @@ func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionPara
 	return lst, txtLen
 }
 
-func toOpenAITools(tools Tools) []responses.ToolUnionParam {
+func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
 	var toolParams []responses.ToolUnionParam
 	for _, tl := range tools {
 		toolParams = append(toolParams, responses.ToolUnionParam{
@@ -155,7 +155,7 @@ func (mdl *openAIModel) NewState() State {
 	return &openAIState{}
 }
 
-func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
+func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools map[string]Tool,
 	opts *Options) error {
 
 	st := ast.(*openAIState)
@@ -285,7 +285,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools Tools,
 				fmt.Printf("Trace: calling %s(%s)\n", item.Name, item.Arguments)
 			}
 
-			out, err := tools.Call(ctx, item.Name, []byte(item.Arguments), opts)
+			out, err := callTool(ctx, tools, item.Name, []byte(item.Arguments), opts)
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%q, ", item.Name, out)
 				fmt.Print(err)

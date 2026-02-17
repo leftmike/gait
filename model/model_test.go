@@ -148,8 +148,8 @@ func currentWeather(ctx context.Context, buf []byte) (string, error) {
 func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
 	fmt.Println(provider, name)
 
-	tools := model.Tools{
-		{
+	tools := map[string]model.Tool{
+		"current_temperature": model.Tool{
 			Name:        "current_temperature",
 			Description: "Gets the current temperature for the given location",
 			Func:        currentTemperature,
@@ -201,14 +201,14 @@ func TestSimpleTool(t *testing.T) {
 func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
 	fmt.Println(provider, name)
 
-	tools := model.Tools{
-		{
+	tools := map[string]model.Tool{
+		"current_temperature": model.Tool{
 			Name:        "current_temperature",
 			Description: "Gets the current temperature for the given location",
 			Func:        currentTemperature,
 			Schema:      model.MustToolSchema[currentTemperatureArgs](),
 		},
-		{
+		"current_weather": model.Tool{
 			Name:        "current_weather",
 			Description: "Gets the current weather for the given location",
 			Func:        currentWeather,

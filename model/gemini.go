@@ -144,7 +144,7 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 	return cnts, txtLen
 }
 
-func toGeminiTools(tools Tools) []*genai.FunctionDeclaration {
+func toGeminiTools(tools map[string]Tool) []*genai.FunctionDeclaration {
 	var decls []*genai.FunctionDeclaration
 	for _, tl := range tools {
 		decls = append(decls, &genai.FunctionDeclaration{
@@ -196,7 +196,7 @@ type geminiToolCall struct {
 	prt *genai.Part
 }
 
-func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
+func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools map[string]Tool,
 	opts *Options) error {
 
 	st := ast.(*geminiState)
@@ -335,7 +335,7 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools Tools,
 					}
 					fmt.Println()
 				}
-				out, err = tools.Call(ctx, tc.prt.FunctionCall.Name, tc.buf, opts)
+				out, err = callTool(ctx, tools, tc.prt.FunctionCall.Name, tc.buf, opts)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%q, ", tc.prt.FunctionCall.Name, out)
 					fmt.Print(err)

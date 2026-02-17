@@ -9,7 +9,7 @@ import (
 
 type Model interface {
 	NewState() State
-	Generate(ctx context.Context, st State, tools Tools, opts *Options) error
+	Generate(ctx context.Context, st State, tools map[string]Tool, opts *Options) error
 }
 
 type Options struct {

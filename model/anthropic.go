@@ -122,7 +122,7 @@ func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
 	}
 }
 
-func toAnthropicTools(tools Tools) []anthropic.ToolUnionParam {
+func toAnthropicTools(tools map[string]Tool) []anthropic.ToolUnionParam {
 	var toolParams []anthropic.ToolUnionParam
 	for _, tl := range tools {
 		toolParams = append(toolParams, anthropic.ToolUnionParam{
@@ -141,7 +141,7 @@ func (mdl *anthropicModel) NewState() State {
 	return &anthropicState{}
 }
 
-func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
+func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools map[string]Tool,
 	opts *Options) error {
 
 	st := ast.(*anthropicState)
@@ -266,7 +266,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools Tools,
 				fmt.Println()
 			}
 
-			out, err := tools.Call(ctx, blk.Name, []byte(blk.Input), opts)
+			out, err := callTool(ctx, tools, blk.Name, []byte(blk.Input), opts)
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%q, ", blk.Name, out)
 				fmt.Print(err)

@@ -12,7 +12,7 @@ import (
 
 type Agent struct {
 	mdl    model.Model
-	tools  model.Tools
+	tools  map[string]model.Tool
 	skills []*skill.Skill
 	FS     *filesys.ForestFS // XXX: should be fs
 	clnts  []*mcpclient.Client
@@ -20,8 +20,9 @@ type Agent struct {
 
 func NewAgent(mdl model.Model) *Agent {
 	return &Agent{
-		mdl: mdl,
-		FS:  filesys.NewForestFS(),
+		mdl:   mdl,
+		tools: map[string]model.Tool{},
+		FS:    filesys.NewForestFS(),
 	}
 }
 
@@ -30,12 +31,12 @@ func (ag *Agent) Close() {
 }
 
 func (ag *Agent) AddTool(name, desc string, fn model.ToolFunc, scm model.ToolSchema) {
-	ag.tools = append(ag.tools, model.Tool{
+	ag.tools[name] = model.Tool{
 		Name:        name,
 		Description: desc,
 		Func:        fn,
 		Schema:      scm,
-	})
+	}
 }
 
 func (ag *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose bool) error {
@@ -43,10 +44,7 @@ func (ag *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose
 	if err != nil {
 		return err
 	}
-	ag.tools, err = clnt.AddTools(ag.tools)
-	if err != nil {
-		return err
-	}
+	clnt.AddTools(ag.tools)
 	ag.clnts = append(ag.clnts, clnt)
 	return nil
 }

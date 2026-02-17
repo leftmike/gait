@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-type Tools []Tool
-
 type ToolFunc func(ctx context.Context, buf []byte) (string, error)
 
 type Tool struct {
@@ -180,10 +178,10 @@ func MustToolSchema[T any]() ToolSchema {
 	return ts
 }
 
-func (tls Tools) Call(ctx context.Context, name string, args []byte,
+func callTool(ctx context.Context, tools map[string]Tool, name string, args []byte,
 	opts *Options) (string, error) {
 
-	for _, tl := range tls {
+	for _, tl := range tools {
 		if tl.Name == name {
 			return tl.Func(ctx, args)
 		}

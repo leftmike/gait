@@ -149,7 +149,7 @@ func (clnt *Client) Name() string {
 	return clnt.svrCfg.Name
 }
 
-func (clnt *Client) AddTools(tools model.Tools) (model.Tools, error) {
+func (clnt *Client) AddTools(tools map[string]model.Tool) {
 	for _, tl := range clnt.tools {
 		schema, ok := tl.InputSchema.(map[string]any)
 		if !ok {
@@ -157,7 +157,7 @@ func (clnt *Client) AddTools(tools model.Tools) (model.Tools, error) {
 		}
 
 		name := tl.Name
-		tools = append(tools, model.Tool{
+		tools[name] = model.Tool{
 			Name:        name,
 			Description: tl.Description,
 			Schema:      schema,
@@ -196,8 +196,6 @@ func (clnt *Client) AddTools(tools model.Tools) (model.Tools, error) {
 				}
 				return s, nil
 			},
-		})
+		}
 	}
-
-	return tools, nil
 }
