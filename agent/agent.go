@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/filesys"
@@ -14,7 +15,7 @@ type Agent struct {
 	mdl    model.Model
 	tools  map[string]model.Tool
 	skills []*skill.Skill
-	FS     *filesys.ForestFS // XXX: should be fs
+	fs     *filesys.ForestFS
 	clnts  []*mcpclient.Client
 }
 
@@ -22,12 +23,12 @@ func NewAgent(mdl model.Model) *Agent {
 	return &Agent{
 		mdl:   mdl,
 		tools: map[string]model.Tool{},
-		FS:    filesys.NewForestFS(),
+		fs:    filesys.NewForestFS(),
 	}
 }
 
 func (ag *Agent) Close() {
-	ag.FS.Close()
+	ag.fs.Close()
 }
 
 func (ag *Agent) AddTool(name, desc string, fn model.ToolFunc, scm model.ToolSchema) {
@@ -50,14 +51,19 @@ func (ag *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose
 }
 
 func (ag *Agent) AddSkill(dir string) error {
-	dirSkills, err := skill.ReadDir(dir)
+	skills, err := skill.ReadDir(dir)
 	if err != nil {
 		return err
 	}
 
-	// XXX: add dirSkills to fs
+	ag.AddReadFileTool()
+	// XXX: ag.AddListFilesTool()
 
-	ag.skills = append(ag.skills, dirSkills...)
+	for _, sk := range skills {
+		ag.fs.AddTree(sk.Dir, false)
+		ag.skills = append(ag.skills, sk)
+	}
+
 	return nil
 }
 
@@ -73,4 +79,33 @@ func (ag *Agent) SystemPrompt(st model.State) {
 
 func (ag *Agent) Generate(ctx context.Context, st model.State, opts *model.Options) error {
 	return ag.mdl.Generate(ctx, st, ag.tools, opts)
+}
+
+type readFileArgs struct {
+	Path string `json:"path" gait:"the path of the file to read"`
+}
+
+func (ag *Agent) readFile(ctx context.Context, buf []byte) (string, error) {
+	var args readFileArgs
+	err := json.Unmarshal(buf, &args)
+	if err != nil {
+		return "", err
+	}
+
+	buf, err = ag.fs.ReadFile(args.Path)
+	if err != nil {
+		return "", err
+	}
+	return string(buf), nil
+}
+
+func (ag *Agent) AddReadFileTool() {
+	if _, ok := ag.tools["read_file"]; !ok {
+		ag.tools["read_file"] = model.Tool{
+			Name:        "read_file",
+			Description: "reads the contents of a file",
+			Func:        ag.readFile,
+			Schema:      model.MustToolSchema[readFileArgs](),
+		}
+	}
 }

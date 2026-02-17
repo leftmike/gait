@@ -11,8 +11,7 @@ To Do:
 
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
-
-- leverage filesys for the agent reading skill files
+-- move slash commands into slash.go
 
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
@@ -201,10 +200,6 @@ func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Mo
 	}
 }
 
-type readFileArgs struct {
-	Path string `json:"path" gait:"the path of the file to read"`
-}
-
 func main() {
 	fs := flag.NewFlagSet("gait", flag.ExitOnError)
 
@@ -258,28 +253,10 @@ func main() {
 		}
 	}
 
-	readFile := func(ctx context.Context, buf []byte) (string, error) {
-		var args readFileArgs
-		err := json.Unmarshal(buf, &args)
-		if err != nil {
-			return "", err
-		}
-
-		buf, err = ag.FS.ReadFile(args.Path)
-		if err != nil {
-			return "", err
-		}
-		return string(buf), nil
-	}
-
 	ag.AddTool("get_weather", "gets the current weather for the given city", getWeather,
 		model.MustToolSchema[getWeatherArgs]())
 	ag.AddTool("current_temperature", "gets the current temperature for the given location",
 		currentTemperature, model.MustToolSchema[currentTemperatureArgs]())
-
-	// XXX: move to agent
-	ag.AddTool("read_file", "reads the contents of a file", readFile,
-		model.MustToolSchema[readFileArgs]())
 
 	line := liner.NewLiner()
 	defer line.Close()
