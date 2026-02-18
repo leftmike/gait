@@ -43,7 +43,7 @@ func slash(ag *agent.Agent, s string) error {
 		return sc.fn(ag, args)
 	}
 
-	fmt.Print("commands: ")
+	fmt.Print("commands:")
 	for _, sc := range slashCommands {
 		if sc.cmd != "" {
 			fmt.Printf(" %s", sc.cmd)
@@ -130,7 +130,11 @@ func slashSkills(ag *agent.Agent, args []string) error {
 			fmt.Println(sk.Name)
 		}
 	} else {
-		for _, arg := range args {
+		for i, arg := range args {
+			if i > 0 {
+				fmt.Println()
+			}
+
 			sk := skill.FindSkill(ag.Skills(), arg)
 			if sk == nil {
 				return fmt.Errorf("skill not found: %s", arg)
@@ -154,7 +158,6 @@ func slashSkills(ag *agent.Agent, args []string) error {
 					fmt.Printf("    %s: %s\n", k, v)
 				}
 			}
-			fmt.Println()
 		}
 	}
 
