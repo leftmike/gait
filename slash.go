@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -10,6 +11,48 @@ import (
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
 )
+
+var (
+	slashCommands = map[string]struct {
+		cmd  string
+		desc string
+		fn   func(ag *agent.Agent, args []string) error
+	}{
+		"/exit":   {cmd: "/exit", desc: "exit the REPL", fn: slashExit},
+		"/help":   {cmd: "/help", desc: "show help and available commands"},
+		"/models": {cmd: "/models", desc: "list available models", fn: slashModels},
+		"/quit":   {fn: slashExit}, // alias for /exit
+		"/skills": {
+			cmd:  "/skills",
+			desc: "list available skills or show skill details",
+			fn:   slashSkills,
+		},
+	}
+)
+
+func init() {
+	// Eliminate circular dependency
+	sc := slashCommands["/help"]
+	sc.fn = slashHelp
+	slashCommands["/help"] = sc
+}
+
+func slash(ag *agent.Agent, s string) error {
+	cmd, args := parseSlash(s)
+	if sc, ok := slashCommands[cmd]; ok {
+		return sc.fn(ag, args)
+	}
+
+	fmt.Print("commands: ")
+	for _, sc := range slashCommands {
+		if sc.cmd != "" {
+			fmt.Printf(" %s", sc.cmd)
+		}
+	}
+	fmt.Println()
+
+	return nil
+}
 
 func parseSlash(s string) (string, []string) {
 	args := strings.Split(s, " ")
@@ -24,59 +67,47 @@ func parseSlash(s string) (string, []string) {
 	return args[0], args[1:i]
 }
 
-func slash(ag *agent.Agent, s string) {
-	cmd, args := parseSlash(s)
-	switch cmd {
-	case "/exit", "/quit":
-		return
-	case "/help":
-		slashHelp(args)
-	case "/models":
-		slashModels(args, ag.Provider(), ag.APIKey())
-	case "/skills":
-		slashSkills(args, ag)
-	default:
-		fmt.Println("slash command must be /exit, /help, /models, or /skills")
-	}
+func slashExit(ag *agent.Agent, args []string) error {
+	return io.EOF
 }
 
-func slashHelp(args []string) {
+func slashHelp(ag *agent.Agent, args []string) error {
 	if len(args) > 0 {
-		fmt.Println("/help: no arguments allowed")
-		return
+		return fmt.Errorf("/help: no arguments allowed: %s", args)
 	}
 
-	fmt.Print(`/exit (quit): exit the REPL
-/help: show help and available commands
-/models: list available models
-/skills: list available skills or show skill details
-`)
+	for _, sc := range slashCommands {
+		if sc.cmd == "" {
+			continue
+		}
+		fmt.Printf("%s: %s\n", sc.cmd, sc.desc)
+	}
+
+	return nil
 }
 
-func slashModels(args []string, provider, apiKey string) {
+func slashModels(ag *agent.Agent, args []string) error {
 	if len(args) > 0 {
-		fmt.Println("/models: no arguments allowed")
-		return
+		return fmt.Errorf("/models: no arguments allowed: %s", args)
 	}
 
 	var infos []model.ModelInfo
 	var err error
 
 	ctx := context.Background()
-	switch provider {
+	switch ag.Provider() {
 	case "openai":
-		infos, err = model.ListOpenAIModels(ctx, apiKey)
+		infos, err = model.ListOpenAIModels(ctx, ag.APIKey())
 	case "anthropic":
-		infos, err = model.ListAnthropicModels(ctx, apiKey)
+		infos, err = model.ListAnthropicModels(ctx, ag.APIKey())
 	case "gemini":
-		infos, err = model.ListGeminiModels(ctx, apiKey)
+		infos, err = model.ListGeminiModels(ctx, ag.APIKey())
 	default:
-		panic(fmt.Sprintf("unknown provider: %s", provider))
+		panic(fmt.Sprintf("unknown provider: %s", ag.Provider()))
 	}
 
 	if err != nil {
-		fmt.Printf("list models: %s: %s\n", provider, err)
-		return
+		return fmt.Errorf("list models for %s: %s\n", ag.Provider(), err)
 	}
 
 	for _, info := range infos {
@@ -89,9 +120,11 @@ func slashModels(args []string, provider, apiKey string) {
 		}
 		fmt.Println()
 	}
+
+	return nil
 }
 
-func slashSkills(args []string, ag *agent.Agent) {
+func slashSkills(ag *agent.Agent, args []string) error {
 	if len(args) == 0 {
 		for _, sk := range ag.Skills() {
 			fmt.Println(sk.Name)
@@ -100,8 +133,7 @@ func slashSkills(args []string, ag *agent.Agent) {
 		for _, arg := range args {
 			sk := skill.FindSkill(ag.Skills(), arg)
 			if sk == nil {
-				fmt.Printf("skill not found: %s\n\n", arg)
-				continue
+				return fmt.Errorf("skill not found: %s", arg)
 			}
 
 			fmt.Printf("name: %s\n", sk.Name)
@@ -125,4 +157,6 @@ func slashSkills(args []string, ag *agent.Agent) {
 			fmt.Println()
 		}
 	}
+
+	return nil
 }

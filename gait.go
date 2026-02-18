@@ -118,7 +118,15 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			slash(ag, s)
+			err := slash(ag, s)
+			if err == io.EOF {
+				fmt.Println()
+				break
+			} else if err != nil {
+				fmt.Printf("%s: %s\n", os.Args[0], err)
+				os.Exit(1)
+			}
+
 			continue
 		}
 
