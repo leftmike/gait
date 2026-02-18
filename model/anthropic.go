@@ -62,6 +62,10 @@ func (st *anthropicState) Step(n int) Step {
 	}
 }
 
+func (st *anthropicState) Clear() {
+	st.steps = st.steps[:0]
+}
+
 func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
 	var params []anthropic.MessageParam
 	var txtLen int

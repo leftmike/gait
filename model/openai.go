@@ -64,6 +64,10 @@ func (st *openAIState) Step(n int) Step {
 	}
 }
 
+func (st *openAIState) Clear() {
+	st.steps = st.steps[:0]
+}
+
 func openAIInputText(role, text string) responses.ResponseInputItemUnionParam {
 	return responses.ResponseInputItemUnionParam{
 		OfInputMessage: &responses.ResponseInputItemMessageParam{

@@ -64,4 +64,5 @@ type State interface {
 	Prompt(s string)
 	Len() int
 	Step(n int) Step
+	Clear()
 }

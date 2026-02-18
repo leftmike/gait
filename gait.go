@@ -2,7 +2,6 @@
 To Do:
 - MaxOutputTokens
 - Slash commands
--- /clear: clear conversation history and free up context
 -- /cost: show token usage statistics
 -- /export: export the current conversation to a file or clipboard
 -- /mcp: manage mcp servers / list configured mcp tools
@@ -118,7 +117,7 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			err := slash(ag, s)
+			err := slash(ag, st, s)
 			if err == io.EOF {
 				fmt.Println()
 				break

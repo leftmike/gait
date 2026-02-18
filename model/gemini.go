@@ -72,6 +72,10 @@ func (st *geminiState) Step(n int) Step {
 	}
 }
 
+func (st *geminiState) Clear() {
+	st.steps = st.steps[:0]
+}
+
 func (st *geminiState) toContents() ([]*genai.Content, int) {
 	var cnts []*genai.Content
 	var txtLen int

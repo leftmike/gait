@@ -16,8 +16,13 @@ var (
 	slashCommands = map[string]struct {
 		cmd  string
 		desc string
-		fn   func(ag *agent.Agent, args []string) error
+		fn   func(ag *agent.Agent, st model.State, args []string) error
 	}{
+		"/clear": {
+			cmd:  "/clear",
+			desc: "clear conversation history and free up context",
+			fn:   slashClear,
+		},
 		"/exit":   {cmd: "/exit", desc: "exit the REPL", fn: slashExit},
 		"/help":   {cmd: "/help", desc: "show help and available commands"},
 		"/models": {cmd: "/models", desc: "list available models", fn: slashModels},
@@ -37,10 +42,10 @@ func init() {
 	slashCommands["/help"] = sc
 }
 
-func slash(ag *agent.Agent, s string) error {
+func slash(ag *agent.Agent, st model.State, s string) error {
 	cmd, args := parseSlash(s)
 	if sc, ok := slashCommands[cmd]; ok {
-		return sc.fn(ag, args)
+		return sc.fn(ag, st, args)
 	}
 
 	fmt.Print("commands:")
@@ -67,11 +72,20 @@ func parseSlash(s string) (string, []string) {
 	return args[0], args[1:i]
 }
 
-func slashExit(ag *agent.Agent, args []string) error {
+func slashClear(ag *agent.Agent, st model.State, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("/clear: no arguments allowed: %s", args)
+	}
+
+	st.Clear()
+	return nil
+}
+
+func slashExit(ag *agent.Agent, st model.State, args []string) error {
 	return io.EOF
 }
 
-func slashHelp(ag *agent.Agent, args []string) error {
+func slashHelp(ag *agent.Agent, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/help: no arguments allowed: %s", args)
 	}
@@ -86,7 +100,7 @@ func slashHelp(ag *agent.Agent, args []string) error {
 	return nil
 }
 
-func slashModels(ag *agent.Agent, args []string) error {
+func slashModels(ag *agent.Agent, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/models: no arguments allowed: %s", args)
 	}
@@ -124,7 +138,7 @@ func slashModels(ag *agent.Agent, args []string) error {
 	return nil
 }
 
-func slashSkills(ag *agent.Agent, args []string) error {
+func slashSkills(ag *agent.Agent, st model.State, args []string) error {
 	if len(args) == 0 {
 		for _, sk := range ag.Skills() {
 			fmt.Println(sk.Name)
