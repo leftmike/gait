@@ -13,6 +13,8 @@ To Do:
 -- /tools -- list tools
 -- move slash commands into slash.go
 
+- codex skills prompt: https://github.com/openai/codex/blob/99f47d6e9a3546c14c43af99c7a58fa6bd130548/codex-rs/core/src/skills/render.rs#L19
+
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
 - Read Claude code config file
