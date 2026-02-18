@@ -12,13 +12,13 @@ import (
 
 type anthropicModel struct {
 	client anthropic.Client
-	name   anthropic.Model
+	apiKey string
 }
 
-func NewAnthropicModel(name, apiKey string, opts *Options) (Model, error) {
+func NewAnthropicModel(apiKey string, opts *Options) (Model, error) {
 	return &anthropicModel{
 		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
-		name:   anthropic.Model(name),
+		apiKey: apiKey,
 	}, nil
 }
 
@@ -141,8 +141,8 @@ func (mdl *anthropicModel) NewState() State {
 	return &anthropicState{}
 }
 
-func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools map[string]Tool,
-	opts *Options) error {
+func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast State,
+	tools map[string]Tool, opts *Options) error {
 
 	st := ast.(*anthropicState)
 	toolParams := toAnthropicTools(tools)
@@ -152,7 +152,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools map[st
 		req := anthropic.MessageNewParams{
 			MaxTokens: 1024 * 32,
 			Messages:  msgParams,
-			Model:     mdl.name,
+			Model:     anthropic.Model(modelName),
 			Tools:     toolParams,
 		}
 		if st.systemPrompt != "" {
@@ -166,7 +166,8 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, tools map[st
 		if opts.Trace {
 			fmt.Print("Trace: Anthropic Messages.NewStreaming(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.name, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", anthropic.Model(modelName), len(tools),
+					txtLen)
 			}
 			fmt.Print(") -> ")
 		}

@@ -11,7 +11,6 @@ To Do:
 
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
--- move slash commands into slash.go
 
 - codex skills prompt: https://github.com/openai/codex/blob/99f47d6e9a3546c14c43af99c7a58fa6bd130548/codex-rs/core/src/skills/render.rs#L19
 
@@ -39,14 +38,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"os"
 	"strings"
-	"time"
 
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
-	"github.com/leftmike/gait/skill"
 
 	"github.com/peterh/liner"
 )
@@ -89,207 +86,39 @@ func currentTemperature(ctx context.Context, buf []byte) (string, error) {
 	return "40", nil
 }
 
-func slashHelp(args []string) {
-	if len(args) > 0 {
-		fmt.Println("/help: no arguments allowed")
-		return
-	}
-
-	fmt.Print(`/exit (quit): exit the REPL
-/help: show help and available commands
-/models: list available models
-/skills: list available skills or show skill details
-`)
-}
-
-func slashModels(args []string, provider, apiKey string) {
-	if len(args) > 0 {
-		fmt.Println("/models: no arguments allowed")
-		return
-	}
-
-	var infos []model.ModelInfo
-	var err error
-
-	ctx := context.Background()
+func newModel(provider, apiKey string, opts *model.Options) (model.Model, error) {
 	switch provider {
 	case "openai":
-		infos, err = model.ListOpenAIModels(ctx, apiKey)
+		return model.NewOpenAIModel(apiKey, opts)
 	case "anthropic":
-		infos, err = model.ListAnthropicModels(ctx, apiKey)
+		return model.NewAnthropicModel(apiKey, opts)
 	case "gemini":
-		infos, err = model.ListGeminiModels(ctx, apiKey)
-	default:
-		panic(fmt.Sprintf("unknown provider: %s", provider))
-	}
-
-	if err != nil {
-		fmt.Printf("list models: %s: %s\n", provider, err)
-		return
-	}
-
-	for _, info := range infos {
-		fmt.Printf("%s", info.Name)
-		if info.DisplayName != "" {
-			fmt.Printf(" [%s]", info.DisplayName)
-		}
-		if !info.Created.Equal(time.Time{}) {
-			fmt.Printf(" (%s)", info.Created.Format("02 Jan 2006"))
-		}
-		fmt.Println()
-	}
-}
-
-func slashSkills(args []string, ag *agent.Agent) {
-	if len(args) == 0 {
-		for _, sk := range ag.Skills() {
-			fmt.Println(sk.Name)
-		}
-	} else {
-		for _, arg := range args {
-			sk := skill.FindSkill(ag.Skills(), arg)
-			if sk == nil {
-				fmt.Printf("skill not found: %s\n\n", arg)
-				continue
-			}
-
-			fmt.Printf("name: %s\n", sk.Name)
-			fmt.Printf("description: %s\n", sk.Description)
-			fmt.Printf("directory: %s\n", sk.Dir)
-			if sk.License != "" {
-				fmt.Printf("license: %s\n", sk.License)
-			}
-			if sk.Compatibility != "" {
-				fmt.Printf("compatibility: %s\n", sk.Compatibility)
-			}
-			if sk.AllowedTools != "" {
-				fmt.Printf("allowed tools: %s\n", sk.AllowedTools)
-			}
-			if len(sk.Metadata) > 0 {
-				fmt.Println("metadata:")
-				for k, v := range sk.Metadata {
-					fmt.Printf("    %s: %s\n", k, v)
-				}
-			}
-			fmt.Println()
-		}
-	}
-}
-
-func parseSlash(s string) (string, []string) {
-	args := strings.Split(s, " ")
-	i := 0
-	for _, arg := range args {
-		if arg != "" {
-			args[i] = arg
-			i += 1
-		}
-	}
-
-	return args[0], args[1:i]
-}
-
-func newModel(provider, modelName, apiKey string, opts *model.Options) (model.Model, error) {
-	switch provider {
-	case "openai":
-		return model.NewOpenAIModel(modelName, apiKey, opts)
-	case "anthropic":
-		return model.NewAnthropicModel(modelName, apiKey, opts)
-	case "gemini":
-		return model.NewGeminiModel(modelName, apiKey, opts)
+		return model.NewGeminiModel(apiKey, opts)
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider)
 	}
 }
 
-func main() {
-	fs := flag.NewFlagSet("gait", flag.ExitOnError)
-
-	var thinking bool
-	fs.BoolVar(&verbose, "verbose", false, "verbose output")
-	fs.BoolVar(&verbose, "v", false, "verbose output")
-	fs.BoolVar(&trace, "trace", false, "trace model interaction")
-	fs.BoolVar(&trace, "t", false, "trace model interaction")
-	fs.BoolVar(&thinking, "thinking", false, "turn on and show thinking")
-
-	provider, modelName, apiKey, cfg, err := config.Options(fs)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	ctx := context.Background()
-
-	opts := &model.Options{
-		Verbose:  verbose,
-		Trace:    trace,
-		Thinking: thinking,
-	}
-
-	mdl, err := newModel(provider, modelName, apiKey, opts)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	if verbose {
-		fmt.Println(provider, modelName)
-	}
-
-	ag := agent.NewAgent(mdl)
-	defer ag.Close()
-
-	for _, dir := range cfg.Skills {
-		err := ag.AddSkill(dir)
-		if err != nil && verbose {
-			fmt.Printf("%s: %s\n", dir, err)
-		}
-	}
-
-	for _, svrCfg := range cfg.MCPServers {
-		err := ag.AddServer(ctx, svrCfg, verbose)
-		if verbose {
-			if err != nil {
-				fmt.Printf("mcp server %v failed: %s", svrCfg, err)
-			} else {
-				fmt.Printf("mcp server: %s\n", svrCfg.Name)
-			}
-		}
-	}
-
-	ag.AddTool("get_weather", "gets the current weather for the given city", getWeather,
-		model.MustToolSchema[getWeatherArgs]())
-	ag.AddTool("current_temperature", "gets the current temperature for the given location",
-		currentTemperature, model.MustToolSchema[currentTemperatureArgs]())
-
+func interact(ag *agent.Agent, opts *model.Options) error {
 	line := liner.NewLiner()
 	defer line.Close()
 
-	st := mdl.NewState()
+	st := ag.Model().NewState()
 	ag.SystemPrompt(st)
+
+	ctx := context.Background()
 	for {
 		s, err := line.Prompt("> ")
 		if err == io.EOF {
 			fmt.Println()
 			break
 		} else if err != nil {
-			log.Fatalln(err)
+			return err
 		}
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			cmd, args := parseSlash(s)
-			switch cmd {
-			case "/exit", "/quit":
-				return
-			case "/help":
-				slashHelp(args)
-			case "/models":
-				slashModels(args, provider, apiKey)
-			case "/skills":
-				slashSkills(args, ag)
-			default:
-				fmt.Println("slash command must be /exit, /help, /models, or /skills")
-			}
-
+			slash(ag, s)
 			continue
 		}
 
@@ -298,7 +127,7 @@ func main() {
 
 		err = ag.Generate(ctx, st, opts)
 		if err != nil {
-			log.Fatalln(err)
+			return err
 		}
 
 		for n < st.Len() {
@@ -324,5 +153,72 @@ func main() {
 				}
 			}
 		}
+	}
+
+	return nil
+}
+
+func main() {
+	fs := flag.NewFlagSet("gait", flag.ExitOnError)
+
+	var thinking bool
+	fs.BoolVar(&verbose, "verbose", false, "verbose output")
+	fs.BoolVar(&verbose, "v", false, "verbose output")
+	fs.BoolVar(&trace, "trace", false, "trace model interaction")
+	fs.BoolVar(&trace, "t", false, "trace model interaction")
+	fs.BoolVar(&thinking, "thinking", true, "turn on and show `thinking`")
+
+	provider, modelName, apiKey, cfg, err := config.Options(fs)
+	if err != nil {
+		fmt.Printf("%s: %s\n", os.Args[0], err)
+		os.Exit(1)
+	}
+
+	opts := &model.Options{
+		Verbose:  verbose,
+		Trace:    trace,
+		Thinking: thinking,
+	}
+
+	mdl, err := newModel(provider, apiKey, opts)
+	if err != nil {
+		fmt.Printf("%s: %s\n", os.Args[0], err)
+		os.Exit(1)
+	}
+
+	if verbose {
+		fmt.Println(provider, modelName)
+	}
+
+	ag := agent.NewAgent(provider, modelName, apiKey, mdl)
+	defer ag.Close()
+
+	for _, dir := range cfg.Skills {
+		err := ag.AddSkill(dir)
+		if err != nil && verbose {
+			fmt.Printf("%s: %s\n", dir, err)
+		}
+	}
+
+	ctx := context.Background()
+	for _, svrCfg := range cfg.MCPServers {
+		err := ag.AddServer(ctx, svrCfg, verbose)
+		if verbose {
+			if err != nil {
+				fmt.Printf("mcp server %v failed: %s", svrCfg, err)
+			} else {
+				fmt.Printf("mcp server: %s\n", svrCfg.Name)
+			}
+		}
+	}
+
+	ag.AddTool("get_weather", "gets the current weather for the given city", getWeather,
+		model.MustToolSchema[getWeatherArgs]())
+	ag.AddTool("current_temperature", "gets the current temperature for the given location",
+		currentTemperature, model.MustToolSchema[currentTemperatureArgs]())
+
+	err = interact(ag, opts)
+	if err != nil {
+		fmt.Printf("%s: %s\n", os.Args[0], err)
 	}
 }

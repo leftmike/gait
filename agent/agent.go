@@ -12,19 +12,37 @@ import (
 )
 
 type Agent struct {
-	mdl    model.Model
-	tools  map[string]model.Tool
-	skills []*skill.Skill
-	fs     *filesys.ForestFS
-	clnts  []*mcpclient.Client
+	provider  string
+	ModelName string
+	apiKey    string
+	mdl       model.Model
+	tools     map[string]model.Tool
+	skills    []*skill.Skill
+	fs        *filesys.ForestFS
+	clnts     []*mcpclient.Client
 }
 
-func NewAgent(mdl model.Model) *Agent {
+func NewAgent(provider, modelName, apiKey string, mdl model.Model) *Agent {
 	return &Agent{
-		mdl:   mdl,
-		tools: map[string]model.Tool{},
-		fs:    filesys.NewForestFS(),
+		provider:  provider,
+		ModelName: modelName,
+		apiKey:    apiKey,
+		mdl:       mdl,
+		tools:     map[string]model.Tool{},
+		fs:        filesys.NewForestFS(),
 	}
+}
+
+func (ag *Agent) Model() model.Model {
+	return ag.mdl
+}
+
+func (ag *Agent) Provider() string {
+	return ag.provider
+}
+
+func (ag *Agent) APIKey() string {
+	return ag.apiKey
 }
 
 func (ag *Agent) Close() {
@@ -78,7 +96,7 @@ func (ag *Agent) SystemPrompt(st model.State) {
 }
 
 func (ag *Agent) Generate(ctx context.Context, st model.State, opts *model.Options) error {
-	return ag.mdl.Generate(ctx, st, ag.tools, opts)
+	return ag.mdl.Generate(ctx, ag.ModelName, st, ag.tools, opts)
 }
 
 type readFileArgs struct {

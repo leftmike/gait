@@ -12,10 +12,10 @@ import (
 
 type geminiModel struct {
 	client *genai.Client
-	name   string
+	apiKey string
 }
 
-func NewGeminiModel(name, apiKey string, opts *Options) (Model, error) {
+func NewGeminiModel(apiKey string, opts *Options) (Model, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
@@ -27,7 +27,7 @@ func NewGeminiModel(name, apiKey string, opts *Options) (Model, error) {
 
 	return &geminiModel{
 		client: client,
-		name:   name,
+		apiKey: apiKey,
 	}, nil
 }
 
@@ -198,8 +198,8 @@ type geminiToolCall struct {
 	prt *genai.Part
 }
 
-func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools map[string]Tool,
-	opts *Options) error {
+func (mdl *geminiModel) Generate(ctx context.Context, modelName string, ast State,
+	tools map[string]Tool, opts *Options) error {
 
 	st := ast.(*geminiState)
 
@@ -232,12 +232,12 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State, tools map[strin
 		if opts.Trace {
 			fmt.Print("Trace: Gemini GenerateContent(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.name, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", modelName, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := mdl.client.Models.GenerateContent(ctx, mdl.name, cnts, &gccfg)
+		rsp, err := mdl.client.Models.GenerateContent(ctx, modelName, cnts, &gccfg)
 
 		if opts.Trace {
 			fmt.Print(err)

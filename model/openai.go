@@ -15,13 +15,13 @@ import (
 
 type openAIModel struct {
 	client openai.Client
-	name   string
+	apiKey string
 }
 
-func NewOpenAIModel(name, apiKey string, opts *Options) (Model, error) {
+func NewOpenAIModel(apiKey string, opts *Options) (Model, error) {
 	return &openAIModel{
 		client: openai.NewClient(option.WithAPIKey(apiKey)),
-		name:   name,
+		apiKey: apiKey,
 	}, nil
 }
 
@@ -169,8 +169,8 @@ func (mdl *openAIModel) NewState() State {
 	return &openAIState{}
 }
 
-func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools map[string]Tool,
-	opts *Options) error {
+func (mdl *openAIModel) Generate(ctx context.Context, modelName string, ast State,
+	tools map[string]Tool, opts *Options) error {
 
 	st := ast.(*openAIState)
 
@@ -193,14 +193,14 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools map[strin
 		if opts.Trace {
 			fmt.Print("Trace: OpenAI Responses.New(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.name, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", modelName, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
 		rsp, err := mdl.client.Responses.New(ctx,
 			responses.ResponseNewParams{
-				Model: mdl.name,
+				Model: modelName,
 				Tools: toolParams,
 				Input: responses.ResponseNewParamsInputUnion{
 					OfInputItemList: lst,

@@ -58,19 +58,19 @@ func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 		var mdl model.Model
 		switch m.provider {
 		case "openai":
-			mdl, err = model.NewOpenAIModel(m.name, p.APIKey, &model.Options{})
+			mdl, err = model.NewOpenAIModel(p.APIKey, &model.Options{})
 			if err != nil {
-				t.Fatalf("NewOpenAIModel(%s) failed with %s", m.name, err)
+				t.Fatalf("NewOpenAIModel() failed with %s", err)
 			}
 		case "anthropic":
-			mdl, err = model.NewAnthropicModel(m.name, p.APIKey, &model.Options{})
+			mdl, err = model.NewAnthropicModel(p.APIKey, &model.Options{})
 			if err != nil {
-				t.Fatalf("NewAnthropicModel(%s) failed with %s", m.name, err)
+				t.Fatalf("NewAnthropicModel() failed with %s", err)
 			}
 		case "gemini":
-			mdl, err = model.NewGeminiModel(m.name, p.APIKey, &model.Options{})
+			mdl, err = model.NewGeminiModel(p.APIKey, &model.Options{})
 			if err != nil {
-				t.Fatalf("NewGeminiModel(%s) failed with %s", m.name, err)
+				t.Fatalf("NewGeminiModel() failed with %s", err)
 			}
 		default:
 			t.Fatalf("unknown provider: %s", m.provider)
@@ -88,7 +88,7 @@ func testSimple(t *testing.T, mdl model.Model, provider, name string, opts *mode
 	st.Prompt("Hello")
 	n := st.Len()
 
-	err := mdl.Generate(ctx, st, nil, opts)
+	err := mdl.Generate(ctx, name, st, nil, opts)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -163,7 +163,7 @@ func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *
 	n := st.Len()
 
 	temperatureLocation = ""
-	err := mdl.Generate(ctx, st, tools, opts)
+	err := mdl.Generate(ctx, name, st, tools, opts)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -223,7 +223,7 @@ func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *m
 
 	temperatureLocation = ""
 	weatherLocation = ""
-	err := mdl.Generate(ctx, st, tools, opts)
+	err := mdl.Generate(ctx, name, st, tools, opts)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
