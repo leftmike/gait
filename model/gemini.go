@@ -82,7 +82,9 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 		switch step.typ {
 		case PromptStep:
 			role = "user"
-			prt = genai.NewPartFromText(step.content) // XXX
+			prt = &genai.Part{
+				Text: step.content,
+			}
 
 		case ModelResponseStep:
 			role = "model"
