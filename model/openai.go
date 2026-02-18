@@ -26,11 +26,12 @@ func NewOpenAIModel(name, apiKey string, opts *Options) (Model, error) {
 }
 
 type openAIStep struct {
-	typ     StepType
-	content string
-	name    string
-	id      string
-	input   string
+	typ       StepType
+	content   string
+	name      string
+	id        string
+	input     string
+	encrypted string
 }
 
 type openAIState struct {
@@ -87,7 +88,7 @@ func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionPara
 		txtLen += len(st.systemPrompt)
 	}
 
-	for _, step := range st.steps {
+	for idx, step := range st.steps {
 		switch step.typ {
 		case PromptStep:
 			lst = append(lst, openAIInputText("user", step.content))
@@ -108,7 +109,20 @@ func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionPara
 			txtLen += len(step.content)
 
 		case ThinkingStep:
-			continue
+			if idx+1 < len(st.steps) && st.steps[idx+1].typ == ModelResponseStep {
+				lst = append(lst, responses.ResponseInputItemUnionParam{
+					OfReasoning: &responses.ResponseReasoningItemParam{
+						ID:               step.id,
+						EncryptedContent: openai_param.NewOpt(step.encrypted),
+						Summary: []responses.ResponseReasoningItemSummaryParam{
+							{
+								Text: step.content,
+							},
+						},
+					},
+				})
+				txtLen += len(step.content)
+			}
 
 		case ToolCallStep:
 			lst = append(lst, responses.ResponseInputItemUnionParam{
@@ -161,12 +175,14 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools map[strin
 	st := ast.(*openAIState)
 
 	var reasoningParam responses.ReasoningParam
+	var include []responses.ResponseIncludable
 	if opts.Thinking {
 		if opts.Verbose {
 			reasoningParam.Summary = "detailed"
 		} else {
 			reasoningParam.Summary = "concise"
 		}
+		include = []responses.ResponseIncludable{"reasoning.encrypted_content"}
 	}
 
 	toolParams := toOpenAITools(tools)
@@ -190,10 +206,11 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools map[strin
 					OfInputItemList: lst,
 				},
 				Reasoning: reasoningParam,
+				Include:   include,
 			})
 		if opts.Trace {
 			fmt.Print(err)
-			if opts.Verbose {
+			if opts.Verbose && rsp != nil {
 				fmt.Printf(" tokens: input: %d output: %d total: %d", rsp.Usage.InputTokens,
 					rsp.Usage.OutputTokens, rsp.Usage.TotalTokens)
 			}
@@ -213,13 +230,9 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools map[strin
 
 					switch rspItem.Type {
 					case "message":
-						if len(rspItem.Content) > 0 {
-							fmt.Print("message")
-						}
+						fmt.Printf("message[%d]", len(rspItem.Content))
 					case "reasoning":
-						if len(rspItem.Summary) > 0 {
-							fmt.Print("reasoning")
-						}
+						fmt.Printf("reasoning[%d, %d]", len(rspItem.Summary), len(rspItem.Content))
 					default:
 						fmt.Print(rspItem.Type)
 					}
@@ -251,12 +264,23 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, tools map[strin
 				})
 
 			case "reasoning":
-				for _, smmry := range item.Summary {
-					st.steps = append(st.steps, openAIStep{
-						typ:     ThinkingStep,
-						content: smmry.Text,
-					})
+				var cnt string
+				if len(item.Summary) == 1 {
+					cnt = item.Summary[0].Text
+				} else {
+					var buf strings.Builder
+					for _, smmry := range item.Summary {
+						buf.WriteString(smmry.Text)
+					}
+					cnt = buf.String()
 				}
+
+				st.steps = append(st.steps, openAIStep{
+					typ:       ThinkingStep,
+					id:        item.ID,
+					content:   cnt,
+					encrypted: item.EncryptedContent,
+				})
 
 			case "function_call":
 				st.steps = append(st.steps, openAIStep{
