@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/leftmike/gait/util"
 	"google.golang.org/genai"
 )
 
@@ -343,7 +344,8 @@ func (mdl *geminiModel) Generate(ctx context.Context, modelName string, ast Stat
 				}
 				out, err = callTool(ctx, tools, tc.prt.FunctionCall.Name, tc.buf, opts)
 				if opts.Trace {
-					fmt.Printf("Trace: results from %s() -> (%q, ", tc.prt.FunctionCall.Name, out)
+					fmt.Printf("Trace: results from %s() -> (%s, ", tc.prt.FunctionCall.Name,
+						util.Lines(out, 1, 160))
 					fmt.Print(err)
 					fmt.Println(")")
 				}

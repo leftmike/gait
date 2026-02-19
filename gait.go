@@ -33,7 +33,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -43,6 +42,7 @@ import (
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
+	"github.com/leftmike/gait/util"
 
 	"github.com/peterh/liner"
 )
@@ -51,39 +51,6 @@ var (
 	verbose bool
 	trace   bool
 )
-
-type getWeatherArgs struct {
-	City    string `json:"city" jsonschema:"the city to get the weather for"`
-	State   string `json:"state,omitzero" jsonschema:"the state of the city"`
-	Country string `json:"country" jsonschema:"the country of the city"`
-}
-
-func getWeather(ctx context.Context, buf []byte) (string, error) {
-	var args getWeatherArgs
-	err := json.Unmarshal(buf, &args)
-	if err != nil {
-		return "", err
-	}
-
-	if verbose {
-		fmt.Printf("$$ city: %s state: %s country: %s $$\n", args.City, args.State, args.Country)
-	}
-	return fmt.Sprintf("It is 75 degrees and sunny in %s.", args.City), nil
-}
-
-type currentTemperatureArgs struct {
-	Location string `json:"location" jsonschema:"location to get the current temperature for"`
-}
-
-func currentTemperature(ctx context.Context, buf []byte) (string, error) {
-	var args currentTemperatureArgs
-	err := json.Unmarshal(buf, &args)
-	if err != nil {
-		return "", err
-	}
-
-	return "40", nil
-}
 
 func newModel(provider, apiKey string, opts *model.Options) (model.Model, error) {
 	switch provider {
@@ -148,7 +115,7 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 				fmt.Println(step.Content)
 			case model.ThinkingStep:
 				if opts.Thinking {
-					fmt.Printf("[%s]\n", step.Content)
+					fmt.Printf("Thinking: [%s]\n", step.Content)
 				}
 			case model.ToolCallStep:
 				if opts.Verbose {
@@ -156,7 +123,8 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 				}
 			case model.ToolOutputStep:
 				if opts.Verbose {
-					fmt.Printf("Tool Output: %s: %s\n", step.Name, step.Content)
+					fmt.Printf("Tool Output: %s: [%s]\n", step.Name,
+						util.Lines(step.Content, 16, 160))
 				}
 			}
 		}
@@ -219,10 +187,10 @@ func main() {
 		}
 	}
 
-	ag.AddTool("get_weather", "gets the current weather for the given city", getWeather,
-		model.MustToolSchema[getWeatherArgs]())
-	ag.AddTool("current_temperature", "gets the current temperature for the given location",
-		currentTemperature, model.MustToolSchema[currentTemperatureArgs]())
+	ag.AddWebFetchTool()
+	if cfg.BraveAPIKey != "" {
+		ag.AddWebSearchTool(cfg.BraveAPIKey)
+	}
 
 	err = interact(ag, opts)
 	if err != nil {

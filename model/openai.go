@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/leftmike/gait/util"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	openai_param "github.com/openai/openai-go/v3/packages/param"
@@ -315,7 +316,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, modelName string, ast Stat
 
 			out, err := callTool(ctx, tools, item.Name, []byte(item.Arguments), opts)
 			if opts.Trace {
-				fmt.Printf("Trace: results from %s() -> (%q, ", item.Name, out)
+				fmt.Printf("Trace: results from %s() -> (%s, ", item.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)
 				fmt.Println(")")
 			}

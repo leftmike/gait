@@ -8,6 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	anthropic_param "github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/leftmike/gait/util"
 )
 
 type anthropicModel struct {
@@ -273,7 +274,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast S
 
 			out, err := callTool(ctx, tools, blk.Name, []byte(blk.Input), opts)
 			if opts.Trace {
-				fmt.Printf("Trace: results from %s() -> (%q, ", blk.Name, out)
+				fmt.Printf("Trace: results from %s() -> (%s, ", blk.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)
 				fmt.Println(")")
 			}

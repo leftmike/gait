@@ -40,10 +40,11 @@ type MCPServer struct {
 }
 
 type Config struct {
-	Provider   string      `hcl:"provider,optional"`
-	Providers  []Provider  `hcl:"provider,block"`
-	MCPServers []MCPServer `hcl:"mcpserver,block"`
-	Skills     []string    `hcl:"skills,optional"`
+	Provider    string      `hcl:"provider,optional"`
+	Providers   []Provider  `hcl:"provider,block"`
+	MCPServers  []MCPServer `hcl:"mcpserver,block"`
+	Skills      []string    `hcl:"skills,optional"`
+	BraveAPIKey string      `hcl:"brave_api_key,optional"`
 }
 
 func (cfg *Config) FindProvider(name string) *Provider {
@@ -85,6 +86,7 @@ func Options(fs *flag.FlagSet) (string, string, string, *Config, error) {
 	var useGemini bool
 	var modelName string
 	var apiKey string
+	var braveAPIKey string
 
 	fs.StringVar(&configFilename, "config", "", "config filename")
 	fs.BoolVar(&noConfig, "no-config", false, "do not load config")
@@ -93,6 +95,7 @@ func Options(fs *flag.FlagSet) (string, string, string, *Config, error) {
 	fs.BoolVar(&useGemini, "gemini", false, "use gemini")
 	fs.StringVar(&modelName, "model", "", "generate using this model `model`")
 	fs.StringVar(&apiKey, "apikey", "", "`api key` to use")
+	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api key` for Brave Search")
 	fs.Parse(os.Args[1:])
 
 	var provider string
@@ -141,6 +144,11 @@ func Options(fs *flag.FlagSet) (string, string, string, *Config, error) {
 			if p != nil {
 				apiKey = p.APIKey
 			}
+		}
+		if braveAPIKey != "" {
+			cfg.BraveAPIKey = braveAPIKey
+		} else if cfg.BraveAPIKey == "" {
+			cfg.BraveAPIKey = os.Getenv("BRAVE_API_KEY")
 		}
 	}
 
