@@ -32,10 +32,8 @@ func webFetch(ctx context.Context, buf []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// XXX: update to user agent to be more generic
-	req.Header.Set("User-Agent", "gait/0.1 (+https://github.com/leftmike/gait)")
-	// XXX: should accept json at least
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; AI-Agent/1.0)")
+	req.Header.Set("Accept", "application/json,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	rsp, err := http.DefaultClient.Do(req)
 	if err != nil {
