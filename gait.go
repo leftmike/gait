@@ -2,6 +2,7 @@
 To Do:
 - MaxOutputTokens
 - Slash commands
+-- /context: show usage of the current context
 -- /cost: show token usage statistics
 -- /export: export the current conversation to a file or clipboard
 -- /mcp: manage mcp servers / list configured mcp tools
@@ -10,6 +11,8 @@ To Do:
 
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
+
+- web_fetch: get user confirmation / config of domains / urls to fetch
 
 - codex skills prompt: https://github.com/openai/codex/blob/99f47d6e9a3546c14c43af99c7a58fa6bd130548/codex-rs/core/src/skills/render.rs#L19
 
