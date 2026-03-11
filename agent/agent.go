@@ -3,9 +3,9 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
 
 	"github.com/leftmike/gait/config"
-	"github.com/leftmike/gait/filesys"
 	"github.com/leftmike/gait/mcpclient"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
@@ -18,7 +18,6 @@ type Agent struct {
 	mdl       model.Model
 	tools     map[string]model.Tool
 	skills    []*skill.Skill
-	fs        *filesys.ForestFS
 	clnts     []*mcpclient.Client
 }
 
@@ -29,7 +28,6 @@ func NewAgent(provider, modelName, apiKey string, mdl model.Model) *Agent {
 		apiKey:    apiKey,
 		mdl:       mdl,
 		tools:     map[string]model.Tool{},
-		fs:        filesys.NewForestFS(),
 	}
 }
 
@@ -43,10 +41,6 @@ func (ag *Agent) Provider() string {
 
 func (ag *Agent) APIKey() string {
 	return ag.apiKey
-}
-
-func (ag *Agent) Close() {
-	ag.fs.Close()
 }
 
 func (ag *Agent) AddTool(name, desc string, fn model.ToolFunc, scm model.ToolSchema) {
@@ -75,10 +69,10 @@ func (ag *Agent) AddSkill(dir string) error {
 	}
 
 	ag.AddReadFileTool()
-	// XXX: ag.AddListFilesTool()
+	// XXX: ag.AddListFilesTool() -- maybe GlobFilesTool instead?
 
 	for _, sk := range skills {
-		ag.fs.AddTree(sk.Dir, false)
+		// XXX: ag.fs.AddTree(sk.Dir, false)
 		ag.skills = append(ag.skills, sk)
 	}
 
@@ -110,7 +104,7 @@ func (ag *Agent) readFile(ctx context.Context, buf []byte) (string, error) {
 		return "", err
 	}
 
-	buf, err = ag.fs.ReadFile(args.Path)
+	buf, err = ioutil.ReadFile(args.Path)
 	if err != nil {
 		return "", err
 	}

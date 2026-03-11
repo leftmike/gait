@@ -8,11 +8,13 @@ To Do:
 -- /mcp: manage mcp servers / list configured mcp tools
 -- /model: set the AI model to use / choose what model and reasoning effort to use
 -- /status: show current session configuration and token usage
-
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
 
 - web_fetch: get user confirmation / config of domains / urls to fetch
+- glob: support ** syntax etc
+
+- restricted sandbox for running cli programs
 
 - codex skills prompt: https://github.com/openai/codex/blob/99f47d6e9a3546c14c43af99c7a58fa6bd130548/codex-rs/core/src/skills/render.rs#L19
 
@@ -169,7 +171,6 @@ func main() {
 	}
 
 	ag := agent.NewAgent(provider, modelName, apiKey, mdl)
-	defer ag.Close()
 
 	for _, dir := range cfg.Skills {
 		err := ag.AddSkill(dir)
