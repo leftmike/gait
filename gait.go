@@ -13,6 +13,12 @@ To Do:
 
 - web_fetch: get user confirmation / config of domains / urls to fetch
 - glob: support ** syntax etc
+- claude code builtin tools: Bash, Edit, Write, Read, Glob, Grep, Agent, WebFetch, WebSearch,
+  AskUserQuestion, ExitPlanMode
+
+- tool search tool: https://www.anthropic.com/engineering/advanced-tool-use
+
+- channels: https://code.claude.com/docs/en/channels-reference
 
 - restricted sandbox for running cli programs
 
@@ -32,6 +38,9 @@ To Do:
 
 - Anthropic
 -- StopReason max_tokens
+
+- OpenAI Codex
+-- API access via codex: https://simonwillison.net/2026/Apr/23/gpt-5-5/
 */
 
 package main
