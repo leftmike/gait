@@ -7,8 +7,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/leftmike/gait/util"
 	"google.golang.org/genai"
+
+	"github.com/leftmike/gait/util"
 )
 
 type geminiModel struct {

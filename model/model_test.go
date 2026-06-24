@@ -33,30 +33,43 @@ func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 		t.Fatalf("ReadConfig() failed with %s", err)
 	}
 
-	models := []struct {
-		provider, name string
-		short          bool
+	cases := []struct {
+		provider, model string
+		short           bool
+		local           bool
+		noThinking      bool
 	}{
-		{"openai", "gpt-5-mini", false},
-		{"anthropic", "claude-haiku-4-5-20251001", false},
-		{"gemini", "gemini-2.5-flash-lite", true},
+		{provider: "openai", model: "gpt-5-mini"},
+		{provider: "anthropic", model: "claude-haiku-4-5-20251001"},
+		{provider: "gemini", model: "gemini-2.5-flash-lite", short: true},
+		{provider: "ollama", model: "llama3.2:3b", local: true, noThinking: true},
+		{provider: "llamacpp", local: true, noThinking: true},
 	}
 
-	for _, m := range models {
-		if *provider != "" && *provider != m.provider {
+	for _, c := range cases {
+		if *provider != "" && *provider != c.provider {
 			continue
-		} else if testing.Short() && !m.short {
-			fmt.Printf("skipping %s %s\n", m.provider, m.name)
+		} else if opts.Thinking && c.noThinking {
+			continue
+		} else if testing.Short() && !c.short {
+			fmt.Printf("skipping %s %s\n", c.provider, c.model)
+			continue
+		} else if *provider == "" && c.local {
+			fmt.Printf("skipping %s (local) %s\n", c.provider, c.model)
 			continue
 		}
 
-		p := cfg.FindProvider(m.provider)
-		if p == nil || p.APIKey == "" {
-			t.Fatalf("missing api key for provider: %s", m.provider)
+		p := cfg.FindProvider(c.provider)
+		if c.local {
+			if p == nil {
+				p = &config.Provider{}
+			}
+		} else if p == nil || p.APIKey == "" {
+			t.Fatalf("missing api key for provider: %s", c.provider)
 		}
 
 		var mdl model.Model
-		switch m.provider {
+		switch c.provider {
 		case "openai":
 			mdl, err = model.NewOpenAIModel(p.APIKey, &model.Options{})
 			if err != nil {
@@ -72,11 +85,21 @@ func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 			if err != nil {
 				t.Fatalf("NewGeminiModel() failed with %s", err)
 			}
+		case "ollama":
+			mdl, err = model.NewOllamaModel(p, &model.Options{})
+			if err != nil {
+				t.Fatalf("NewOllamaModel() failed with %s", err)
+			}
+		case "llamacpp":
+			mdl, err = model.NewLlamaCppModel(p, &model.Options{})
+			if err != nil {
+				t.Fatalf("NewLlamaCppModel() failed with %s", err)
+			}
 		default:
-			t.Fatalf("unknown provider: %s", m.provider)
+			t.Fatalf("unknown provider: %s", c.provider)
 		}
 
-		test(t, mdl, m.provider, m.name, opts)
+		test(t, mdl, c.provider, c.model, opts)
 	}
 }
 
@@ -159,7 +182,8 @@ func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *
 
 	ctx := context.Background()
 	st := mdl.NewState()
-	st.Prompt("what is the current temperature for seattle?")
+	st.Prompt(`What is the current temperature for seattle? You must call the
+current_temperature tool.`)
 	n := st.Len()
 
 	temperatureLocation = ""
@@ -218,7 +242,8 @@ func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *m
 
 	ctx := context.Background()
 	st := mdl.NewState()
-	st.Prompt("what is the current temperature and weather for seattle?")
+	st.Prompt(`What is the current temperature and weather for seattle? You must call both the
+current_temperature and current_weather tools.`)
 	n := st.Len()
 
 	temperatureLocation = ""

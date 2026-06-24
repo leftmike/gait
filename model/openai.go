@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leftmike/gait/util"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	openai_param "github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+
+	"github.com/leftmike/gait/util"
 )
 
 type openAIModel struct {

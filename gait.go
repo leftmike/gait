@@ -15,6 +15,7 @@ To Do:
 - glob: support ** syntax etc
 - claude code builtin tools: Bash, Edit, Write, Read, Glob, Grep, Agent, WebFetch, WebSearch,
   AskUserQuestion, ExitPlanMode
+- remove brave search?
 
 - tool search tool: https://www.anthropic.com/engineering/advanced-tool-use
 
@@ -53,12 +54,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/peterh/liner"
+
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/util"
-
-	"github.com/peterh/liner"
 )
 
 var (
@@ -66,16 +67,20 @@ var (
 	trace   bool
 )
 
-func newModel(provider, apiKey string, opts *model.Options) (model.Model, error) {
-	switch provider {
+func newModel(provider *config.Provider, opts *model.Options) (model.Model, error) {
+	switch provider.Name {
 	case "openai":
-		return model.NewOpenAIModel(apiKey, opts)
+		return model.NewOpenAIModel(provider.APIKey, opts)
 	case "anthropic":
-		return model.NewAnthropicModel(apiKey, opts)
+		return model.NewAnthropicModel(provider.APIKey, opts)
 	case "gemini":
-		return model.NewGeminiModel(apiKey, opts)
+		return model.NewGeminiModel(provider.APIKey, opts)
+	case "ollama":
+		return model.NewOllamaModel(provider, opts)
+	case "llamacpp":
+		return model.NewLlamaCppModel(provider, opts)
 	default:
-		return nil, fmt.Errorf("unknown provider: %s", provider)
+		return nil, fmt.Errorf("unknown provider: %s", provider.Name)
 	}
 }
 
@@ -157,7 +162,7 @@ func main() {
 	fs.BoolVar(&trace, "t", false, "trace model interaction")
 	fs.BoolVar(&thinking, "thinking", true, "turn on and show `thinking`")
 
-	provider, modelName, apiKey, cfg, err := config.Options(fs)
+	provider, cfg, err := config.Options(fs)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
@@ -169,17 +174,17 @@ func main() {
 		Thinking: thinking,
 	}
 
-	mdl, err := newModel(provider, apiKey, opts)
+	mdl, err := newModel(provider, opts)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
 	}
 
 	if verbose {
-		fmt.Println(provider, modelName)
+		fmt.Println(provider.Name, provider.Model)
 	}
 
-	ag := agent.NewAgent(provider, modelName, apiKey, mdl)
+	ag := agent.NewAgent(provider, mdl)
 
 	for _, dir := range cfg.Skills {
 		err := ag.AddSkill(dir)

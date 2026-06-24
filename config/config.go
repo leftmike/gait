@@ -12,9 +12,10 @@ import (
 )
 
 type Provider struct {
-	Name   string `hcl:"name,label"`
-	Model  string `hcl:"model,optional"`
-	APIKey string `hcl:"api_key,optional"`
+	Name    string `hcl:"name,label"`
+	Model   string `hcl:"model,optional"`
+	APIKey  string `hcl:"api_key,optional"`
+	BaseURL string `hcl:"base_url,optional"`
 }
 
 /*
@@ -78,14 +79,17 @@ func ReadConfig(filenames []string) (*Config, error) {
 	return nil, fmt.Errorf("config file not found: %v", filenames)
 }
 
-func Options(fs *flag.FlagSet) (string, string, string, *Config, error) {
+func Options(fs *flag.FlagSet) (*Provider, *Config, error) {
 	var configFilename string
 	var noConfig bool
 	var useOpenAI bool
 	var useAnthropic bool
 	var useGemini bool
+	var useOllama bool
+	var useLlamaCpp bool
 	var modelName string
 	var apiKey string
+	var baseURL string
 	var braveAPIKey string
 
 	fs.StringVar(&configFilename, "config", "", "config filename")
@@ -93,26 +97,30 @@ func Options(fs *flag.FlagSet) (string, string, string, *Config, error) {
 	fs.BoolVar(&useOpenAI, "openai", false, "use openai")
 	fs.BoolVar(&useAnthropic, "anthropic", false, "use anthropic")
 	fs.BoolVar(&useGemini, "gemini", false, "use gemini")
+	fs.BoolVar(&useOllama, "ollama", false, "use ollama")
+	fs.BoolVar(&useLlamaCpp, "llamacpp", false, "use llama.cpp")
 	fs.StringVar(&modelName, "model", "", "generate using this model `model`")
 	fs.StringVar(&apiKey, "apikey", "", "`api key` to use")
+	fs.StringVar(&baseURL, "baseurl", "", "`base url` of the model server")
 	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api key` for Brave Search")
 	fs.Parse(os.Args[1:])
 
+	providers := map[string]bool{
+		"openai":    useOpenAI,
+		"anthropic": useAnthropic,
+		"gemini":    useGemini,
+		"ollama":    useOllama,
+		"llamacpp":  useLlamaCpp,
+	}
+
 	var provider string
-	if useOpenAI {
-		provider = "openai"
-	}
-	if useAnthropic {
-		if provider != "" {
-			return "", "", "", nil, errors.New("multiple providers specified")
+	for name, use := range providers {
+		if use {
+			if provider != "" {
+				return nil, nil, errors.New("multiple providers specified")
+			}
+			provider = name
 		}
-		provider = "anthropic"
-	}
-	if useGemini {
-		if provider != "" {
-			return "", "", "", nil, errors.New("multiple providers specified")
-		}
-		provider = "gemini"
 	}
 
 	var cfg *Config
@@ -127,24 +135,24 @@ func Options(fs *flag.FlagSet) (string, string, string, *Config, error) {
 		var err error
 		cfg, err = ReadConfig(filenames)
 		if err != nil {
-			return "", "", "", nil, err
+			return nil, nil, err
 		}
 
 		if provider == "" {
 			provider = cfg.Provider
 		}
-		if modelName == "" {
-			p := cfg.FindProvider(provider)
-			if p != nil {
-				modelName = p.Model
-			}
+		p := cfg.FindProvider(provider)
+
+		if modelName == "" && p != nil {
+			modelName = p.Model
 		}
-		if apiKey == "" {
-			p := cfg.FindProvider(provider)
-			if p != nil {
-				apiKey = p.APIKey
-			}
+		if apiKey == "" && p != nil {
+			apiKey = p.APIKey
 		}
+		if baseURL == "" && p != nil {
+			baseURL = p.BaseURL
+		}
+
 		if braveAPIKey != "" {
 			cfg.BraveAPIKey = braveAPIKey
 		} else if cfg.BraveAPIKey == "" {
@@ -152,5 +160,10 @@ func Options(fs *flag.FlagSet) (string, string, string, *Config, error) {
 		}
 	}
 
-	return provider, modelName, apiKey, cfg, nil
+	return &Provider{
+		Name:    provider,
+		Model:   modelName,
+		APIKey:  apiKey,
+		BaseURL: baseURL,
+	}, cfg, nil
 }

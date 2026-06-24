@@ -21,11 +21,11 @@ type Agent struct {
 	clnts     []*mcpclient.Client
 }
 
-func NewAgent(provider, modelName, apiKey string, mdl model.Model) *Agent {
+func NewAgent(provider *config.Provider, mdl model.Model) *Agent {
 	return &Agent{
-		provider:  provider,
-		ModelName: modelName,
-		apiKey:    apiKey,
+		provider:  provider.Name,
+		ModelName: provider.Model,
+		apiKey:    provider.APIKey,
 		mdl:       mdl,
 		tools:     map[string]model.Tool{},
 	}
