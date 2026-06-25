@@ -37,20 +37,20 @@ func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 		provider, model string
 		short           bool
 		local           bool
-		noThoughts      bool
+		thoughts        bool
 	}{
-		{provider: "openai", model: "gpt-5-mini"},
-		{provider: "anthropic", model: "claude-sonnet-4-6"},
-		{provider: "anthropic", model: "claude-haiku-4-5-20251001"},
-		{provider: "gemini", model: "gemini-2.5-flash-lite", short: true, noThoughts: true}, // XXX: thoughts
-		{provider: "ollama", model: "llama3.2:3b", local: true, noThoughts: true},
-		{provider: "llamacpp", local: true, noThoughts: true},
+		{provider: "openai", model: "gpt-5.4-nano", thoughts: true},
+		{provider: "anthropic", model: "claude-sonnet-4-6", thoughts: true},
+		{provider: "anthropic", model: "claude-haiku-4-5-20251001", thoughts: true},
+		{provider: "gemini", model: "gemini-3.1-flash-lite", thoughts: true},
+		{provider: "ollama", model: "llama3.2:3b", local: true},
+		{provider: "llamacpp", local: true},
 	}
 
 	for _, c := range cases {
 		if *provider != "" && *provider != c.provider {
 			continue
-		} else if opts.IncludeThoughts && c.noThoughts {
+		} else if opts.IncludeThoughts && !c.thoughts {
 			continue
 		} else if testing.Short() && !c.short {
 			fmt.Printf("skipping %s %s\n", c.provider, c.model)

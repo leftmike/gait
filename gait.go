@@ -35,7 +35,6 @@ To Do:
 
 - Gemini
 -- Seed in GenerateContentConfig
--- gemini-3-flash-preview
 
 - Anthropic
 -- StopReason max_tokens
