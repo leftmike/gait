@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -184,21 +185,28 @@ func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast S
 			Messages:  msgParams,
 			Model:     anthropic.Model(modelName),
 			Tools:     toolParams,
-			OutputConfig: anthropic.OutputConfigParam{
-				Effort: effort,
-			},
 		}
 		if st.systemPrompt != "" {
 			req.System = []anthropic.TextBlockParam{{Text: st.systemPrompt}}
 			txtLen += len(st.systemPrompt)
 		}
-		if opts.IncludeThoughts {
-			req.Thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
-				Display: "summarized",
+
+		if strings.Contains(modelName, "-4-5-") || strings.Contains(modelName, "-4-1-") {
+			req.Thinking.OfEnabled = &anthropic.ThinkingConfigEnabledParam{
+				BudgetTokens: 4096,
 			}
-		} else if effort != "" {
-			req.Thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
-				Display: "omitted",
+		} else {
+			req.OutputConfig = anthropic.OutputConfigParam{
+				Effort: effort,
+			}
+			if opts.IncludeThoughts {
+				req.Thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
+					Display: "summarized",
+				}
+			} else if effort != "" {
+				req.Thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
+					Display: "omitted",
+				}
 			}
 		}
 

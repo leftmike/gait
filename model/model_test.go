@@ -40,7 +40,7 @@ func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 		noThoughts      bool
 	}{
 		{provider: "openai", model: "gpt-5-mini"},
-		{provider: "anthropic", model: "claude-haiku-4-5-20251001", noThoughts: true},       // XXX: thoughts
+		{provider: "anthropic", model: "claude-sonnet-4-6"},                                 //"claude-haiku-4-5-20251001"},
 		{provider: "gemini", model: "gemini-2.5-flash-lite", short: true, noThoughts: true}, // XXX: thoughts
 		{provider: "ollama", model: "llama3.2:3b", local: true, noThoughts: true},
 		{provider: "llamacpp", local: true, noThoughts: true},

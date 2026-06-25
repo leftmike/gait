@@ -32,7 +32,7 @@ func structToSchema(typ reflect.Type) (map[string]any, error) {
 			vals := strings.Split(jt, ",")
 			name = vals[0]
 			for j := 1; j < len(vals); j += 1 {
-				if vals[j] == "omitempty" {
+				if vals[j] == "omitempty" || vals[j] == "omitzero" {
 					optional = true
 				}
 			}

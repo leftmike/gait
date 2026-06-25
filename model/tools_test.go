@@ -89,7 +89,7 @@ func TestTypeToSchema(t *testing.T) {
 			Inner struct1 `json:"inner"`
 		}{},
 		struct {
-			ID    int      `json:"id,omitzero"` // Will still be required.
+			ID    int      `json:"id,omitzero"`
 			Name  string   `json:"other_name"`
 			Inner *struct1 `json:"inner"`
 		}{},
