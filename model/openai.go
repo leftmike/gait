@@ -27,6 +27,10 @@ func NewOpenAIModel(apiKey string, opts *Options) (Model, error) {
 	}, nil
 }
 
+func (mdl *openAIModel) EffortLevels() []string {
+	return []string{"none", "minimal", "low", "medium", "high", "xhigh"}
+}
+
 type openAIStep struct {
 	typ       StepType
 	content   string
@@ -171,6 +175,27 @@ func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
 	return toolParams
 }
 
+func toOpenAIEffort(opts *Options) responses.ReasoningEffort {
+	switch opts.Effort {
+	case "", "default":
+		return ""
+	case "none":
+		return responses.ReasoningEffortNone
+	case "minimal":
+		return responses.ReasoningEffortMinimal
+	case "low":
+		return responses.ReasoningEffortLow
+	case "medium":
+		return responses.ReasoningEffortMedium
+	case "high":
+		return responses.ReasoningEffortHigh
+	case "xhigh":
+		return responses.ReasoningEffortXhigh
+	}
+
+	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
+}
+
 func (mdl *openAIModel) NewState() State {
 	return &openAIState{}
 }
@@ -180,9 +205,12 @@ func (mdl *openAIModel) Generate(ctx context.Context, modelName string, ast Stat
 
 	st := ast.(*openAIState)
 
-	var reasoningParam responses.ReasoningParam
+	reasoningParam := responses.ReasoningParam{
+		Effort: toOpenAIEffort(opts),
+	}
+
 	var include []responses.ResponseIncludable
-	if opts.Thinking {
+	if opts.IncludeThoughts {
 		if opts.Verbose {
 			reasoningParam.Summary = "detailed"
 		} else {

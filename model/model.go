@@ -8,15 +8,17 @@ import (
 )
 
 type Model interface {
+	EffortLevels() []string
 	NewState() State
 	Generate(ctx context.Context, modelName string, st State, tools map[string]Tool,
 		opts *Options) error
 }
 
 type Options struct {
-	Verbose  bool
-	Trace    bool
-	Thinking bool
+	Verbose         bool
+	Trace           bool
+	IncludeThoughts bool
+	Effort          string
 }
 
 type ModelInfo struct {

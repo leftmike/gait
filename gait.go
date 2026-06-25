@@ -52,6 +52,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/peterh/liner"
@@ -133,7 +134,7 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 			case model.ModelResponseStep:
 				fmt.Println(step.Content)
 			case model.ThinkingStep:
-				if opts.Thinking {
+				if opts.IncludeThoughts {
 					fmt.Printf("Thinking: [%s]\n", step.Content)
 				}
 			case model.ToolCallStep:
@@ -155,12 +156,14 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 func main() {
 	fs := flag.NewFlagSet("gait", flag.ExitOnError)
 
-	var thinking bool
+	var thoughts bool
+	var effort string
 	fs.BoolVar(&verbose, "verbose", false, "verbose output")
 	fs.BoolVar(&verbose, "v", false, "verbose output")
 	fs.BoolVar(&trace, "trace", false, "trace model interaction")
 	fs.BoolVar(&trace, "t", false, "trace model interaction")
-	fs.BoolVar(&thinking, "thinking", true, "turn on and show `thinking`")
+	fs.BoolVar(&thoughts, "thoughts", true, "include `thoughts`")
+	fs.StringVar(&effort, "effort", "", "reasoning `effort`; depends on provider and model")
 
 	provider, cfg, err := config.Options(fs)
 	if err != nil {
@@ -169,14 +172,21 @@ func main() {
 	}
 
 	opts := &model.Options{
-		Verbose:  verbose,
-		Trace:    trace,
-		Thinking: thinking,
+		Verbose:         verbose,
+		Trace:           trace,
+		IncludeThoughts: thoughts,
+		Effort:          effort,
 	}
 
 	mdl, err := newModel(provider, opts)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
+		os.Exit(1)
+	}
+
+	if effort != "" && effort != "default" && !slices.Contains(mdl.EffortLevels(), effort) {
+		fmt.Printf("%s: effort must be default, %s: %s\n", os.Args[0],
+			strings.Join(mdl.EffortLevels(), ", "), effort)
 		os.Exit(1)
 	}
 

@@ -33,6 +33,10 @@ func NewGeminiModel(apiKey string, opts *Options) (Model, error) {
 	}, nil
 }
 
+func (mdl *geminiModel) EffortLevels() []string {
+	return []string{"minimal", "low", "medium", "high"}
+}
+
 type geminiStep struct {
 	typ      StepType
 	content  string
@@ -194,6 +198,23 @@ func partType(prt *genai.Part) string {
 	return "--empty--"
 }
 
+func toGeminiThinkingLevel(opts *Options) genai.ThinkingLevel {
+	switch opts.Effort {
+	case "", "default":
+		return genai.ThinkingLevelUnspecified
+	case "minimal":
+		return genai.ThinkingLevelMinimal
+	case "low":
+		return genai.ThinkingLevelLow
+	case "medium":
+		return genai.ThinkingLevelMedium
+	case "high":
+		return genai.ThinkingLevelHigh
+	}
+
+	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
+}
+
 func (mdl *geminiModel) NewState() State {
 	return &geminiState{}
 }
@@ -208,20 +229,17 @@ func (mdl *geminiModel) Generate(ctx context.Context, modelName string, ast Stat
 	tools map[string]Tool, opts *Options) error {
 
 	st := ast.(*geminiState)
+	thinkingLevel := toGeminiThinkingLevel(opts)
 
 	var gccfg genai.GenerateContentConfig
 	if st.systemPrompt != "" {
 		gccfg.SystemInstruction = genai.NewContentFromText(st.systemPrompt, genai.RoleUser)
 	}
-	if opts.Thinking {
+	if opts.IncludeThoughts || thinkingLevel != genai.ThinkingLevelUnspecified {
 		gccfg.ThinkingConfig = &genai.ThinkingConfig{
-			IncludeThoughts: true,
+			IncludeThoughts: opts.IncludeThoughts,
+			ThinkingLevel:   thinkingLevel,
 		}
-		/*
-			if opts.ThinkingBudget > 0 {
-				gccfg.ThinkingConfig.BudgetTokenCount = int32(opts.ThinkingBudget)
-			}
-		*/
 	}
 	if len(tools) > 0 {
 		gccfg.Tools = []*genai.Tool{

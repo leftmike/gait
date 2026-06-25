@@ -24,6 +24,10 @@ func NewAnthropicModel(apiKey string, opts *Options) (Model, error) {
 	}, nil
 }
 
+func (mdl *anthropicModel) EffortLevels() []string {
+	return []string{"low", "medium", "high", "xhigh", "max"}
+}
+
 type anthropicStep struct {
 	typ       StepType
 	content   string
@@ -143,6 +147,25 @@ func toAnthropicTools(tools map[string]Tool) []anthropic.ToolUnionParam {
 	return toolParams
 }
 
+func toAnthropicEffort(opts *Options) anthropic.OutputConfigEffort {
+	switch opts.Effort {
+	case "", "default":
+		return ""
+	case "low":
+		return anthropic.OutputConfigEffortLow
+	case "medium":
+		return anthropic.OutputConfigEffortMedium
+	case "high":
+		return anthropic.OutputConfigEffortHigh
+	case "xhigh":
+		return anthropic.OutputConfigEffortXhigh
+	case "max":
+		return anthropic.OutputConfigEffortMax
+	}
+
+	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
+}
+
 func (mdl *anthropicModel) NewState() State {
 	return &anthropicState{}
 }
@@ -152,6 +175,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast S
 
 	st := ast.(*anthropicState)
 	toolParams := toAnthropicTools(tools)
+	effort := toAnthropicEffort(opts)
 
 	for {
 		msgParams, txtLen := st.toMessageParams()
@@ -160,13 +184,22 @@ func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast S
 			Messages:  msgParams,
 			Model:     anthropic.Model(modelName),
 			Tools:     toolParams,
+			OutputConfig: anthropic.OutputConfigParam{
+				Effort: effort,
+			},
 		}
 		if st.systemPrompt != "" {
 			req.System = []anthropic.TextBlockParam{{Text: st.systemPrompt}}
 			txtLen += len(st.systemPrompt)
 		}
-		if opts.Thinking {
-			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(1024 * 8)
+		if opts.IncludeThoughts {
+			req.Thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
+				Display: "summarized",
+			}
+		} else if effort != "" {
+			req.Thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
+				Display: "omitted",
+			}
 		}
 
 		if opts.Trace {

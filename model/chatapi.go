@@ -52,6 +52,10 @@ func NewLlamaCppModel(provider *config.Provider, opts *Options) (Model, error) {
 	return newChatAPIModel(provider, llamaCppDefaultBaseURL, opts)
 }
 
+func (mdl *chatAPIModel) EffortLevels() []string {
+	return nil
+}
+
 type chatAPIStep struct {
 	typ     StepType
 	content string
@@ -178,6 +182,8 @@ func (mdl *chatAPIModel) NewState() State {
 
 func (mdl *chatAPIModel) Generate(ctx context.Context, modelName string, ast State,
 	tools map[string]Tool, opts *Options) error {
+
+	// XXX: opts.IncludeThoughts and opts.Effort
 
 	st := ast.(*chatAPIState)
 	toolParams := toOpenAICompatTools(tools)
