@@ -4,10 +4,10 @@ go 1.24.11
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
-	github.com/anthropics/anthropic-sdk-go v1.22.1
+	github.com/anthropics/anthropic-sdk-go v1.52.0
 	github.com/hashicorp/hcl/v2 v2.24.0
-	github.com/invopop/jsonschema v0.13.0
-	github.com/modelcontextprotocol/go-sdk v1.3.0
+	github.com/invopop/jsonschema v0.14.0
+	github.com/modelcontextprotocol/go-sdk v1.3.1
 	github.com/openai/openai-go/v3 v3.22.0
 	github.com/peterh/liner v1.2.2
 	google.golang.org/genai v1.46.0
@@ -22,7 +22,7 @@ require (
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
-	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -37,6 +37,10 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
+	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
+	github.com/segmentio/asm v1.1.3 // indirect
+	github.com/segmentio/encoding v0.5.4 // indirect
+	github.com/standard-webhooks/standard-webhooks/libraries v0.0.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
@@ -49,6 +53,7 @@ require (
 	go.opentelemetry.io/otel v1.40.0 // indirect
 	go.opentelemetry.io/otel/metric v1.40.0 // indirect
 	go.opentelemetry.io/otel/trace v1.40.0 // indirect
+	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
