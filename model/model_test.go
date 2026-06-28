@@ -23,9 +23,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-type testModelFunc func(t *testing.T, mdl model.Model, provider, name string, opts *model.Options)
+type testModelFunc func(t *testing.T, mdl model.Model, provider, name string, opts *config.Options)
 
-func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
+func testModels(t *testing.T, test testModelFunc, opts *config.Options) {
 	t.Helper()
 
 	cfg, err := config.ReadConfig([]string{"./gait.hcl", "../gait.hcl"})
@@ -42,7 +42,7 @@ func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 		{provider: "openai", model: "gpt-5.4-nano", thoughts: true},
 		{provider: "anthropic", model: "claude-sonnet-4-6", thoughts: true},
 		{provider: "anthropic", model: "claude-haiku-4-5-20251001", thoughts: true},
-		{provider: "gemini", model: "gemini-3.1-flash-lite", thoughts: true},
+		{provider: "gemini", model: "gemini-3.1-flash-lite", short: true, thoughts: true},
 		{provider: "ollama", model: "llama3.2:3b", local: true},
 		{provider: "llamacpp", local: true},
 	}
@@ -72,27 +72,27 @@ func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 		var mdl model.Model
 		switch c.provider {
 		case "openai":
-			mdl, err = model.NewOpenAIModel(p.APIKey, &model.Options{})
+			mdl, err = model.NewOpenAIModel(p.APIKey)
 			if err != nil {
 				t.Fatalf("NewOpenAIModel() failed with %s", err)
 			}
 		case "anthropic":
-			mdl, err = model.NewAnthropicModel(p.APIKey, &model.Options{})
+			mdl, err = model.NewAnthropicModel(p.APIKey)
 			if err != nil {
 				t.Fatalf("NewAnthropicModel() failed with %s", err)
 			}
 		case "gemini":
-			mdl, err = model.NewGeminiModel(p.APIKey, &model.Options{})
+			mdl, err = model.NewGeminiModel(p.APIKey)
 			if err != nil {
 				t.Fatalf("NewGeminiModel() failed with %s", err)
 			}
 		case "ollama":
-			mdl, err = model.NewOllamaModel(p, &model.Options{})
+			mdl, err = model.NewOllamaModel(p)
 			if err != nil {
 				t.Fatalf("NewOllamaModel() failed with %s", err)
 			}
 		case "llamacpp":
-			mdl, err = model.NewLlamaCppModel(p, &model.Options{})
+			mdl, err = model.NewLlamaCppModel(p)
 			if err != nil {
 				t.Fatalf("NewLlamaCppModel() failed with %s", err)
 			}
@@ -104,7 +104,7 @@ func testModels(t *testing.T, test testModelFunc, opts *model.Options) {
 	}
 }
 
-func testSimple(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
+func testSimple(t *testing.T, mdl model.Model, provider, name string, opts *config.Options) {
 	fmt.Println(provider, name)
 
 	ctx := context.Background()
@@ -129,7 +129,7 @@ func testSimple(t *testing.T, mdl model.Model, provider, name string, opts *mode
 }
 
 func TestSimple(t *testing.T) {
-	testModels(t, testSimple, &model.Options{})
+	testModels(t, testSimple, &config.Options{})
 }
 
 var (
@@ -169,7 +169,7 @@ func currentWeather(ctx context.Context, buf []byte) (string, error) {
 	return "sunny and 70", nil
 }
 
-func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
+func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *config.Options) {
 	fmt.Println(provider, name)
 
 	tools := map[string]model.Tool{
@@ -220,10 +220,10 @@ current_temperature tool.`)
 }
 
 func TestSimpleTool(t *testing.T) {
-	testModels(t, testSimpleTool, &model.Options{})
+	testModels(t, testSimpleTool, &config.Options{})
 }
 
-func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *model.Options) {
+func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *config.Options) {
 	fmt.Println(provider, name)
 
 	tools := map[string]model.Tool{
@@ -287,9 +287,9 @@ current_temperature and current_weather tools.`)
 }
 
 func TestMultiTool(t *testing.T) {
-	testModels(t, testMultiTool, &model.Options{})
+	testModels(t, testMultiTool, &config.Options{})
 }
 
 func TestMultiToolThinking(t *testing.T) {
-	testModels(t, testMultiTool, &model.Options{IncludeThoughts: true})
+	testModels(t, testMultiTool, &config.Options{IncludeThoughts: true})
 }

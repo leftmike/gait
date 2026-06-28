@@ -12,6 +12,7 @@ import (
 	openai_param "github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 
+	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/util"
 )
 
@@ -20,7 +21,7 @@ type openAIModel struct {
 	apiKey string
 }
 
-func NewOpenAIModel(apiKey string, opts *Options) (Model, error) {
+func NewOpenAIModel(apiKey string) (Model, error) {
 	return &openAIModel{
 		client: openai.NewClient(option.WithAPIKey(apiKey)),
 		apiKey: apiKey,
@@ -175,7 +176,7 @@ func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
 	return toolParams
 }
 
-func toOpenAIEffort(opts *Options) responses.ReasoningEffort {
+func toOpenAIEffort(opts *config.Options) responses.ReasoningEffort {
 	switch opts.Effort {
 	case "", "default":
 		return ""
@@ -201,7 +202,7 @@ func (mdl *openAIModel) NewState() State {
 }
 
 func (mdl *openAIModel) Generate(ctx context.Context, modelName string, ast State,
-	tools map[string]Tool, opts *Options) error {
+	tools map[string]Tool, opts *config.Options) error {
 
 	st := ast.(*openAIState)
 

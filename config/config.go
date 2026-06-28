@@ -11,11 +11,20 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsimple"
 )
 
+type Options struct {
+	Verbose         bool
+	Trace           bool
+	IncludeThoughts bool
+	Effort          string
+}
+
 type Provider struct {
-	Name    string `hcl:"name,label"`
-	Model   string `hcl:"model,optional"`
-	APIKey  string `hcl:"api_key,optional"`
-	BaseURL string `hcl:"base_url,optional"`
+	Name     string `hcl:"name,label"`
+	Model    string `hcl:"model,optional"`
+	APIKey   string `hcl:"api_key,optional"`
+	BaseURL  string `hcl:"base_url,optional"`
+	Thoughts bool   `hcl:"thoughts,optional"`
+	Effort   string `hcl:"effort,optional"`
 }
 
 /*
@@ -79,7 +88,7 @@ func ReadConfig(filenames []string) (*Config, error) {
 	return nil, fmt.Errorf("config file not found: %v", filenames)
 }
 
-func Options(fs *flag.FlagSet) (*Provider, *Config, error) {
+func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	var configFilename string
 	var noConfig bool
 	var useOpenAI bool
@@ -90,6 +99,8 @@ func Options(fs *flag.FlagSet) (*Provider, *Config, error) {
 	var modelName string
 	var apiKey string
 	var baseURL string
+	var thoughts bool
+	var effort string
 	var braveAPIKey string
 
 	fs.StringVar(&configFilename, "config", "", "config filename")
@@ -102,6 +113,8 @@ func Options(fs *flag.FlagSet) (*Provider, *Config, error) {
 	fs.StringVar(&modelName, "model", "", "generate using this model `model`")
 	fs.StringVar(&apiKey, "apikey", "", "`api key` to use")
 	fs.StringVar(&baseURL, "baseurl", "", "`base url` of the model server")
+	fs.BoolVar(&thoughts, "thoughts", true, "include `thoughts`")
+	fs.StringVar(&effort, "effort", "", "reasoning `effort`; depends on provider and model")
 	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api key` for Brave Search")
 	fs.Parse(os.Args[1:])
 
@@ -117,7 +130,7 @@ func Options(fs *flag.FlagSet) (*Provider, *Config, error) {
 	for name, use := range providers {
 		if use {
 			if provider != "" {
-				return nil, nil, errors.New("multiple providers specified")
+				return nil, nil, nil, errors.New("multiple providers specified")
 			}
 			provider = name
 		}
@@ -135,7 +148,7 @@ func Options(fs *flag.FlagSet) (*Provider, *Config, error) {
 		var err error
 		cfg, err = ReadConfig(filenames)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		if provider == "" {
@@ -152,6 +165,12 @@ func Options(fs *flag.FlagSet) (*Provider, *Config, error) {
 		if baseURL == "" && p != nil {
 			baseURL = p.BaseURL
 		}
+		if !thoughts && p != nil {
+			thoughts = p.Thoughts
+		}
+		if effort == "" && p != nil {
+			effort = p.Effort
+		}
 
 		if braveAPIKey != "" {
 			cfg.BraveAPIKey = braveAPIKey
@@ -160,10 +179,13 @@ func Options(fs *flag.FlagSet) (*Provider, *Config, error) {
 		}
 	}
 
-	return &Provider{
-		Name:    provider,
-		Model:   modelName,
-		APIKey:  apiKey,
-		BaseURL: baseURL,
-	}, cfg, nil
+	return &Options{
+			IncludeThoughts: thoughts,
+			Effort:          effort,
+		}, &Provider{
+			Name:    provider,
+			Model:   modelName,
+			APIKey:  apiKey,
+			BaseURL: baseURL,
+		}, cfg, nil
 }

@@ -25,8 +25,7 @@ type chatAPIModel struct {
 	provider string
 }
 
-func newChatAPIModel(provider *config.Provider, defaultBaseURL string, opts *Options) (Model,
-	error) {
+func newChatAPIModel(provider *config.Provider, defaultBaseURL string) (Model, error) {
 
 	baseURL := provider.BaseURL
 	if baseURL == "" {
@@ -44,12 +43,12 @@ func newChatAPIModel(provider *config.Provider, defaultBaseURL string, opts *Opt
 	}, nil
 }
 
-func NewOllamaModel(provider *config.Provider, opts *Options) (Model, error) {
-	return newChatAPIModel(provider, ollamaDefaultBaseURL, opts)
+func NewOllamaModel(provider *config.Provider) (Model, error) {
+	return newChatAPIModel(provider, ollamaDefaultBaseURL)
 }
 
-func NewLlamaCppModel(provider *config.Provider, opts *Options) (Model, error) {
-	return newChatAPIModel(provider, llamaCppDefaultBaseURL, opts)
+func NewLlamaCppModel(provider *config.Provider) (Model, error) {
+	return newChatAPIModel(provider, llamaCppDefaultBaseURL)
 }
 
 func (mdl *chatAPIModel) EffortLevels() []string {
@@ -181,7 +180,7 @@ func (mdl *chatAPIModel) NewState() State {
 }
 
 func (mdl *chatAPIModel) Generate(ctx context.Context, modelName string, ast State,
-	tools map[string]Tool, opts *Options) error {
+	tools map[string]Tool, opts *config.Options) error {
 
 	// XXX: opts.IncludeThoughts and opts.Effort
 

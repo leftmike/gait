@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/genai"
 
+	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/util"
 )
 
@@ -17,7 +18,7 @@ type geminiModel struct {
 	apiKey string
 }
 
-func NewGeminiModel(apiKey string, opts *Options) (Model, error) {
+func NewGeminiModel(apiKey string) (Model, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
@@ -198,7 +199,7 @@ func partType(prt *genai.Part) string {
 	return "--empty--"
 }
 
-func toGeminiThinkingLevel(opts *Options) genai.ThinkingLevel {
+func toGeminiThinkingLevel(opts *config.Options) genai.ThinkingLevel {
 	switch opts.Effort {
 	case "", "default":
 		return genai.ThinkingLevelUnspecified
@@ -226,7 +227,7 @@ type geminiToolCall struct {
 }
 
 func (mdl *geminiModel) Generate(ctx context.Context, modelName string, ast State,
-	tools map[string]Tool, opts *Options) error {
+	tools map[string]Tool, opts *config.Options) error {
 
 	st := ast.(*geminiState)
 	thinkingLevel := toGeminiThinkingLevel(opts)

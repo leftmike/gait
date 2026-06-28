@@ -1,6 +1,8 @@
 /*
 To Do:
+- Config: Thoughts and Effort
 - MaxOutputTokens
+
 - Slash commands
 -- /context: show usage of the current context
 -- /cost: show token usage statistics
@@ -67,24 +69,24 @@ var (
 	trace   bool
 )
 
-func newModel(provider *config.Provider, opts *model.Options) (model.Model, error) {
+func newModel(provider *config.Provider, opts *config.Options) (model.Model, error) {
 	switch provider.Name {
 	case "openai":
-		return model.NewOpenAIModel(provider.APIKey, opts)
+		return model.NewOpenAIModel(provider.APIKey)
 	case "anthropic":
-		return model.NewAnthropicModel(provider.APIKey, opts)
+		return model.NewAnthropicModel(provider.APIKey)
 	case "gemini":
-		return model.NewGeminiModel(provider.APIKey, opts)
+		return model.NewGeminiModel(provider.APIKey)
 	case "ollama":
-		return model.NewOllamaModel(provider, opts)
+		return model.NewOllamaModel(provider)
 	case "llamacpp":
-		return model.NewLlamaCppModel(provider, opts)
+		return model.NewLlamaCppModel(provider)
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider.Name)
 	}
 }
 
-func interact(ag *agent.Agent, opts *model.Options) error {
+func interact(ag *agent.Agent, opts *config.Options) error {
 	line := liner.NewLiner()
 	defer line.Close()
 
@@ -155,27 +157,20 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 func main() {
 	fs := flag.NewFlagSet("gait", flag.ExitOnError)
 
-	var thoughts bool
-	var effort string
 	fs.BoolVar(&verbose, "verbose", false, "verbose output")
 	fs.BoolVar(&verbose, "v", false, "verbose output")
 	fs.BoolVar(&trace, "trace", false, "trace model interaction")
 	fs.BoolVar(&trace, "t", false, "trace model interaction")
-	fs.BoolVar(&thoughts, "thoughts", true, "include `thoughts`")
-	fs.StringVar(&effort, "effort", "", "reasoning `effort`; depends on provider and model")
 
-	provider, cfg, err := config.Options(fs)
+	opts, provider, cfg, err := config.ParseFlags(fs)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
 	}
 
-	opts := &model.Options{
-		Verbose:         verbose,
-		Trace:           trace,
-		IncludeThoughts: thoughts,
-		Effort:          effort,
-	}
+	// XXX: move model name to opts
+	opts.Verbose = verbose
+	opts.Trace = trace
 
 	mdl, err := newModel(provider, opts)
 	if err != nil {
@@ -183,6 +178,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	effort := opts.Effort
 	if effort != "" && effort != "default" && !slices.Contains(mdl.EffortLevels(), effort) {
 		fmt.Printf("%s: effort must be default, %s: %s\n", os.Args[0],
 			strings.Join(mdl.EffortLevels(), ", "), effort)

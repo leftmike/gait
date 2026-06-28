@@ -10,6 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	anthropic_param "github.com/anthropics/anthropic-sdk-go/packages/param"
 
+	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/util"
 )
 
@@ -18,7 +19,7 @@ type anthropicModel struct {
 	apiKey string
 }
 
-func NewAnthropicModel(apiKey string, opts *Options) (Model, error) {
+func NewAnthropicModel(apiKey string) (Model, error) {
 	return &anthropicModel{
 		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
 		apiKey: apiKey,
@@ -148,7 +149,7 @@ func toAnthropicTools(tools map[string]Tool) []anthropic.ToolUnionParam {
 	return toolParams
 }
 
-func toAnthropicEffort(opts *Options) anthropic.OutputConfigEffort {
+func toAnthropicEffort(opts *config.Options) anthropic.OutputConfigEffort {
 	switch opts.Effort {
 	case "", "default":
 		return ""
@@ -172,7 +173,7 @@ func (mdl *anthropicModel) NewState() State {
 }
 
 func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast State,
-	tools map[string]Tool, opts *Options) error {
+	tools map[string]Tool, opts *config.Options) error {
 
 	st := ast.(*anthropicState)
 	toolParams := toAnthropicTools(tools)

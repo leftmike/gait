@@ -89,7 +89,7 @@ func (ag *Agent) SystemPrompt(st model.State) {
 	}
 }
 
-func (ag *Agent) Generate(ctx context.Context, st model.State, opts *model.Options) error {
+func (ag *Agent) Generate(ctx context.Context, st model.State, opts *config.Options) error {
 	return ag.mdl.Generate(ctx, ag.ModelName, st, ag.tools, opts)
 }
 

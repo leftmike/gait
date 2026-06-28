@@ -5,20 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/leftmike/gait/config"
 )
 
 type Model interface {
 	EffortLevels() []string
 	NewState() State
 	Generate(ctx context.Context, modelName string, st State, tools map[string]Tool,
-		opts *Options) error
-}
-
-type Options struct {
-	Verbose         bool
-	Trace           bool
-	IncludeThoughts bool
-	Effort          string
+		opts *config.Options) error
 }
 
 type ModelInfo struct {
