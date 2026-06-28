@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclsimple"
@@ -16,6 +17,7 @@ type Options struct {
 	Trace           bool
 	IncludeThoughts bool
 	Effort          string
+	Model           string
 }
 
 type Provider struct {
@@ -99,7 +101,7 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	var modelName string
 	var apiKey string
 	var baseURL string
-	var thoughts bool
+	var thoughts, hasThoughts bool
 	var effort string
 	var braveAPIKey string
 
@@ -113,7 +115,15 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	fs.StringVar(&modelName, "model", "", "generate using this model `model`")
 	fs.StringVar(&apiKey, "apikey", "", "`api key` to use")
 	fs.StringVar(&baseURL, "baseurl", "", "`base url` of the model server")
-	fs.BoolVar(&thoughts, "thoughts", true, "include `thoughts`")
+	fs.BoolFunc("thoughts", "include `thoughts`", func(s string) error {
+		var err error
+		thoughts, err = strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+		hasThoughts = true
+		return nil
+	})
 	fs.StringVar(&effort, "effort", "", "reasoning `effort`; depends on provider and model")
 	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api key` for Brave Search")
 	fs.Parse(os.Args[1:])
@@ -165,7 +175,7 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 		if baseURL == "" && p != nil {
 			baseURL = p.BaseURL
 		}
-		if !thoughts && p != nil {
+		if !hasThoughts && p != nil {
 			thoughts = p.Thoughts
 		}
 		if effort == "" && p != nil {
@@ -182,9 +192,9 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	return &Options{
 			IncludeThoughts: thoughts,
 			Effort:          effort,
+			Model:           modelName,
 		}, &Provider{
 			Name:    provider,
-			Model:   modelName,
 			APIKey:  apiKey,
 			BaseURL: baseURL,
 		}, cfg, nil

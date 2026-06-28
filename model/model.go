@@ -12,8 +12,7 @@ import (
 type Model interface {
 	EffortLevels() []string
 	NewState() State
-	Generate(ctx context.Context, modelName string, st State, tools map[string]Tool,
-		opts *config.Options) error
+	Generate(ctx context.Context, st State, tools map[string]Tool, opts *config.Options) error
 }
 
 type ModelInfo struct {

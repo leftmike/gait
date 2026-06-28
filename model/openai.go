@@ -201,7 +201,7 @@ func (mdl *openAIModel) NewState() State {
 	return &openAIState{}
 }
 
-func (mdl *openAIModel) Generate(ctx context.Context, modelName string, ast State,
+func (mdl *openAIModel) Generate(ctx context.Context, ast State,
 	tools map[string]Tool, opts *config.Options) error {
 
 	st := ast.(*openAIState)
@@ -228,14 +228,14 @@ func (mdl *openAIModel) Generate(ctx context.Context, modelName string, ast Stat
 		if opts.Trace {
 			fmt.Print("Trace: OpenAI Responses.New(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", modelName, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", opts.Model, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
 		rsp, err := mdl.client.Responses.New(ctx,
 			responses.ResponseNewParams{
-				Model: modelName,
+				Model: opts.Model,
 				Tools: toolParams,
 				Input: responses.ResponseNewParamsInputUnion{
 					OfInputItemList: lst,

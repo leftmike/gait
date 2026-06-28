@@ -172,7 +172,7 @@ func (mdl *anthropicModel) NewState() State {
 	return &anthropicState{}
 }
 
-func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast State,
+func (mdl *anthropicModel) Generate(ctx context.Context, ast State,
 	tools map[string]Tool, opts *config.Options) error {
 
 	st := ast.(*anthropicState)
@@ -184,7 +184,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast S
 		req := anthropic.MessageNewParams{
 			MaxTokens: 1024 * 32,
 			Messages:  msgParams,
-			Model:     anthropic.Model(modelName),
+			Model:     anthropic.Model(opts.Model),
 			Tools:     toolParams,
 		}
 		if st.systemPrompt != "" {
@@ -192,7 +192,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast S
 			txtLen += len(st.systemPrompt)
 		}
 
-		if strings.Contains(modelName, "-4-5-") || strings.Contains(modelName, "-4-1-") {
+		if strings.Contains(opts.Model, "-4-5-") || strings.Contains(opts.Model, "-4-1-") {
 			req.Thinking.OfEnabled = &anthropic.ThinkingConfigEnabledParam{
 				BudgetTokens: 4096,
 			}
@@ -214,7 +214,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, modelName string, ast S
 		if opts.Trace {
 			fmt.Print("Trace: Anthropic Messages.NewStreaming(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", anthropic.Model(modelName), len(tools),
+				fmt.Printf("%s, %d tools, %d bytes", anthropic.Model(opts.Model), len(tools),
 					txtLen)
 			}
 			fmt.Print(") -> ")

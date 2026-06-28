@@ -69,7 +69,7 @@ var (
 	trace   bool
 )
 
-func newModel(provider *config.Provider, opts *config.Options) (model.Model, error) {
+func newModel(provider *config.Provider) (model.Model, error) {
 	switch provider.Name {
 	case "openai":
 		return model.NewOpenAIModel(provider.APIKey)
@@ -168,11 +168,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// XXX: move model name to opts
 	opts.Verbose = verbose
 	opts.Trace = trace
 
-	mdl, err := newModel(provider, opts)
+	mdl, err := newModel(provider)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
@@ -186,7 +185,7 @@ func main() {
 	}
 
 	if verbose {
-		fmt.Println(provider.Name, provider.Model)
+		fmt.Println(provider.Name, opts.Model)
 	}
 
 	ag := agent.NewAgent(provider, mdl)

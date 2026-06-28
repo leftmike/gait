@@ -226,7 +226,7 @@ type geminiToolCall struct {
 	prt *genai.Part
 }
 
-func (mdl *geminiModel) Generate(ctx context.Context, modelName string, ast State,
+func (mdl *geminiModel) Generate(ctx context.Context, ast State,
 	tools map[string]Tool, opts *config.Options) error {
 
 	st := ast.(*geminiState)
@@ -257,12 +257,12 @@ func (mdl *geminiModel) Generate(ctx context.Context, modelName string, ast Stat
 		if opts.Trace {
 			fmt.Print("Trace: Gemini GenerateContent(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", modelName, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", opts.Model, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := mdl.client.Models.GenerateContent(ctx, modelName, cnts, &gccfg)
+		rsp, err := mdl.client.Models.GenerateContent(ctx, opts.Model, cnts, &gccfg)
 
 		if opts.Trace {
 			fmt.Print(err)

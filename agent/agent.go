@@ -12,22 +12,20 @@ import (
 )
 
 type Agent struct {
-	provider  string
-	ModelName string
-	apiKey    string
-	mdl       model.Model
-	tools     map[string]model.Tool
-	skills    []*skill.Skill
-	clnts     []*mcpclient.Client
+	provider string
+	apiKey   string
+	mdl      model.Model
+	tools    map[string]model.Tool
+	skills   []*skill.Skill
+	clnts    []*mcpclient.Client
 }
 
 func NewAgent(provider *config.Provider, mdl model.Model) *Agent {
 	return &Agent{
-		provider:  provider.Name,
-		ModelName: provider.Model,
-		apiKey:    provider.APIKey,
-		mdl:       mdl,
-		tools:     map[string]model.Tool{},
+		provider: provider.Name,
+		apiKey:   provider.APIKey,
+		mdl:      mdl,
+		tools:    map[string]model.Tool{},
 	}
 }
 
@@ -90,7 +88,7 @@ func (ag *Agent) SystemPrompt(st model.State) {
 }
 
 func (ag *Agent) Generate(ctx context.Context, st model.State, opts *config.Options) error {
-	return ag.mdl.Generate(ctx, ag.ModelName, st, ag.tools, opts)
+	return ag.mdl.Generate(ctx, st, ag.tools, opts)
 }
 
 type readFileArgs struct {

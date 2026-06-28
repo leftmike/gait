@@ -179,7 +179,7 @@ func (mdl *chatAPIModel) NewState() State {
 	return &chatAPIState{}
 }
 
-func (mdl *chatAPIModel) Generate(ctx context.Context, modelName string, ast State,
+func (mdl *chatAPIModel) Generate(ctx context.Context, ast State,
 	tools map[string]Tool, opts *config.Options) error {
 
 	// XXX: opts.IncludeThoughts and opts.Effort
@@ -193,13 +193,13 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, modelName string, ast Sta
 		if opts.Trace {
 			fmt.Printf("Trace: %s Chat.Completions.New(", mdl.provider)
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", modelName, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", opts.Model, len(tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
 		params := openai.ChatCompletionNewParams{
-			Model:    modelName,
+			Model:    opts.Model,
 			Messages: msgs,
 		}
 		if len(toolParams) > 0 {
