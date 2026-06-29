@@ -153,8 +153,18 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State,
 	stream := false
 	think := toOllamaThink(opts)
 
+	numPredict := 8192
+	if opts.MaxTokens > 0 {
+		numPredict = opts.MaxTokens
+	}
+
 	for {
 		msgs, txtLen := st.toOllamaMessages()
+
+		numCtx := (txtLen/4 + numPredict) * 6 / 5
+		if numCtx < 4096 {
+			numCtx = 4096
+		}
 
 		req := &ollama.ChatRequest{
 			Model:    opts.Model,
@@ -162,6 +172,10 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State,
 			Tools:    toolDefs,
 			Stream:   &stream,
 			Think:    think,
+			Options: map[string]any{
+				"num_predict": numPredict,
+				"num_ctx":     numCtx,
+			},
 		}
 
 		if opts.Trace {

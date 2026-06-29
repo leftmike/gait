@@ -35,9 +35,6 @@ To Do:
 - Gemini
 -- Seed in GenerateContentConfig
 
-- Anthropic
--- StopReason max_tokens
-
 - OpenAI Codex
 -- API access via codex: https://simonwillison.net/2026/Apr/23/gpt-5-5/
 */
