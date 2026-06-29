@@ -233,16 +233,20 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State,
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := mdl.client.Responses.New(ctx,
-			responses.ResponseNewParams{
-				Model: opts.Model,
-				Tools: toolParams,
-				Input: responses.ResponseNewParamsInputUnion{
-					OfInputItemList: lst,
-				},
-				Reasoning: reasoningParam,
-				Include:   include,
-			})
+		rspParams := responses.ResponseNewParams{
+			Model: opts.Model,
+			Tools: toolParams,
+			Input: responses.ResponseNewParamsInputUnion{
+				OfInputItemList: lst,
+			},
+			Reasoning: reasoningParam,
+			Include:   include,
+		}
+		if opts.MaxTokens > 0 {
+			rspParams.MaxOutputTokens = openai.Int(int64(opts.MaxTokens))
+		}
+
+		rsp, err := mdl.client.Responses.New(ctx, rspParams)
 		if opts.Trace {
 			fmt.Print(err)
 			if opts.Verbose && rsp != nil {

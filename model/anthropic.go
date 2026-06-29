@@ -172,6 +172,13 @@ func (mdl *anthropicModel) NewState() State {
 	return &anthropicState{}
 }
 
+func anthropicMaxTokens(opts *config.Options) int64 {
+	if opts.MaxTokens > 0 {
+		return int64(opts.MaxTokens)
+	}
+	return 64000
+}
+
 func (mdl *anthropicModel) Generate(ctx context.Context, ast State,
 	tools map[string]Tool, opts *config.Options) error {
 
@@ -182,7 +189,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State,
 	for {
 		msgParams, txtLen := st.toMessageParams()
 		req := anthropic.MessageNewParams{
-			MaxTokens: 1024 * 32,
+			MaxTokens: anthropicMaxTokens(opts),
 			Messages:  msgParams,
 			Model:     anthropic.Model(opts.Model),
 			Tools:     toolParams,

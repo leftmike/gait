@@ -1,8 +1,5 @@
 /*
 To Do:
-- Config: Thoughts and Effort
-- MaxOutputTokens
-
 - Slash commands
 -- /context: show usage of the current context
 -- /cost: show token usage statistics

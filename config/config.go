@@ -18,15 +18,17 @@ type Options struct {
 	IncludeThoughts bool
 	Effort          string
 	Model           string
+	MaxTokens       int
 }
 
 type Provider struct {
-	Name     string `hcl:"name,label"`
-	Model    string `hcl:"model,optional"`
-	APIKey   string `hcl:"api_key,optional"`
-	BaseURL  string `hcl:"base_url,optional"`
-	Thoughts bool   `hcl:"thoughts,optional"`
-	Effort   string `hcl:"effort,optional"`
+	Name      string `hcl:"name,label"`
+	Model     string `hcl:"model,optional"`
+	APIKey    string `hcl:"api_key,optional"`
+	BaseURL   string `hcl:"base_url,optional"`
+	Thoughts  bool   `hcl:"thoughts,optional"`
+	Effort    string `hcl:"effort,optional"`
+	MaxTokens int    `hcl:"max_tokens,optional"`
 }
 
 /*
@@ -103,6 +105,7 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	var baseURL string
 	var thoughts, hasThoughts bool
 	var effort string
+	var maxTokens int
 	var braveAPIKey string
 
 	fs.StringVar(&configFilename, "config", "", "config filename")
@@ -125,8 +128,13 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 		return nil
 	})
 	fs.StringVar(&effort, "effort", "", "reasoning `effort`; depends on provider and model")
+	fs.IntVar(&maxTokens, "max-tokens", 0, "maximum output `tokens`")
 	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api key` for Brave Search")
 	fs.Parse(os.Args[1:])
+
+	if maxTokens < 0 {
+		return nil, nil, nil, fmt.Errorf("max-tokens must be positive")
+	}
 
 	providers := map[string]bool{
 		"openai":    useOpenAI,
@@ -181,6 +189,9 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 		if effort == "" && p != nil {
 			effort = p.Effort
 		}
+		if maxTokens == 0 && p != nil {
+			maxTokens = p.MaxTokens
+		}
 
 		if braveAPIKey != "" {
 			cfg.BraveAPIKey = braveAPIKey
@@ -193,6 +204,7 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 			IncludeThoughts: thoughts,
 			Effort:          effort,
 			Model:           modelName,
+			MaxTokens:       maxTokens,
 		}, &Provider{
 			Name:    provider,
 			APIKey:  apiKey,

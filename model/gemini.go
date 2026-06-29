@@ -233,6 +233,11 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State,
 	thinkingLevel := toGeminiThinkingLevel(opts)
 
 	var gccfg genai.GenerateContentConfig
+	if opts.MaxTokens > 0 {
+		gccfg.MaxOutputTokens = int32(opts.MaxTokens)
+	} else {
+		gccfg.MaxOutputTokens = 65536
+	}
 	if st.systemPrompt != "" {
 		gccfg.SystemInstruction = genai.NewContentFromText(st.systemPrompt, genai.RoleUser)
 	}
