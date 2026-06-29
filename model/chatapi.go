@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	ollamaDefaultBaseURL   = "http://localhost:11434/v1"
 	llamaCppDefaultBaseURL = "http://localhost:8080/v1"
 )
 
@@ -26,7 +25,6 @@ type chatAPIModel struct {
 }
 
 func newChatAPIModel(provider *config.Provider, defaultBaseURL string) (Model, error) {
-
 	baseURL := provider.BaseURL
 	if baseURL == "" {
 		baseURL = defaultBaseURL
@@ -41,10 +39,6 @@ func newChatAPIModel(provider *config.Provider, defaultBaseURL string) (Model, e
 		client:   openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey)),
 		provider: provider.Name,
 	}, nil
-}
-
-func NewOllamaModel(provider *config.Provider) (Model, error) {
-	return newChatAPIModel(provider, ollamaDefaultBaseURL)
 }
 
 func NewLlamaCppModel(provider *config.Provider) (Model, error) {
@@ -292,13 +286,6 @@ func listOpenAICompatModels(ctx context.Context, baseURL, apiKey string) ([]Mode
 	}
 
 	return models, nil
-}
-
-func ListOllamaModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
-	if baseURL == "" {
-		baseURL = ollamaDefaultBaseURL
-	}
-	return listOpenAICompatModels(ctx, baseURL, apiKey)
 }
 
 func ListLlamaCppModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
