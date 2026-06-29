@@ -37,6 +37,16 @@ func NewOllamaModel(provider *config.Provider) (Model, error) {
 }
 
 func (mdl *ollamaModel) EffortLevels() []string {
+	return []string{"low", "medium", "high", "max"}
+}
+
+func toOllamaThink(opts *config.Options) *ollama.ThinkValue {
+	if opts.Effort != "" && opts.Effort != "default" {
+		return &ollama.ThinkValue{Value: opts.Effort}
+	}
+	if opts.IncludeThoughts {
+		return &ollama.ThinkValue{Value: true}
+	}
 	return nil
 }
 
@@ -53,6 +63,7 @@ func (st *chatAPIState) toOllamaMessages() ([]ollama.Message, int) {
 		txtLen += len(st.systemPrompt)
 	}
 
+	var thinking string
 	for _, step := range st.steps {
 		switch step.typ {
 		case PromptStep:
@@ -60,8 +71,13 @@ func (st *chatAPIState) toOllamaMessages() ([]ollama.Message, int) {
 			txtLen += len(step.content)
 
 		case ModelResponseStep:
-			msgs = append(msgs, ollama.Message{Role: "assistant", Content: step.content})
-			txtLen += len(step.content)
+			msgs = append(msgs, ollama.Message{
+				Role:     "assistant",
+				Thinking: thinking,
+				Content:  step.content,
+			})
+			txtLen += len(thinking) + len(step.content)
+			thinking = ""
 
 		case ToolCallStep:
 			var args ollama.ToolCallFunctionArguments
@@ -80,8 +96,11 @@ func (st *chatAPIState) toOllamaMessages() ([]ollama.Message, int) {
 			} else {
 				msgs = append(msgs, ollama.Message{
 					Role:      "assistant",
+					Thinking:  thinking,
 					ToolCalls: []ollama.ToolCall{tc},
 				})
+				txtLen += len(thinking)
+				thinking = ""
 			}
 
 		case ToolOutputStep:
@@ -89,7 +108,7 @@ func (st *chatAPIState) toOllamaMessages() ([]ollama.Message, int) {
 			txtLen += len(step.content)
 
 		case ThinkingStep:
-			// No portable field for reasoning in Ollama native API; skip on resend.
+			thinking = step.content
 
 		default:
 			panic(fmt.Sprintf("unexpected step type: %s", step.typ))
@@ -132,6 +151,8 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State,
 	}
 
 	stream := false
+	think := toOllamaThink(opts)
+
 	for {
 		msgs, txtLen := st.toOllamaMessages()
 
@@ -140,6 +161,7 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State,
 			Messages: msgs,
 			Tools:    toolDefs,
 			Stream:   &stream,
+			Think:    think,
 		}
 
 		if opts.Trace {
@@ -161,6 +183,13 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State,
 		}
 		if err != nil {
 			return err
+		}
+
+		if rspMsg.Thinking != "" {
+			st.steps = append(st.steps, chatAPIStep{
+				typ:     ThinkingStep,
+				content: rspMsg.Thinking,
+			})
 		}
 
 		if rspMsg.Content != "" {
