@@ -14,35 +14,31 @@ import (
 	"github.com/leftmike/gait/util"
 )
 
-const (
-	llamaCppDefaultBaseURL = "http://localhost:8080/v1"
-)
-
 // Model for OpenAI-compatible Chat Completions API (/v1/chat/completions)
 type chatAPIModel struct {
 	client   openai.Client
 	provider string
 }
 
-func newChatAPIModel(provider *config.Provider, defaultBaseURL string) (Model, error) {
-	baseURL := provider.BaseURL
-	if baseURL == "" {
-		baseURL = defaultBaseURL
-	}
-
-	apiKey := provider.APIKey
-	if apiKey == "" {
-		apiKey = "no-api-key"
-	}
-
+func newChatAPIModel(provider *config.Provider, client openai.Client) (Model, error) {
 	return &chatAPIModel{
-		client:   openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey)),
+		client:   client,
 		provider: provider.Name,
 	}, nil
 }
 
+func newLlamaCppClient(baseURL, apiKey string) openai.Client {
+	if baseURL == "" {
+		baseURL = "http://localhost:8080/v1"
+	}
+	if apiKey == "" {
+		apiKey = "no-api-key"
+	}
+	return openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey))
+}
+
 func NewLlamaCppModel(provider *config.Provider) (Model, error) {
-	return newChatAPIModel(provider, llamaCppDefaultBaseURL)
+	return newChatAPIModel(provider, newLlamaCppClient(provider.BaseURL, provider.APIKey))
 }
 
 func (mdl *chatAPIModel) EffortLevels() []string {
@@ -267,11 +263,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State,
 	return nil
 }
 
-func listOpenAICompatModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
-	if apiKey == "" {
-		apiKey = "no-key"
-	}
-	client := openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey))
+func listOpenAICompatModels(ctx context.Context, client openai.Client) ([]ModelInfo, error) {
 	lst, err := client.Models.List(ctx)
 	if err != nil {
 		return nil, err
@@ -289,8 +281,5 @@ func listOpenAICompatModels(ctx context.Context, baseURL, apiKey string) ([]Mode
 }
 
 func ListLlamaCppModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
-	if baseURL == "" {
-		baseURL = llamaCppDefaultBaseURL
-	}
-	return listOpenAICompatModels(ctx, baseURL, apiKey)
+	return listOpenAICompatModels(ctx, newLlamaCppClient(baseURL, apiKey))
 }
