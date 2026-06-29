@@ -212,6 +212,9 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State,
 		if len(rsp.Choices) == 0 {
 			return fmt.Errorf("%s: no choices returned", mdl.provider)
 		}
+		if rsp.Choices[0].FinishReason == "length" {
+			return fmt.Errorf("max tokens reached: output was truncated")
+		}
 		msg := rsp.Choices[0].Message
 
 		if msg.Content != "" {

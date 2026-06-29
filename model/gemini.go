@@ -314,6 +314,9 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State,
 
 		var toolCalls []geminiToolCall
 		for _, cnd := range rsp.Candidates {
+			if cnd.FinishReason == genai.FinishReasonMaxTokens {
+				return fmt.Errorf("max tokens reached: output was truncated")
+			}
 			for _, prt := range cnd.Content.Parts {
 				if prt.Thought {
 					st.steps = append(st.steps, geminiStep{

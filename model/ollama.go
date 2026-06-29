@@ -173,8 +173,10 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State,
 		}
 
 		var rspMsg ollama.Message
+		var doneReason string
 		err := mdl.client.Chat(ctx, req, func(rsp ollama.ChatResponse) error {
 			rspMsg = rsp.Message
+			doneReason = rsp.DoneReason
 			return nil
 		})
 		if opts.Trace {
@@ -183,6 +185,10 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State,
 		}
 		if err != nil {
 			return err
+		}
+
+		if doneReason == "length" {
+			return fmt.Errorf("max tokens reached: output was truncated")
 		}
 
 		if rspMsg.Thinking != "" {

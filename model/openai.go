@@ -259,6 +259,10 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State,
 			return err
 		}
 
+		if rsp.Status == responses.ResponseStatusIncomplete {
+			return fmt.Errorf("max tokens reached: output was truncated")
+		}
+
 		if opts.Trace {
 			if opts.Verbose {
 				fmt.Print("Trace: ResponseItems: [")

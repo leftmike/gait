@@ -254,6 +254,10 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State,
 			return err
 		}
 
+		if rsp.StopReason == anthropic.StopReasonMaxTokens {
+			return fmt.Errorf("max tokens reached: output was truncated")
+		}
+
 		if opts.Trace {
 			if opts.Verbose {
 				fmt.Print("Trace: ContentBlocks: [")
