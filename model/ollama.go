@@ -186,15 +186,43 @@ func (mdl *ollamaModel) Generate(ctx context.Context, opts *config.Options, ast 
 			fmt.Print(") -> ")
 		}
 
-		var rspMsg ollama.Message
-		var doneReason string
+		var toolCalls []ollama.ToolCall
 		err := mdl.client.Chat(ctx, req, func(rsp ollama.ChatResponse) error {
-			rspMsg = rsp.Message
-			doneReason = rsp.DoneReason
-
 			st.inputTokens += int64(rsp.PromptEvalCount)
 			st.outputTokens += int64(rsp.EvalCount)
 			st.contextTokens = int64(rsp.PromptEvalCount) + int64(rsp.EvalCount)
+
+			if rsp.DoneReason == "length" {
+				return fmt.Errorf("max tokens reached: output was truncated")
+			}
+
+			if rsp.Message.Thinking != "" {
+				st.steps = append(st.steps, chatAPIStep{
+					typ:     ThinkingStep,
+					content: rsp.Message.Thinking,
+				})
+			}
+
+			if rsp.Message.Content != "" {
+				st.steps = append(st.steps, chatAPIStep{
+					typ:     ModelResponseStep,
+					content: rsp.Message.Content,
+				})
+			}
+
+			for _, tc := range rsp.Message.ToolCalls {
+				args, err := json.Marshal(tc.Function.Arguments)
+				if err != nil {
+					return err
+				}
+				st.steps = append(st.steps, chatAPIStep{
+					typ:   ToolCallStep,
+					name:  tc.Function.Name,
+					input: string(args),
+				})
+				toolCalls = append(toolCalls, tc)
+			}
+
 			return nil
 		})
 		if opts.Trace {
@@ -203,39 +231,6 @@ func (mdl *ollamaModel) Generate(ctx context.Context, opts *config.Options, ast 
 		}
 		if err != nil {
 			return err
-		}
-
-		// XXX: move into the func above
-		if doneReason == "length" {
-			return fmt.Errorf("max tokens reached: output was truncated")
-		}
-
-		if rspMsg.Thinking != "" {
-			st.steps = append(st.steps, chatAPIStep{
-				typ:     ThinkingStep,
-				content: rspMsg.Thinking,
-			})
-		}
-
-		if rspMsg.Content != "" {
-			st.steps = append(st.steps, chatAPIStep{
-				typ:     ModelResponseStep,
-				content: rspMsg.Content,
-			})
-		}
-
-		var toolCalls []ollama.ToolCall
-		for _, tc := range rspMsg.ToolCalls {
-			args, err := json.Marshal(tc.Function.Arguments)
-			if err != nil {
-				return err
-			}
-			st.steps = append(st.steps, chatAPIStep{
-				typ:   ToolCallStep,
-				name:  tc.Function.Name,
-				input: string(args),
-			})
-			toolCalls = append(toolCalls, tc)
 		}
 
 		if len(toolCalls) == 0 {
