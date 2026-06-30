@@ -29,9 +29,6 @@ To Do:
 
 - mcp servers: at startup, load them in separate go routines and don't wait on them
 
-- Gemini
--- Seed in GenerateContentConfig
-
 - OpenAI Codex
 -- API access via codex: https://simonwillison.net/2026/Apr/23/gpt-5-5/
 */
@@ -111,7 +108,7 @@ func interact(ag *agent.Agent, opts *config.Options) error {
 		st.Prompt(s)
 		n := st.Len()
 
-		err = ag.Generate(ctx, st, opts)
+		err = ag.Generate(ctx, opts, st)
 		if err != nil {
 			return err
 		}

@@ -233,8 +233,8 @@ type geminiToolCall struct {
 	prt *genai.Part
 }
 
-func (mdl *geminiModel) Generate(ctx context.Context, ast State,
-	tools map[string]Tool, opts *config.Options) error {
+func (mdl *geminiModel) Generate(ctx context.Context, opts *config.Options, ast State,
+	tools map[string]Tool) error {
 
 	st := ast.(*geminiState)
 	thinkingLevel := toGeminiThinkingLevel(opts)

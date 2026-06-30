@@ -141,8 +141,8 @@ func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
 	return toolDefs, nil
 }
 
-func (mdl *ollamaModel) Generate(ctx context.Context, ast State,
-	tools map[string]Tool, opts *config.Options) error {
+func (mdl *ollamaModel) Generate(ctx context.Context, opts *config.Options, ast State,
+	tools map[string]Tool) error {
 
 	st := ast.(*chatAPIState)
 	toolDefs, err := toOllamaTools(tools)

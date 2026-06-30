@@ -208,8 +208,8 @@ func (mdl *openAIModel) NewState() State {
 	return &openAIState{}
 }
 
-func (mdl *openAIModel) Generate(ctx context.Context, ast State,
-	tools map[string]Tool, opts *config.Options) error {
+func (mdl *openAIModel) Generate(ctx context.Context, opts *config.Options, ast State,
+	tools map[string]Tool) error {
 
 	st := ast.(*openAIState)
 

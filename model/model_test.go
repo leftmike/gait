@@ -114,7 +114,7 @@ func testSimple(t *testing.T, mdl model.Model, provider, name string, opts *conf
 	st.Prompt("Hello")
 	n := st.Len()
 
-	err := mdl.Generate(ctx, st, nil, opts)
+	err := mdl.Generate(ctx, opts, st, nil)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -190,7 +190,7 @@ current_temperature tool.`)
 	n := st.Len()
 
 	temperatureLocation = ""
-	err := mdl.Generate(ctx, st, tools, opts)
+	err := mdl.Generate(ctx, opts, st, tools)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -251,7 +251,7 @@ current_temperature and current_weather tools.`)
 
 	temperatureLocation = ""
 	weatherLocation = ""
-	err := mdl.Generate(ctx, st, tools, opts)
+	err := mdl.Generate(ctx, opts, st, tools)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}

@@ -186,8 +186,8 @@ func anthropicMaxTokens(opts *config.Options) int64 {
 	return 64000
 }
 
-func (mdl *anthropicModel) Generate(ctx context.Context, ast State,
-	tools map[string]Tool, opts *config.Options) error {
+func (mdl *anthropicModel) Generate(ctx context.Context, opts *config.Options, ast State,
+	tools map[string]Tool) error {
 
 	st := ast.(*anthropicState)
 	toolParams := toAnthropicTools(tools)

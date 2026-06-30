@@ -87,8 +87,8 @@ func (ag *Agent) SystemPrompt(st model.State) {
 	}
 }
 
-func (ag *Agent) Generate(ctx context.Context, st model.State, opts *config.Options) error {
-	return ag.mdl.Generate(ctx, st, ag.tools, opts)
+func (ag *Agent) Generate(ctx context.Context, opts *config.Options, st model.State) error {
+	return ag.mdl.Generate(ctx, opts, st, ag.tools)
 }
 
 type readFileArgs struct {

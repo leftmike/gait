@@ -176,8 +176,8 @@ func (mdl *chatAPIModel) NewState() State {
 	return &chatAPIState{}
 }
 
-func (mdl *chatAPIModel) Generate(ctx context.Context, ast State,
-	tools map[string]Tool, opts *config.Options) error {
+func (mdl *chatAPIModel) Generate(ctx context.Context, opts *config.Options, ast State,
+	tools map[string]Tool) error {
 
 	// XXX: opts.IncludeThoughts and opts.Effort
 
