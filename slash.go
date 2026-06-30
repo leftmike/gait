@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/leftmike/gait/agent"
+	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
 )
@@ -16,12 +17,22 @@ var (
 	slashCommands = map[string]struct {
 		cmd  string
 		desc string
-		fn   func(ag *agent.Agent, st model.State, args []string) error
+		fn   func(ag *agent.Agent, opts *config.Options, st model.State, args []string) error
 	}{
 		"/clear": {
 			cmd:  "/clear",
 			desc: "clear conversation history and free up context",
 			fn:   slashClear,
+		},
+		"/context": {
+			cmd:  "/context",
+			desc: "show usage of the current context window",
+			fn:   slashContext,
+		},
+		"/cost": {
+			cmd:  "/cost",
+			desc: "show token usage statistics for the session",
+			fn:   slashCost,
 		},
 		"/exit":   {cmd: "/exit", desc: "exit the REPL", fn: slashExit},
 		"/help":   {cmd: "/help", desc: "show help and available commands"},
@@ -31,6 +42,11 @@ var (
 			cmd:  "/skills",
 			desc: "list available skills or show skill details",
 			fn:   slashSkills,
+		},
+		"/status": {
+			cmd:  "/status",
+			desc: "show current session configuration and token usage",
+			fn:   slashStatus,
 		},
 	}
 )
@@ -42,10 +58,10 @@ func init() {
 	slashCommands["/help"] = sc
 }
 
-func slash(ag *agent.Agent, st model.State, s string) error {
+func slash(ag *agent.Agent, opts *config.Options, st model.State, s string) error {
 	cmd, args := parseSlash(s)
 	if sc, ok := slashCommands[cmd]; ok {
-		return sc.fn(ag, st, args)
+		return sc.fn(ag, opts, st, args)
 	}
 
 	fmt.Print("commands:")
@@ -72,7 +88,7 @@ func parseSlash(s string) (string, []string) {
 	return args[0], args[1:i]
 }
 
-func slashClear(ag *agent.Agent, st model.State, args []string) error {
+func slashClear(ag *agent.Agent, opts *config.Options, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/clear: no arguments allowed: %s", args)
 	}
@@ -81,11 +97,11 @@ func slashClear(ag *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
-func slashExit(ag *agent.Agent, st model.State, args []string) error {
+func slashExit(ag *agent.Agent, opts *config.Options, st model.State, args []string) error {
 	return io.EOF
 }
 
-func slashHelp(ag *agent.Agent, st model.State, args []string) error {
+func slashHelp(ag *agent.Agent, opts *config.Options, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/help: no arguments allowed: %s", args)
 	}
@@ -100,7 +116,7 @@ func slashHelp(ag *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
-func slashModels(ag *agent.Agent, st model.State, args []string) error {
+func slashModels(ag *agent.Agent, opts *config.Options, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/models: no arguments allowed: %s", args)
 	}
@@ -138,7 +154,7 @@ func slashModels(ag *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
-func slashSkills(ag *agent.Agent, st model.State, args []string) error {
+func slashSkills(ag *agent.Agent, opts *config.Options, st model.State, args []string) error {
 	if len(args) == 0 {
 		for _, sk := range ag.Skills() {
 			fmt.Println(sk.Name)
@@ -174,6 +190,59 @@ func slashSkills(ag *agent.Agent, st model.State, args []string) error {
 			}
 		}
 	}
+
+	return nil
+}
+
+func slashCost(ag *agent.Agent, opts *config.Options, st model.State, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("/cost: no arguments allowed: %s", args)
+	}
+
+	inputTokens, outputTokens, _ := st.Usage()
+	fmt.Printf("input tokens:  %d\n", inputTokens)
+	fmt.Printf("output tokens: %d\n", outputTokens)
+
+	return nil
+}
+
+func slashContext(ag *agent.Agent, opts *config.Options, st model.State, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("/context: no arguments allowed: %s", args)
+	}
+
+	printContext(ag, opts, st)
+	return nil
+}
+
+func printContext(ag *agent.Agent, opts *config.Options, st model.State) {
+	/*
+		u := st.Usage()
+		window := model.ContextWindow(ag.Provider(), opts.Model)
+		pct := 0.0
+		if window > 0 {
+			pct = float64(u.ContextTokens) / float64(window) * 100
+		}
+		fmt.Printf("context: %d / %d tokens (%.1f%%)\n", u.ContextTokens, window, pct)
+	*/
+}
+
+func slashStatus(ag *agent.Agent, opts *config.Options, st model.State, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("/status: no arguments allowed: %s", args)
+	}
+
+	fmt.Printf("provider: %s\n", ag.Provider())
+	fmt.Printf("model:    %s\n", opts.Model)
+	if opts.Effort != "" {
+		fmt.Printf("effort:   %s\n", opts.Effort)
+	}
+	fmt.Printf("thoughts: %t\n", opts.IncludeThoughts)
+
+	inputTokens, outputTokens, _ := st.Usage()
+	fmt.Printf("input tokens:  %d\n", inputTokens)
+	fmt.Printf("output tokens: %d\n", outputTokens)
+	printContext(ag, opts, st)
 
 	return nil
 }

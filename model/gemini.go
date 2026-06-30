@@ -50,8 +50,11 @@ type geminiStep struct {
 }
 
 type geminiState struct {
-	systemPrompt string
-	steps        []geminiStep
+	systemPrompt  string
+	steps         []geminiStep
+	inputTokens   int32
+	outputTokens  int32
+	contextTokens int32
 }
 
 func (st *geminiState) SystemPrompt(s string) {
@@ -81,6 +84,10 @@ func (st *geminiState) Step(n int) Step {
 
 func (st *geminiState) Clear() {
 	st.steps = st.steps[:0]
+}
+
+func (st *geminiState) Usage() (int64, int64, int64) {
+	return int64(st.inputTokens), int64(st.outputTokens), int64(st.contextTokens)
 }
 
 func (st *geminiState) toContents() ([]*genai.Content, int) {
@@ -281,6 +288,11 @@ func (mdl *geminiModel) Generate(ctx context.Context, ast State,
 		if err != nil {
 			return err
 		}
+
+		st.inputTokens += rsp.UsageMetadata.PromptTokenCount
+		st.outputTokens += rsp.UsageMetadata.CandidatesTokenCount
+		st.contextTokens = rsp.UsageMetadata.PromptTokenCount +
+			rsp.UsageMetadata.CandidatesTokenCount
 
 		if opts.Trace {
 			if opts.Verbose {

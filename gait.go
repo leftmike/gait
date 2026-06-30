@@ -1,12 +1,9 @@
 /*
 To Do:
 - Slash commands
--- /context: show usage of the current context
--- /cost: show token usage statistics
 -- /export: export the current conversation to a file or clipboard
 -- /mcp: manage mcp servers / list configured mcp tools
 -- /model: set the AI model to use / choose what model and reasoning effort to use
--- /status: show current session configuration and token usage
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
 
@@ -99,7 +96,7 @@ func interact(ag *agent.Agent, opts *config.Options) error {
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			err := slash(ag, st, s)
+			err := slash(ag, opts, st, s)
 			if err == io.EOF {
 				fmt.Println()
 				break

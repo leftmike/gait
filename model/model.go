@@ -61,4 +61,5 @@ type State interface {
 	Len() int
 	Step(n int) Step
 	Clear()
+	Usage() (int64, int64, int64) // input tokens, output tokens, contextTokens
 }

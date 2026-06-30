@@ -42,8 +42,11 @@ type openAIStep struct {
 }
 
 type openAIState struct {
-	systemPrompt string
-	steps        []openAIStep
+	systemPrompt  string
+	steps         []openAIStep
+	inputTokens   int64
+	outputTokens  int64
+	contextTokens int64
 }
 
 func (st *openAIState) SystemPrompt(s string) {
@@ -73,6 +76,10 @@ func (st *openAIState) Step(n int) Step {
 
 func (st *openAIState) Clear() {
 	st.steps = st.steps[:0]
+}
+
+func (st *openAIState) Usage() (int64, int64, int64) {
+	return st.inputTokens, st.outputTokens, st.contextTokens
 }
 
 func openAIInputText(role, text string) responses.ResponseInputItemUnionParam {
@@ -258,6 +265,10 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State,
 		if err != nil {
 			return err
 		}
+
+		st.inputTokens += rsp.Usage.InputTokens
+		st.outputTokens += rsp.Usage.OutputTokens
+		st.contextTokens = rsp.Usage.InputTokens + rsp.Usage.OutputTokens
 
 		if rsp.Status == responses.ResponseStatusIncomplete {
 			return fmt.Errorf("max tokens reached: output was truncated")

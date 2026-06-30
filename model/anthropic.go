@@ -41,8 +41,11 @@ type anthropicStep struct {
 }
 
 type anthropicState struct {
-	systemPrompt string
-	steps        []anthropicStep
+	systemPrompt  string
+	steps         []anthropicStep
+	inputTokens   int64
+	outputTokens  int64
+	contextTokens int64
 }
 
 func (st *anthropicState) SystemPrompt(s string) {
@@ -72,6 +75,10 @@ func (st *anthropicState) Step(n int) Step {
 
 func (st *anthropicState) Clear() {
 	st.steps = st.steps[:0]
+}
+
+func (st *anthropicState) Usage() (int64, int64, int64) {
+	return st.inputTokens, st.outputTokens, st.contextTokens
 }
 
 func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
@@ -253,6 +260,10 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State,
 		if err != nil {
 			return err
 		}
+
+		st.inputTokens += rsp.Usage.InputTokens
+		st.outputTokens += rsp.Usage.OutputTokens
+		st.contextTokens = rsp.Usage.InputTokens + rsp.Usage.OutputTokens
 
 		if rsp.StopReason == anthropic.StopReasonMaxTokens {
 			return fmt.Errorf("max tokens reached: output was truncated")

@@ -54,8 +54,11 @@ type chatAPIStep struct {
 }
 
 type chatAPIState struct {
-	systemPrompt string
-	steps        []chatAPIStep
+	systemPrompt  string
+	steps         []chatAPIStep
+	inputTokens   int64
+	outputTokens  int64
+	contextTokens int64
 }
 
 func (st *chatAPIState) SystemPrompt(s string) {
@@ -85,6 +88,10 @@ func (st *chatAPIState) Step(n int) Step {
 
 func (st *chatAPIState) Clear() {
 	st.steps = st.steps[:0]
+}
+
+func (st *chatAPIState) Usage() (int64, int64, int64) {
+	return st.inputTokens, st.outputTokens, st.contextTokens
 }
 
 func (step chatAPIStep) toolCall() openai.ChatCompletionMessageToolCallUnionParam {
@@ -208,6 +215,10 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State,
 		if err != nil {
 			return err
 		}
+
+		st.inputTokens += rsp.Usage.PromptTokens
+		st.outputTokens += rsp.Usage.CompletionTokens
+		st.contextTokens = rsp.Usage.PromptTokens + rsp.Usage.CompletionTokens
 
 		if len(rsp.Choices) == 0 {
 			return fmt.Errorf("%s: no choices returned", mdl.provider)
