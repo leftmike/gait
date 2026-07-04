@@ -15,16 +15,9 @@ import (
 )
 
 // Model for OpenAI-compatible Chat Completions API (/v1/chat/completions)
-type chatAPIModel struct {
+type chatAPIClient struct {
 	client   openai.Client
 	provider string
-}
-
-func newChatAPIModel(provider *config.Provider, client openai.Client) (Model, error) {
-	return &chatAPIModel{
-		client:   client,
-		provider: provider.Name,
-	}, nil
 }
 
 func newLlamaCppClient(baseURL, apiKey string) openai.Client {
@@ -37,11 +30,14 @@ func newLlamaCppClient(baseURL, apiKey string) openai.Client {
 	return openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey))
 }
 
-func NewLlamaCppModel(provider *config.Provider) (Model, error) {
-	return newChatAPIModel(provider, newLlamaCppClient(provider.BaseURL, provider.APIKey))
+func NewLlamaCppClient(provider *config.Provider) (Client, error) {
+	return &chatAPIClient{
+		client:   newLlamaCppClient(provider.BaseURL, provider.APIKey),
+		provider: provider.Name,
+	}, nil
 }
 
-func (mdl *chatAPIModel) EffortLevels() []string {
+func (clnt *chatAPIClient) EffortLevels() []string {
 	return nil
 }
 
@@ -172,11 +168,11 @@ func toOpenAICompatTools(tools map[string]Tool) []openai.ChatCompletionToolUnion
 	return toolParams
 }
 
-func (mdl *chatAPIModel) NewState() State {
+func (clnt *chatAPIClient) NewState() State {
 	return &chatAPIState{}
 }
 
-func (mdl *chatAPIModel) Generate(ctx context.Context, opts *config.Options, ast State,
+func (clnt *chatAPIClient) Generate(ctx context.Context, opts *config.Options, ast State,
 	tools map[string]Tool) error {
 
 	// XXX: opts.IncludeThoughts and opts.Effort
@@ -188,7 +184,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, opts *config.Options, ast
 		msgs, txtLen := st.toMessages()
 
 		if opts.Trace {
-			fmt.Printf("Trace: %s Chat.Completions.New(", mdl.provider)
+			fmt.Printf("Trace: %s Chat.Completions.New(", clnt.provider)
 			if opts.Verbose {
 				fmt.Printf("%s, %d tools, %d bytes", opts.Model, len(tools), txtLen)
 			}
@@ -203,7 +199,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, opts *config.Options, ast
 			params.Tools = toolParams
 		}
 
-		rsp, err := mdl.client.Chat.Completions.New(ctx, params)
+		rsp, err := clnt.client.Chat.Completions.New(ctx, params)
 		if opts.Trace {
 			fmt.Print(err)
 			if opts.Verbose && rsp != nil {
@@ -221,7 +217,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, opts *config.Options, ast
 		st.contextTokens = rsp.Usage.PromptTokens + rsp.Usage.CompletionTokens
 
 		if len(rsp.Choices) == 0 {
-			return fmt.Errorf("%s: no choices returned", mdl.provider)
+			return fmt.Errorf("%s: no choices returned", clnt.provider)
 		}
 		if rsp.Choices[0].FinishReason == "length" {
 			return fmt.Errorf("max tokens reached: output was truncated")

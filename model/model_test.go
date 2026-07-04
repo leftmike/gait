@@ -23,7 +23,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-type testModelFunc func(t *testing.T, mdl model.Model, provider, name string, opts *config.Options)
+type testModelFunc func(t *testing.T, clnt model.Client, provider, name string, opts *config.Options)
 
 func testModels(t *testing.T, test testModelFunc, opts *config.Options) {
 	t.Helper()
@@ -69,32 +69,32 @@ func testModels(t *testing.T, test testModelFunc, opts *config.Options) {
 			t.Fatalf("missing api key for provider: %s", c.provider)
 		}
 
-		var mdl model.Model
+		var clnt model.Client
 		switch c.provider {
 		case "openai":
-			mdl, err = model.NewOpenAIModel(p.APIKey)
+			clnt, err = model.NewOpenAIClient(p.APIKey)
 			if err != nil {
-				t.Fatalf("NewOpenAIModel() failed with %s", err)
+				t.Fatalf("NewOpenAIClient() failed with %s", err)
 			}
 		case "anthropic":
-			mdl, err = model.NewAnthropicModel(p.APIKey)
+			clnt, err = model.NewAnthropicClient(p.APIKey)
 			if err != nil {
-				t.Fatalf("NewAnthropicModel() failed with %s", err)
+				t.Fatalf("NewAnthropicClient() failed with %s", err)
 			}
 		case "gemini":
-			mdl, err = model.NewGeminiModel(p.APIKey)
+			clnt, err = model.NewGeminiClient(p.APIKey)
 			if err != nil {
-				t.Fatalf("NewGeminiModel() failed with %s", err)
+				t.Fatalf("NewGeminiClient() failed with %s", err)
 			}
 		case "ollama":
-			mdl, err = model.NewOllamaModel(p)
+			clnt, err = model.NewOllamaClient(p)
 			if err != nil {
-				t.Fatalf("NewOllamaModel() failed with %s", err)
+				t.Fatalf("NewOllamaClient() failed with %s", err)
 			}
 		case "llamacpp":
-			mdl, err = model.NewLlamaCppModel(p)
+			clnt, err = model.NewLlamaCppClient(p)
 			if err != nil {
-				t.Fatalf("NewLlamaCppModel() failed with %s", err)
+				t.Fatalf("NewLlamaCppClient() failed with %s", err)
 			}
 		default:
 			t.Fatalf("unknown provider: %s", c.provider)
@@ -102,19 +102,19 @@ func testModels(t *testing.T, test testModelFunc, opts *config.Options) {
 
 		testOpts := *opts
 		testOpts.Model = c.model
-		test(t, mdl, c.provider, c.model, &testOpts)
+		test(t, clnt, c.provider, c.model, &testOpts)
 	}
 }
 
-func testSimple(t *testing.T, mdl model.Model, provider, name string, opts *config.Options) {
+func testSimple(t *testing.T, clnt model.Client, provider, name string, opts *config.Options) {
 	fmt.Println(provider, name)
 
 	ctx := context.Background()
-	st := mdl.NewState()
+	st := clnt.NewState()
 	st.Prompt("Hello")
 	n := st.Len()
 
-	err := mdl.Generate(ctx, opts, st, nil)
+	err := clnt.Generate(ctx, opts, st, nil)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -171,7 +171,7 @@ func currentWeather(ctx context.Context, buf []byte) (string, error) {
 	return "sunny and 70", nil
 }
 
-func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *config.Options) {
+func testSimpleTool(t *testing.T, clnt model.Client, provider, name string, opts *config.Options) {
 	fmt.Println(provider, name)
 
 	tools := map[string]model.Tool{
@@ -184,13 +184,13 @@ func testSimpleTool(t *testing.T, mdl model.Model, provider, name string, opts *
 	}
 
 	ctx := context.Background()
-	st := mdl.NewState()
+	st := clnt.NewState()
 	st.Prompt(`What is the current temperature for seattle? You must call the
 current_temperature tool.`)
 	n := st.Len()
 
 	temperatureLocation = ""
-	err := mdl.Generate(ctx, opts, st, tools)
+	err := clnt.Generate(ctx, opts, st, tools)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -225,7 +225,7 @@ func TestSimpleTool(t *testing.T) {
 	testModels(t, testSimpleTool, &config.Options{})
 }
 
-func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *config.Options) {
+func testMultiTool(t *testing.T, clnt model.Client, provider, name string, opts *config.Options) {
 	fmt.Println(provider, name)
 
 	tools := map[string]model.Tool{
@@ -244,14 +244,14 @@ func testMultiTool(t *testing.T, mdl model.Model, provider, name string, opts *c
 	}
 
 	ctx := context.Background()
-	st := mdl.NewState()
+	st := clnt.NewState()
 	st.Prompt(`What is the current temperature and weather for seattle? You must call both the
 current_temperature and current_weather tools.`)
 	n := st.Len()
 
 	temperatureLocation = ""
 	weatherLocation = ""
-	err := mdl.Generate(ctx, opts, st, tools)
+	err := clnt.Generate(ctx, opts, st, tools)
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}

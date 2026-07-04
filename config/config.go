@@ -13,11 +13,11 @@ import (
 )
 
 type Options struct {
+	Model           string
 	Verbose         bool
 	Trace           bool
 	IncludeThoughts bool
 	Effort          string
-	Model           string
 	MaxTokens       int
 }
 

@@ -14,23 +14,23 @@ import (
 type Agent struct {
 	provider string
 	apiKey   string
-	mdl      model.Model
+	clnt     model.Client
 	tools    map[string]model.Tool
 	skills   []*skill.Skill
-	clnts    []*mcpclient.Client
+	clnts    []*mcpclient.Client // XXX: rename field
 }
 
-func NewAgent(provider *config.Provider, mdl model.Model) *Agent {
+func NewAgent(provider *config.Provider, clnt model.Client) *Agent {
 	return &Agent{
 		provider: provider.Name,
 		apiKey:   provider.APIKey,
-		mdl:      mdl,
+		clnt:     clnt,
 		tools:    map[string]model.Tool{},
 	}
 }
 
-func (ag *Agent) Model() model.Model {
-	return ag.mdl
+func (ag *Agent) Client() model.Client {
+	return ag.clnt
 }
 
 func (ag *Agent) Provider() string {
@@ -88,7 +88,7 @@ func (ag *Agent) SystemPrompt(st model.State) {
 }
 
 func (ag *Agent) Generate(ctx context.Context, opts *config.Options, st model.State) error {
-	return ag.mdl.Generate(ctx, opts, st, ag.tools)
+	return ag.clnt.Generate(ctx, opts, st, ag.tools)
 }
 
 type readFileArgs struct {

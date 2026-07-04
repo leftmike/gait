@@ -13,7 +13,7 @@ import (
 	"github.com/leftmike/gait/util"
 )
 
-type ollamaModel struct {
+type ollamaClient struct {
 	client *ollama.Client
 }
 
@@ -28,15 +28,15 @@ func newOllamaClient(baseURL string) (*ollama.Client, error) {
 	return ollama.NewClient(base, http.DefaultClient), nil
 }
 
-func NewOllamaModel(provider *config.Provider) (Model, error) {
+func NewOllamaClient(provider *config.Provider) (Client, error) {
 	client, err := newOllamaClient(provider.BaseURL)
 	if err != nil {
 		return nil, err
 	}
-	return &ollamaModel{client: client}, nil
+	return &ollamaClient{client: client}, nil
 }
 
-func (mdl *ollamaModel) EffortLevels() []string {
+func (clnt *ollamaClient) EffortLevels() []string {
 	return []string{"low", "medium", "high", "max"}
 }
 
@@ -50,7 +50,7 @@ func toOllamaThink(opts *config.Options) *ollama.ThinkValue {
 	return nil
 }
 
-func (mdl *ollamaModel) NewState() State {
+func (clnt *ollamaClient) NewState() State {
 	return &chatAPIState{}
 }
 
@@ -141,7 +141,7 @@ func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
 	return toolDefs, nil
 }
 
-func (mdl *ollamaModel) Generate(ctx context.Context, opts *config.Options, ast State,
+func (clnt *ollamaClient) Generate(ctx context.Context, opts *config.Options, ast State,
 	tools map[string]Tool) error {
 
 	st := ast.(*chatAPIState)
@@ -187,7 +187,7 @@ func (mdl *ollamaModel) Generate(ctx context.Context, opts *config.Options, ast 
 		}
 
 		var toolCalls []ollama.ToolCall
-		err := mdl.client.Chat(ctx, req, func(rsp ollama.ChatResponse) error {
+		err := clnt.client.Chat(ctx, req, func(rsp ollama.ChatResponse) error {
 			st.inputTokens += int64(rsp.PromptEvalCount)
 			st.outputTokens += int64(rsp.EvalCount)
 			st.contextTokens = int64(rsp.PromptEvalCount) + int64(rsp.EvalCount)

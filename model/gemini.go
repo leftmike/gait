@@ -13,12 +13,12 @@ import (
 	"github.com/leftmike/gait/util"
 )
 
-type geminiModel struct {
+type geminiClient struct {
 	client *genai.Client
 	apiKey string
 }
 
-func NewGeminiModel(apiKey string) (Model, error) {
+func NewGeminiClient(apiKey string) (Client, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
@@ -28,13 +28,13 @@ func NewGeminiModel(apiKey string) (Model, error) {
 		return nil, err
 	}
 
-	return &geminiModel{
+	return &geminiClient{
 		client: client,
 		apiKey: apiKey,
 	}, nil
 }
 
-func (mdl *geminiModel) EffortLevels() []string {
+func (clnt *geminiClient) EffortLevels() []string {
 	return []string{"minimal", "low", "medium", "high"}
 }
 
@@ -223,7 +223,7 @@ func toGeminiThinkingLevel(opts *config.Options) genai.ThinkingLevel {
 	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
 }
 
-func (mdl *geminiModel) NewState() State {
+func (clnt *geminiClient) NewState() State {
 	return &geminiState{}
 }
 
@@ -233,7 +233,7 @@ type geminiToolCall struct {
 	prt *genai.Part
 }
 
-func (mdl *geminiModel) Generate(ctx context.Context, opts *config.Options, ast State,
+func (clnt *geminiClient) Generate(ctx context.Context, opts *config.Options, ast State,
 	tools map[string]Tool) error {
 
 	st := ast.(*geminiState)
@@ -274,7 +274,7 @@ func (mdl *geminiModel) Generate(ctx context.Context, opts *config.Options, ast 
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := mdl.client.Models.GenerateContent(ctx, opts.Model, cnts, &gccfg)
+		rsp, err := clnt.client.Models.GenerateContent(ctx, opts.Model, cnts, &gccfg)
 
 		if opts.Trace {
 			fmt.Print(err)

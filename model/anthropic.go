@@ -14,19 +14,19 @@ import (
 	"github.com/leftmike/gait/util"
 )
 
-type anthropicModel struct {
+type anthropicClient struct {
 	client anthropic.Client
 	apiKey string
 }
 
-func NewAnthropicModel(apiKey string) (Model, error) {
-	return &anthropicModel{
+func NewAnthropicClient(apiKey string) (Client, error) {
+	return &anthropicClient{
 		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
 		apiKey: apiKey,
 	}, nil
 }
 
-func (mdl *anthropicModel) EffortLevels() []string {
+func (clnt *anthropicClient) EffortLevels() []string {
 	return []string{"low", "medium", "high", "xhigh", "max"}
 }
 
@@ -175,7 +175,7 @@ func toAnthropicEffort(opts *config.Options) anthropic.OutputConfigEffort {
 	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
 }
 
-func (mdl *anthropicModel) NewState() State {
+func (clnt *anthropicClient) NewState() State {
 	return &anthropicState{}
 }
 
@@ -186,7 +186,7 @@ func anthropicMaxTokens(opts *config.Options) int64 {
 	return 64000
 }
 
-func (mdl *anthropicModel) Generate(ctx context.Context, opts *config.Options, ast State,
+func (clnt *anthropicClient) Generate(ctx context.Context, opts *config.Options, ast State,
 	tools map[string]Tool) error {
 
 	st := ast.(*anthropicState)
@@ -234,7 +234,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, opts *config.Options, a
 			fmt.Print(") -> ")
 		}
 
-		strm := mdl.client.Messages.NewStreaming(ctx, req)
+		strm := clnt.client.Messages.NewStreaming(ctx, req)
 		defer strm.Close()
 
 		var rsp anthropic.Message

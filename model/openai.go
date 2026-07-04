@@ -16,19 +16,19 @@ import (
 	"github.com/leftmike/gait/util"
 )
 
-type openAIModel struct {
+type openAIClient struct {
 	client openai.Client
 	apiKey string
 }
 
-func NewOpenAIModel(apiKey string) (Model, error) {
-	return &openAIModel{
+func NewOpenAIClient(apiKey string) (Client, error) {
+	return &openAIClient{
 		client: openai.NewClient(option.WithAPIKey(apiKey)),
 		apiKey: apiKey,
 	}, nil
 }
 
-func (mdl *openAIModel) EffortLevels() []string {
+func (clnt *openAIClient) EffortLevels() []string {
 	return []string{"none", "minimal", "low", "medium", "high", "xhigh"}
 }
 
@@ -204,11 +204,11 @@ func toOpenAIEffort(opts *config.Options) responses.ReasoningEffort {
 	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
 }
 
-func (mdl *openAIModel) NewState() State {
+func (clnt *openAIClient) NewState() State {
 	return &openAIState{}
 }
 
-func (mdl *openAIModel) Generate(ctx context.Context, opts *config.Options, ast State,
+func (clnt *openAIClient) Generate(ctx context.Context, opts *config.Options, ast State,
 	tools map[string]Tool) error {
 
 	st := ast.(*openAIState)
@@ -253,7 +253,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, opts *config.Options, ast 
 			rspParams.MaxOutputTokens = openai.Int(int64(opts.MaxTokens))
 		}
 
-		rsp, err := mdl.client.Responses.New(ctx, rspParams)
+		rsp, err := clnt.client.Responses.New(ctx, rspParams)
 		if opts.Trace {
 			fmt.Print(err)
 			if opts.Verbose && rsp != nil {

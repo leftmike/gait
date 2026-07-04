@@ -9,7 +9,7 @@ import (
 	"github.com/leftmike/gait/config"
 )
 
-type Model interface {
+type Client interface {
 	EffortLevels() []string
 	NewState() State
 	Generate(ctx context.Context, opts *config.Options, st State, tools map[string]Tool) error

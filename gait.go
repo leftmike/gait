@@ -29,6 +29,8 @@ To Do:
 
 - mcp servers: at startup, load them in separate go routines and don't wait on them
 
+- Rename gemini to google
+
 - OpenAI Codex
 -- API access via codex: https://simonwillison.net/2026/Apr/23/gpt-5-5/
 */
@@ -57,18 +59,18 @@ var (
 	trace   bool
 )
 
-func newModel(provider *config.Provider) (model.Model, error) {
+func newClient(provider *config.Provider) (model.Client, error) {
 	switch provider.Name {
 	case "openai":
-		return model.NewOpenAIModel(provider.APIKey)
+		return model.NewOpenAIClient(provider.APIKey)
 	case "anthropic":
-		return model.NewAnthropicModel(provider.APIKey)
+		return model.NewAnthropicClient(provider.APIKey)
 	case "gemini":
-		return model.NewGeminiModel(provider.APIKey)
+		return model.NewGeminiClient(provider.APIKey)
 	case "ollama":
-		return model.NewOllamaModel(provider)
+		return model.NewOllamaClient(provider)
 	case "llamacpp":
-		return model.NewLlamaCppModel(provider)
+		return model.NewLlamaCppClient(provider)
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider.Name)
 	}
@@ -78,7 +80,7 @@ func interact(ag *agent.Agent, opts *config.Options) error {
 	line := liner.NewLiner()
 	defer line.Close()
 
-	st := ag.Model().NewState()
+	st := ag.Client().NewState()
 	ag.SystemPrompt(st)
 
 	ctx := context.Background()
@@ -156,19 +158,30 @@ func main() {
 		os.Exit(1)
 	}
 
+	/*
+		providers, err := llmreg.Providers(false)
+		if err != nil {
+			fmt.Printf("%s: %s\n", os.Args[0], err)
+			os.Exit(1)
+		}
+		for id, p := range providers {
+			fmt.Printf("%s %s %s\n", id, p.ID, p.Name)
+		}
+	*/
+
 	opts.Verbose = verbose
 	opts.Trace = trace
 
-	mdl, err := newModel(provider)
+	clnt, err := newClient(provider)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
 	}
 
 	effort := opts.Effort
-	if effort != "" && effort != "default" && !slices.Contains(mdl.EffortLevels(), effort) {
+	if effort != "" && effort != "default" && !slices.Contains(clnt.EffortLevels(), effort) {
 		fmt.Printf("%s: effort must be default, %s: %s\n", os.Args[0],
-			strings.Join(mdl.EffortLevels(), ", "), effort)
+			strings.Join(clnt.EffortLevels(), ", "), effort)
 		os.Exit(1)
 	}
 
@@ -176,7 +189,7 @@ func main() {
 		fmt.Println(provider.Name, opts.Model)
 	}
 
-	ag := agent.NewAgent(provider, mdl)
+	ag := agent.NewAgent(provider, clnt)
 
 	for _, dir := range cfg.Skills {
 		err := ag.AddSkill(dir)
