@@ -46,7 +46,7 @@ type geminiState struct {
 	contextTokens int32
 }
 
-func NewGeminiClient(apiKey string) (Client, error) {
+func newGeminiClient(apiKey string) (Client, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,

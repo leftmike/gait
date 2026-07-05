@@ -25,7 +25,7 @@ type ollamaModel struct {
 	toolDefs   ollama.Tools
 }
 
-func newOllamaClient(baseURL string) (*ollama.Client, error) {
+func newOllama(baseURL string) (*ollama.Client, error) {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -36,8 +36,8 @@ func newOllamaClient(baseURL string) (*ollama.Client, error) {
 	return ollama.NewClient(base, http.DefaultClient), nil
 }
 
-func NewOllamaClient(clntCfg config.ClientConfig) (Client, error) {
-	client, err := newOllamaClient(clntCfg.BaseURL)
+func newOllamaClient(clntCfg config.ClientConfig) (Client, error) {
+	client, err := newOllama(clntCfg.BaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +282,7 @@ func (clnt *ollamaClient) Generate(ctx context.Context, amdl Model, ast State,
 }
 
 func ListOllamaModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
-	client, err := newOllamaClient(baseURL)
+	client, err := newOllama(baseURL)
 	if err != nil {
 		return nil, err
 	}

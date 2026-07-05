@@ -10,6 +10,7 @@ import (
 )
 
 type Client interface {
+	// XXX: ListModels
 	EffortLevels() []string // XXX: move to Model?
 	NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model, error)
 	NewState() State
@@ -73,4 +74,21 @@ type State interface {
 	Step(n int) Step
 	Clear()
 	Usage() (int64, int64, int64) // input tokens, output tokens, contextTokens
+}
+
+func NewClient(clntCfg config.ClientConfig) (Client, error) {
+	switch clntCfg.Provider {
+	case "anthropic":
+		return newAnthropicClient(clntCfg.APIKey)
+	case "gemini":
+		return newGeminiClient(clntCfg.APIKey)
+	case "llamacpp":
+		return newLlamaCppClient(clntCfg)
+	case "ollama":
+		return newOllamaClient(clntCfg)
+	case "openai":
+		return newOpenAIClient(clntCfg.APIKey)
+	default:
+		return nil, fmt.Errorf("unknown provider: %s", clntCfg.Provider)
+	}
 }

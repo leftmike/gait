@@ -46,7 +46,7 @@ type anthropicState struct {
 	contextTokens int64
 }
 
-func NewAnthropicClient(apiKey string) (Client, error) {
+func newAnthropicClient(apiKey string) (Client, error) {
 	return &anthropicClient{
 		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
 		apiKey: apiKey,

@@ -47,7 +47,7 @@ type openAIState struct {
 	contextTokens int64
 }
 
-func NewOpenAIClient(apiKey string) (Client, error) {
+func newOpenAIClient(apiKey string) (Client, error) {
 	return &openAIClient{
 		client: openai.NewClient(option.WithAPIKey(apiKey)),
 		apiKey: apiKey,

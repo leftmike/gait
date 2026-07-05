@@ -60,24 +60,6 @@ var (
 	trace   bool
 )
 
-// XXX: move into ./model
-func newClient(clntCfg config.ClientConfig) (model.Client, error) {
-	switch clntCfg.Provider {
-	case "openai":
-		return model.NewOpenAIClient(clntCfg.APIKey)
-	case "anthropic":
-		return model.NewAnthropicClient(clntCfg.APIKey)
-	case "gemini":
-		return model.NewGeminiClient(clntCfg.APIKey)
-	case "ollama":
-		return model.NewOllamaClient(clntCfg)
-	case "llamacpp":
-		return model.NewLlamaCppClient(clntCfg)
-	default:
-		return nil, fmt.Errorf("unknown provider: %s", clntCfg.Provider)
-	}
-}
-
 func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) error {
 	line := liner.NewLiner()
 	defer line.Close()
@@ -181,7 +163,7 @@ func main() {
 		Trace:   trace,
 	}
 
-	clnt, err := newClient(clntCfg)
+	clnt, err := model.NewClient(clntCfg)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)

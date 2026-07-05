@@ -42,7 +42,7 @@ type chatAPIState struct {
 	contextTokens int64
 }
 
-func newLlamaCppClient(baseURL, apiKey string) openai.Client {
+func newLlamaCpp(baseURL, apiKey string) openai.Client {
 	if baseURL == "" {
 		baseURL = "http://localhost:8080/v1"
 	}
@@ -52,9 +52,9 @@ func newLlamaCppClient(baseURL, apiKey string) openai.Client {
 	return openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey))
 }
 
-func NewLlamaCppClient(clntCfg config.ClientConfig) (Client, error) {
+func newLlamaCppClient(clntCfg config.ClientConfig) (Client, error) {
 	return &chatAPIClient{
-		client:   newLlamaCppClient(clntCfg.BaseURL, clntCfg.APIKey),
+		client:   newLlamaCpp(clntCfg.BaseURL, clntCfg.APIKey),
 		provider: clntCfg.Provider,
 	}, nil
 }
@@ -307,5 +307,5 @@ func listOpenAICompatModels(ctx context.Context, client openai.Client) ([]ModelI
 }
 
 func ListLlamaCppModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
-	return listOpenAICompatModels(ctx, newLlamaCppClient(baseURL, apiKey))
+	return listOpenAICompatModels(ctx, newLlamaCpp(baseURL, apiKey))
 }

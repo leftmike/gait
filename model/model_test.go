@@ -66,37 +66,42 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 			t.Fatalf("missing api key for provider: %s", c.provider)
 		}
 
-		var clnt model.Client
-		switch c.provider {
-		case "openai":
-			clnt, err = model.NewOpenAIClient(clntCfg.APIKey)
-			if err != nil {
-				t.Fatalf("NewOpenAIClient() failed with %s", err)
-			}
-		case "anthropic":
-			clnt, err = model.NewAnthropicClient(clntCfg.APIKey)
-			if err != nil {
-				t.Fatalf("NewAnthropicClient() failed with %s", err)
-			}
-		case "gemini":
-			clnt, err = model.NewGeminiClient(clntCfg.APIKey)
-			if err != nil {
-				t.Fatalf("NewGeminiClient() failed with %s", err)
-			}
-		case "ollama":
-			clnt, err = model.NewOllamaClient(clntCfg)
-			if err != nil {
-				t.Fatalf("NewOllamaClient() failed with %s", err)
-			}
-		case "llamacpp":
-			clnt, err = model.NewLlamaCppClient(clntCfg)
-			if err != nil {
-				t.Fatalf("NewLlamaCppClient() failed with %s", err)
-			}
-		default:
-			t.Fatalf("unknown provider: %s", c.provider)
+		clnt, err := model.NewClient(clntCfg)
+		if err != nil {
+			t.Fatalf("NewClient(%s) failed with %s", c.provider, err)
 		}
-
+		/*
+			var clnt model.Client
+			switch c.provider {
+			case "openai":
+				clnt, err = model.NewOpenAIClient(clntCfg.APIKey)
+				if err != nil {
+					t.Fatalf("NewOpenAIClient() failed with %s", err)
+				}
+			case "anthropic":
+				clnt, err = model.NewAnthropicClient(clntCfg.APIKey)
+				if err != nil {
+					t.Fatalf("NewAnthropicClient() failed with %s", err)
+				}
+			case "gemini":
+				clnt, err = model.NewGeminiClient(clntCfg.APIKey)
+				if err != nil {
+					t.Fatalf("NewGeminiClient() failed with %s", err)
+				}
+			case "ollama":
+				clnt, err = model.NewOllamaClient(clntCfg)
+				if err != nil {
+					t.Fatalf("NewOllamaClient() failed with %s", err)
+				}
+			case "llamacpp":
+				clnt, err = model.NewLlamaCppClient(clntCfg)
+				if err != nil {
+					t.Fatalf("NewLlamaCppClient() failed with %s", err)
+				}
+			default:
+				t.Fatalf("unknown provider: %s", c.provider)
+			}
+		*/
 		mdlCfg.Model = c.model
 		test(t, clnt, c.provider, c.model, mdlCfg)
 	}
