@@ -9,7 +9,7 @@ gait supports the following model providers:
 |-------------|---------------|--------|
 | OpenAI      | `-openai`     | cloud  |
 | Anthropic   | `-anthropic`  | cloud  |
-| Gemini      | `-gemini`     | cloud  |
+| Google      | `-google`     | cloud  |
 | Ollama      | `-ollama`     | local  |
 | llama.cpp   | `-llamacpp`   | local  |
 

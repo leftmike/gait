@@ -80,8 +80,8 @@ func NewClient(clntCfg config.ClientConfig) (Client, error) {
 	switch clntCfg.Provider {
 	case "anthropic":
 		return newAnthropicClient(clntCfg.APIKey)
-	case "gemini":
-		return newGeminiClient(clntCfg.APIKey)
+	case "google":
+		return newGoogleClient(clntCfg.APIKey)
 	case "llamacpp":
 		return newLlamaCppClient(clntCfg)
 	case "ollama":

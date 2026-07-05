@@ -43,7 +43,7 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 		{provider: "openai", model: "gpt-5.4-nano", thoughts: true},
 		{provider: "anthropic", model: "claude-sonnet-4-6", thoughts: true},
 		{provider: "anthropic", model: "claude-haiku-4-5-20251001", thoughts: true},
-		{provider: "gemini", model: "gemini-3.1-flash-lite", short: true, thoughts: true},
+		{provider: "google", model: "gemini-3.1-flash-lite", short: true, thoughts: true},
 		{provider: "ollama", model: "llama3.2:3b", local: true},
 		{provider: "llamacpp", local: true},
 	}
@@ -70,38 +70,7 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 		if err != nil {
 			t.Fatalf("NewClient(%s) failed with %s", c.provider, err)
 		}
-		/*
-			var clnt model.Client
-			switch c.provider {
-			case "openai":
-				clnt, err = model.NewOpenAIClient(clntCfg.APIKey)
-				if err != nil {
-					t.Fatalf("NewOpenAIClient() failed with %s", err)
-				}
-			case "anthropic":
-				clnt, err = model.NewAnthropicClient(clntCfg.APIKey)
-				if err != nil {
-					t.Fatalf("NewAnthropicClient() failed with %s", err)
-				}
-			case "gemini":
-				clnt, err = model.NewGeminiClient(clntCfg.APIKey)
-				if err != nil {
-					t.Fatalf("NewGeminiClient() failed with %s", err)
-				}
-			case "ollama":
-				clnt, err = model.NewOllamaClient(clntCfg)
-				if err != nil {
-					t.Fatalf("NewOllamaClient() failed with %s", err)
-				}
-			case "llamacpp":
-				clnt, err = model.NewLlamaCppClient(clntCfg)
-				if err != nil {
-					t.Fatalf("NewLlamaCppClient() failed with %s", err)
-				}
-			default:
-				t.Fatalf("unknown provider: %s", c.provider)
-			}
-		*/
+
 		mdlCfg.Model = c.model
 		test(t, clnt, c.provider, c.model, mdlCfg)
 	}

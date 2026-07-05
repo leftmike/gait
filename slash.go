@@ -130,8 +130,8 @@ func slashModels(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, arg
 		infos, err = model.ListOpenAIModels(ctx, ag.APIKey())
 	case "anthropic":
 		infos, err = model.ListAnthropicModels(ctx, ag.APIKey())
-	case "gemini":
-		infos, err = model.ListGeminiModels(ctx, ag.APIKey())
+	case "google":
+		infos, err = model.ListGoogleModels(ctx, ag.APIKey())
 	default:
 		panic(fmt.Sprintf("unknown provider: %s", ag.Provider()))
 	}

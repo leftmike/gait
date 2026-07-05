@@ -25,14 +25,13 @@ To Do:
 - Read Claude desktop config file
 - Read Claude code config file
 - Read OpenAI config file (if possible)
-- Read Gemini config file (if possible)
+- Read Google config file (if possible)
 
 - mcp servers: at startup, load them in separate go routines and don't wait on them
 
 - OpenAI Codex
 -- API access via codex: https://simonwillison.net/2026/Apr/23/gpt-5-5/
 
-- Rename gemini to google
 - Reorder funcs in the model go files to match the types
 */
 

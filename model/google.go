@@ -13,12 +13,12 @@ import (
 	"github.com/leftmike/gait/util"
 )
 
-type geminiClient struct {
+type googleClient struct {
 	client *genai.Client
 	apiKey string
 }
 
-type geminiModel struct {
+type googleModel struct {
 	model           string
 	includeThoughts bool
 	thinkingLevel   genai.ThinkingLevel
@@ -27,7 +27,7 @@ type geminiModel struct {
 	funcDecls       []*genai.FunctionDeclaration
 }
 
-type geminiStep struct {
+type googleStep struct {
 	typ      StepType
 	content  string
 	name     string
@@ -38,15 +38,15 @@ type geminiStep struct {
 	isError  bool
 }
 
-type geminiState struct {
+type googleState struct {
 	systemPrompt  string
-	steps         []geminiStep
+	steps         []googleStep
 	inputTokens   int32
 	outputTokens  int32
 	contextTokens int32
 }
 
-func newGeminiClient(apiKey string) (Client, error) {
+func newGoogleClient(apiKey string) (Client, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
@@ -56,32 +56,32 @@ func newGeminiClient(apiKey string) (Client, error) {
 		return nil, err
 	}
 
-	return &geminiClient{
+	return &googleClient{
 		client: client,
 		apiKey: apiKey,
 	}, nil
 }
 
-func (clnt *geminiClient) EffortLevels() []string {
+func (clnt *googleClient) EffortLevels() []string {
 	return []string{"minimal", "low", "medium", "high"}
 }
 
-func (st *geminiState) SystemPrompt(s string) {
+func (st *googleState) SystemPrompt(s string) {
 	st.systemPrompt = s
 }
 
-func (st *geminiState) Prompt(s string) {
-	st.steps = append(st.steps, geminiStep{
+func (st *googleState) Prompt(s string) {
+	st.steps = append(st.steps, googleStep{
 		typ:     PromptStep,
 		content: s,
 	})
 }
 
-func (st *geminiState) Len() int {
+func (st *googleState) Len() int {
 	return len(st.steps)
 }
 
-func (st *geminiState) Step(n int) Step {
+func (st *googleState) Step(n int) Step {
 	step := st.steps[n]
 	return Step{
 		Type:    step.typ,
@@ -91,15 +91,15 @@ func (st *geminiState) Step(n int) Step {
 	}
 }
 
-func (st *geminiState) Clear() {
+func (st *googleState) Clear() {
 	st.steps = st.steps[:0]
 }
 
-func (st *geminiState) Usage() (int64, int64, int64) {
+func (st *googleState) Usage() (int64, int64, int64) {
 	return int64(st.inputTokens), int64(st.outputTokens), int64(st.contextTokens)
 }
 
-func (st *geminiState) toContents() ([]*genai.Content, int) {
+func (st *googleState) toContents() ([]*genai.Content, int) {
 	var cnts []*genai.Content
 	var txtLen int
 	for _, step := range st.steps {
@@ -173,7 +173,7 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 	return cnts, txtLen
 }
 
-func toGeminiFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
+func toGoogleFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
 	var decls []*genai.FunctionDeclaration
 	for _, tl := range tools {
 		decls = append(decls, &genai.FunctionDeclaration{
@@ -215,7 +215,7 @@ func partType(prt *genai.Part) string {
 	return "--empty--"
 }
 
-func (clnt *geminiClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
+func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
 	var thinkingLevel genai.ThinkingLevel
@@ -241,31 +241,31 @@ func (clnt *geminiClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 		maxOutputTokens = 65536
 	}
 
-	return &geminiModel{
+	return &googleModel{
 		model:           mdlCfg.Model,
 		includeThoughts: mdlCfg.IncludeThoughts,
 		thinkingLevel:   thinkingLevel,
 		maxOutputTokens: maxOutputTokens,
 		tools:           tools,
-		funcDecls:       toGeminiFuncDecls(tools),
+		funcDecls:       toGoogleFuncDecls(tools),
 	}, nil
 }
 
-func (clnt *geminiClient) NewState() State {
-	return &geminiState{}
+func (clnt *googleClient) NewState() State {
+	return &googleState{}
 }
 
-type geminiToolCall struct {
+type googleToolCall struct {
 	buf []byte
 	err error
 	prt *genai.Part
 }
 
-func (clnt *geminiClient) Generate(ctx context.Context, amdl Model, ast State,
+func (clnt *googleClient) Generate(ctx context.Context, amdl Model, ast State,
 	opts *Options) error {
 
-	mdl := amdl.(*geminiModel)
-	st := ast.(*geminiState)
+	mdl := amdl.(*googleModel)
+	st := ast.(*googleState)
 
 	gccfg := genai.GenerateContentConfig{
 		MaxOutputTokens: mdl.maxOutputTokens,
@@ -293,7 +293,7 @@ func (clnt *geminiClient) Generate(ctx context.Context, amdl Model, ast State,
 		txtLen += len(st.systemPrompt)
 
 		if opts.Trace {
-			fmt.Print("Trace: Gemini GenerateContent(")
+			fmt.Print("Trace: Google GenerateContent(")
 			if opts.Verbose {
 				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
 			}
@@ -350,19 +350,19 @@ func (clnt *geminiClient) Generate(ctx context.Context, amdl Model, ast State,
 			}
 		}
 
-		var toolCalls []geminiToolCall
+		var toolCalls []googleToolCall
 		for _, cnd := range rsp.Candidates {
 			if cnd.FinishReason == genai.FinishReasonMaxTokens {
 				return fmt.Errorf("max tokens reached: output was truncated")
 			}
 			for _, prt := range cnd.Content.Parts {
 				if prt.Thought {
-					st.steps = append(st.steps, geminiStep{
+					st.steps = append(st.steps, googleStep{
 						typ:     ThinkingStep,
 						content: prt.Text,
 					})
 				} else if prt.Text != "" {
-					st.steps = append(st.steps, geminiStep{
+					st.steps = append(st.steps, googleStep{
 						typ:      ModelResponseStep,
 						content:  prt.Text,
 						thoughts: prt.ThoughtSignature,
@@ -370,7 +370,7 @@ func (clnt *geminiClient) Generate(ctx context.Context, amdl Model, ast State,
 				} else if prt.FunctionCall != nil {
 					buf, err := json.Marshal(prt.FunctionCall.Args)
 
-					st.steps = append(st.steps, geminiStep{
+					st.steps = append(st.steps, googleStep{
 						typ:      ToolCallStep,
 						name:     prt.FunctionCall.Name,
 						id:       prt.FunctionCall.ID,
@@ -378,7 +378,7 @@ func (clnt *geminiClient) Generate(ctx context.Context, amdl Model, ast State,
 						args:     prt.FunctionCall.Args,
 						thoughts: prt.ThoughtSignature,
 					})
-					toolCalls = append(toolCalls, geminiToolCall{
+					toolCalls = append(toolCalls, googleToolCall{
 						buf: buf,
 						err: err,
 						prt: prt,
@@ -420,7 +420,7 @@ func (clnt *geminiClient) Generate(ctx context.Context, amdl Model, ast State,
 			if err != nil {
 				out = fmt.Sprintf("error: %s", err)
 			}
-			st.steps = append(st.steps, geminiStep{
+			st.steps = append(st.steps, googleStep{
 				typ:     ToolOutputStep,
 				name:    tc.prt.FunctionCall.Name,
 				id:      tc.prt.FunctionCall.ID,
@@ -433,7 +433,7 @@ func (clnt *geminiClient) Generate(ctx context.Context, amdl Model, ast State,
 	return nil
 }
 
-func ListGeminiModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
+func ListGoogleModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
