@@ -63,103 +63,6 @@ func (clnt *chatAPIClient) EffortLevels() []string {
 	return nil
 }
 
-func (st *chatAPIState) SystemPrompt(s string) {
-	st.systemPrompt = s
-}
-
-func (st *chatAPIState) Prompt(s string) {
-	st.steps = append(st.steps, chatAPIStep{
-		typ:     PromptStep,
-		content: s,
-	})
-}
-
-func (st *chatAPIState) Len() int {
-	return len(st.steps)
-}
-
-func (st *chatAPIState) Step(n int) Step {
-	step := st.steps[n]
-	return Step{
-		Type:    step.typ,
-		Content: step.content,
-		Name:    step.name,
-		Input:   []byte(step.input),
-	}
-}
-
-func (st *chatAPIState) Clear() {
-	st.steps = st.steps[:0]
-}
-
-func (st *chatAPIState) Usage() (int64, int64, int64) {
-	return st.inputTokens, st.outputTokens, st.contextTokens
-}
-
-func (step chatAPIStep) toolCall() openai.ChatCompletionMessageToolCallUnionParam {
-	if step.typ != ToolCallStep {
-		panic("must be a tool call step")
-	}
-
-	return openai.ChatCompletionMessageToolCallUnionParam{
-		OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
-			ID: step.id,
-			Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
-				Name:      step.name,
-				Arguments: step.input,
-			},
-		},
-	}
-}
-
-func (st *chatAPIState) toMessages() ([]openai.ChatCompletionMessageParamUnion, int) {
-	var msgs []openai.ChatCompletionMessageParamUnion
-	var txtLen int
-
-	if st.systemPrompt != "" {
-		msgs = append(msgs, openai.SystemMessage(st.systemPrompt))
-		txtLen += len(st.systemPrompt)
-	}
-
-	for _, step := range st.steps {
-		switch step.typ {
-		case PromptStep:
-			msgs = append(msgs, openai.UserMessage(step.content))
-			txtLen += len(step.content)
-
-		case ModelResponseStep:
-			msgs = append(msgs, openai.AssistantMessage(step.content))
-			txtLen += len(step.content)
-
-		case ToolCallStep:
-			if len(msgs) == 0 || msgs[len(msgs)-1].OfAssistant == nil {
-				msgs = append(msgs, openai.ChatCompletionMessageParamUnion{
-					OfAssistant: &openai.ChatCompletionAssistantMessageParam{
-						ToolCalls: []openai.ChatCompletionMessageToolCallUnionParam{
-							step.toolCall(),
-						},
-					},
-				})
-			} else {
-				asst := msgs[len(msgs)-1].OfAssistant
-				asst.ToolCalls = append(asst.ToolCalls, step.toolCall())
-			}
-
-		case ToolOutputStep:
-			msgs = append(msgs, openai.ToolMessage(step.content, step.id))
-			txtLen += len(step.content)
-
-		case ThinkingStep:
-			// No portable Chat Completions field for reasoning; skip on resend.
-
-		default:
-			panic(fmt.Sprintf("unexpected step type: %s", step.typ))
-		}
-	}
-
-	return msgs, txtLen
-}
-
 func toOpenAICompatTools(tools map[string]Tool) []openai.ChatCompletionToolUnionParam {
 	var toolParams []openai.ChatCompletionToolUnionParam
 	for _, tl := range tools {
@@ -287,6 +190,103 @@ func (clnt *chatAPIClient) Generate(ctx context.Context, amdl Model, ast State,
 	}
 
 	return nil
+}
+
+func (st *chatAPIState) SystemPrompt(s string) {
+	st.systemPrompt = s
+}
+
+func (st *chatAPIState) Prompt(s string) {
+	st.steps = append(st.steps, chatAPIStep{
+		typ:     PromptStep,
+		content: s,
+	})
+}
+
+func (st *chatAPIState) Len() int {
+	return len(st.steps)
+}
+
+func (st *chatAPIState) Step(n int) Step {
+	step := st.steps[n]
+	return Step{
+		Type:    step.typ,
+		Content: step.content,
+		Name:    step.name,
+		Input:   []byte(step.input),
+	}
+}
+
+func (st *chatAPIState) Clear() {
+	st.steps = st.steps[:0]
+}
+
+func (st *chatAPIState) Usage() (int64, int64, int64) {
+	return st.inputTokens, st.outputTokens, st.contextTokens
+}
+
+func (step chatAPIStep) toolCall() openai.ChatCompletionMessageToolCallUnionParam {
+	if step.typ != ToolCallStep {
+		panic("must be a tool call step")
+	}
+
+	return openai.ChatCompletionMessageToolCallUnionParam{
+		OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+			ID: step.id,
+			Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+				Name:      step.name,
+				Arguments: step.input,
+			},
+		},
+	}
+}
+
+func (st *chatAPIState) toMessages() ([]openai.ChatCompletionMessageParamUnion, int) {
+	var msgs []openai.ChatCompletionMessageParamUnion
+	var txtLen int
+
+	if st.systemPrompt != "" {
+		msgs = append(msgs, openai.SystemMessage(st.systemPrompt))
+		txtLen += len(st.systemPrompt)
+	}
+
+	for _, step := range st.steps {
+		switch step.typ {
+		case PromptStep:
+			msgs = append(msgs, openai.UserMessage(step.content))
+			txtLen += len(step.content)
+
+		case ModelResponseStep:
+			msgs = append(msgs, openai.AssistantMessage(step.content))
+			txtLen += len(step.content)
+
+		case ToolCallStep:
+			if len(msgs) == 0 || msgs[len(msgs)-1].OfAssistant == nil {
+				msgs = append(msgs, openai.ChatCompletionMessageParamUnion{
+					OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+						ToolCalls: []openai.ChatCompletionMessageToolCallUnionParam{
+							step.toolCall(),
+						},
+					},
+				})
+			} else {
+				asst := msgs[len(msgs)-1].OfAssistant
+				asst.ToolCalls = append(asst.ToolCalls, step.toolCall())
+			}
+
+		case ToolOutputStep:
+			msgs = append(msgs, openai.ToolMessage(step.content, step.id))
+			txtLen += len(step.content)
+
+		case ThinkingStep:
+			// No portable Chat Completions field for reasoning; skip on resend.
+
+		default:
+			panic(fmt.Sprintf("unexpected step type: %s", step.typ))
+		}
+	}
+
+	return msgs, txtLen
 }
 
 func listOpenAICompatModels(ctx context.Context, client openai.Client) ([]ModelInfo, error) {

@@ -58,125 +58,6 @@ func (clnt *openAIClient) EffortLevels() []string {
 	return []string{"none", "minimal", "low", "medium", "high", "xhigh"}
 }
 
-func (st *openAIState) SystemPrompt(s string) {
-	st.systemPrompt = s
-}
-
-func (st *openAIState) Prompt(s string) {
-	st.steps = append(st.steps, openAIStep{
-		typ:     PromptStep,
-		content: s,
-	})
-}
-
-func (st *openAIState) Len() int {
-	return len(st.steps)
-}
-
-func (st *openAIState) Step(n int) Step {
-	step := st.steps[n]
-	return Step{
-		Type:    step.typ,
-		Content: step.content,
-		Name:    step.name,
-		Input:   json.RawMessage(step.input),
-	}
-}
-
-func (st *openAIState) Clear() {
-	st.steps = st.steps[:0]
-}
-
-func (st *openAIState) Usage() (int64, int64, int64) {
-	return st.inputTokens, st.outputTokens, st.contextTokens
-}
-
-func openAIInputText(role, text string) responses.ResponseInputItemUnionParam {
-	return responses.ResponseInputItemUnionParam{
-		OfInputMessage: &responses.ResponseInputItemMessageParam{
-			Role: role,
-			Content: []responses.ResponseInputContentUnionParam{
-				{
-					OfInputText: &responses.ResponseInputTextParam{
-						Text: text,
-					},
-				},
-			},
-		},
-	}
-}
-
-func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionParam, int) {
-	var lst []responses.ResponseInputItemUnionParam
-	var txtLen int
-
-	if st.systemPrompt != "" {
-		lst = append(lst, openAIInputText("system", st.systemPrompt))
-		txtLen += len(st.systemPrompt)
-	}
-
-	for idx, step := range st.steps {
-		switch step.typ {
-		case PromptStep:
-			lst = append(lst, openAIInputText("user", step.content))
-			txtLen += len(step.content)
-
-		case ModelResponseStep:
-			lst = append(lst, responses.ResponseInputItemUnionParam{
-				OfOutputMessage: &responses.ResponseOutputMessageParam{
-					Content: []responses.ResponseOutputMessageContentUnionParam{
-						{
-							OfOutputText: &responses.ResponseOutputTextParam{
-								Text: step.content,
-							},
-						},
-					},
-				},
-			})
-			txtLen += len(step.content)
-
-		case ThinkingStep:
-			if idx+1 < len(st.steps) && st.steps[idx+1].typ == ModelResponseStep {
-				lst = append(lst, responses.ResponseInputItemUnionParam{
-					OfReasoning: &responses.ResponseReasoningItemParam{
-						ID:               step.id,
-						EncryptedContent: openai_param.NewOpt(step.encrypted),
-						Summary: []responses.ResponseReasoningItemSummaryParam{
-							{
-								Text: step.content,
-							},
-						},
-					},
-				})
-				txtLen += len(step.content)
-			}
-
-		case ToolCallStep:
-			lst = append(lst, responses.ResponseInputItemUnionParam{
-				OfFunctionCall: &responses.ResponseFunctionToolCallParam{
-					Arguments: step.input,
-					CallID:    step.id,
-					Name:      step.name,
-				},
-			})
-			txtLen += len(step.input)
-
-		case ToolOutputStep:
-			lst = append(lst, responses.ResponseInputItemUnionParam{
-				OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-					CallID: step.id,
-					Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
-						OfString: openai_param.NewOpt(step.content),
-					},
-				},
-			})
-			txtLen += len(step.content)
-		}
-	}
-
-	return lst, txtLen
-}
-
 func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
 	var toolParams []responses.ToolUnionParam
 	for _, tl := range tools {
@@ -402,6 +283,125 @@ func (clnt *openAIClient) Generate(ctx context.Context, amdl Model, ast State,
 	}
 
 	return nil
+}
+
+func (st *openAIState) SystemPrompt(s string) {
+	st.systemPrompt = s
+}
+
+func (st *openAIState) Prompt(s string) {
+	st.steps = append(st.steps, openAIStep{
+		typ:     PromptStep,
+		content: s,
+	})
+}
+
+func (st *openAIState) Len() int {
+	return len(st.steps)
+}
+
+func (st *openAIState) Step(n int) Step {
+	step := st.steps[n]
+	return Step{
+		Type:    step.typ,
+		Content: step.content,
+		Name:    step.name,
+		Input:   json.RawMessage(step.input),
+	}
+}
+
+func (st *openAIState) Clear() {
+	st.steps = st.steps[:0]
+}
+
+func (st *openAIState) Usage() (int64, int64, int64) {
+	return st.inputTokens, st.outputTokens, st.contextTokens
+}
+
+func openAIInputText(role, text string) responses.ResponseInputItemUnionParam {
+	return responses.ResponseInputItemUnionParam{
+		OfInputMessage: &responses.ResponseInputItemMessageParam{
+			Role: role,
+			Content: []responses.ResponseInputContentUnionParam{
+				{
+					OfInputText: &responses.ResponseInputTextParam{
+						Text: text,
+					},
+				},
+			},
+		},
+	}
+}
+
+func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionParam, int) {
+	var lst []responses.ResponseInputItemUnionParam
+	var txtLen int
+
+	if st.systemPrompt != "" {
+		lst = append(lst, openAIInputText("system", st.systemPrompt))
+		txtLen += len(st.systemPrompt)
+	}
+
+	for idx, step := range st.steps {
+		switch step.typ {
+		case PromptStep:
+			lst = append(lst, openAIInputText("user", step.content))
+			txtLen += len(step.content)
+
+		case ModelResponseStep:
+			lst = append(lst, responses.ResponseInputItemUnionParam{
+				OfOutputMessage: &responses.ResponseOutputMessageParam{
+					Content: []responses.ResponseOutputMessageContentUnionParam{
+						{
+							OfOutputText: &responses.ResponseOutputTextParam{
+								Text: step.content,
+							},
+						},
+					},
+				},
+			})
+			txtLen += len(step.content)
+
+		case ThinkingStep:
+			if idx+1 < len(st.steps) && st.steps[idx+1].typ == ModelResponseStep {
+				lst = append(lst, responses.ResponseInputItemUnionParam{
+					OfReasoning: &responses.ResponseReasoningItemParam{
+						ID:               step.id,
+						EncryptedContent: openai_param.NewOpt(step.encrypted),
+						Summary: []responses.ResponseReasoningItemSummaryParam{
+							{
+								Text: step.content,
+							},
+						},
+					},
+				})
+				txtLen += len(step.content)
+			}
+
+		case ToolCallStep:
+			lst = append(lst, responses.ResponseInputItemUnionParam{
+				OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+					Arguments: step.input,
+					CallID:    step.id,
+					Name:      step.name,
+				},
+			})
+			txtLen += len(step.input)
+
+		case ToolOutputStep:
+			lst = append(lst, responses.ResponseInputItemUnionParam{
+				OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+					CallID: step.id,
+					Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+						OfString: openai_param.NewOpt(step.content),
+					},
+				},
+			})
+			txtLen += len(step.content)
+		}
+	}
+
+	return lst, txtLen
 }
 
 func ListOpenAIModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {

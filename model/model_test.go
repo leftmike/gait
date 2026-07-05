@@ -64,6 +64,8 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 		clntCfg, ok := cfg.FindClientConfig(c.provider)
 		if !c.local && (!ok || clntCfg.APIKey == "") {
 			t.Fatalf("missing api key for provider: %s", c.provider)
+		} else if c.local {
+			clntCfg.Provider = c.provider
 		}
 
 		clnt, err := model.NewClient(clntCfg)

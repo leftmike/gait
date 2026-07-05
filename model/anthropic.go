@@ -57,85 +57,6 @@ func (clnt *anthropicClient) EffortLevels() []string {
 	return []string{"low", "medium", "high", "xhigh", "max"}
 }
 
-func (st *anthropicState) SystemPrompt(s string) {
-	st.systemPrompt = s
-}
-
-func (st *anthropicState) Prompt(s string) {
-	st.steps = append(st.steps, anthropicStep{
-		typ:     PromptStep,
-		content: s,
-	})
-}
-
-func (st *anthropicState) Len() int {
-	return len(st.steps)
-}
-
-func (st *anthropicState) Step(n int) Step {
-	step := st.steps[n]
-	return Step{
-		Type:    step.typ,
-		Content: step.content,
-		Name:    step.name,
-		Input:   step.input,
-	}
-}
-
-func (st *anthropicState) Clear() {
-	st.steps = st.steps[:0]
-}
-
-func (st *anthropicState) Usage() (int64, int64, int64) {
-	return st.inputTokens, st.outputTokens, st.contextTokens
-}
-
-func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
-	var params []anthropic.MessageParam
-	var txtLen int
-	for _, step := range st.steps {
-		var role anthropic.MessageParamRole
-		var blk anthropic.ContentBlockParamUnion
-
-		switch step.typ {
-		case PromptStep:
-			role = anthropic.MessageParamRoleUser
-			blk = anthropic.NewTextBlock(step.content)
-
-		case ModelResponseStep:
-			role = anthropic.MessageParamRoleAssistant
-			blk = anthropic.NewTextBlock(step.content)
-
-		case ThinkingStep:
-			role = anthropic.MessageParamRoleAssistant
-			blk = anthropic.NewThinkingBlock(step.signature, step.content)
-
-		case ToolCallStep:
-			role = anthropic.MessageParamRoleAssistant
-			blk = anthropic.NewToolUseBlock(step.id, step.input, step.name)
-
-		case ToolOutputStep:
-			role = anthropic.MessageParamRoleUser
-			blk = anthropic.NewToolResultBlock(step.id, step.content, step.isError)
-
-		default:
-			panic(fmt.Sprintf("unexpected step type: %d", step.typ))
-		}
-
-		if len(params) == 0 || params[len(params)-1].Role != role {
-			params = append(params, anthropic.MessageParam{
-				Role:    role,
-				Content: []anthropic.ContentBlockParamUnion{blk},
-			})
-		} else {
-			params[len(params)-1].Content = append(params[len(params)-1].Content, blk)
-		}
-		txtLen += len(step.content) + len(step.input)
-	}
-
-	return params, txtLen
-}
-
 func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
 	var req []string
 	if val, ok := scm["required"]; ok {
@@ -203,6 +124,52 @@ func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[strin
 
 func (clnt *anthropicClient) NewState() State {
 	return &anthropicState{}
+}
+
+func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
+	var params []anthropic.MessageParam
+	var txtLen int
+	for _, step := range st.steps {
+		var role anthropic.MessageParamRole
+		var blk anthropic.ContentBlockParamUnion
+
+		switch step.typ {
+		case PromptStep:
+			role = anthropic.MessageParamRoleUser
+			blk = anthropic.NewTextBlock(step.content)
+
+		case ModelResponseStep:
+			role = anthropic.MessageParamRoleAssistant
+			blk = anthropic.NewTextBlock(step.content)
+
+		case ThinkingStep:
+			role = anthropic.MessageParamRoleAssistant
+			blk = anthropic.NewThinkingBlock(step.signature, step.content)
+
+		case ToolCallStep:
+			role = anthropic.MessageParamRoleAssistant
+			blk = anthropic.NewToolUseBlock(step.id, step.input, step.name)
+
+		case ToolOutputStep:
+			role = anthropic.MessageParamRoleUser
+			blk = anthropic.NewToolResultBlock(step.id, step.content, step.isError)
+
+		default:
+			panic(fmt.Sprintf("unexpected step type: %d", step.typ))
+		}
+
+		if len(params) == 0 || params[len(params)-1].Role != role {
+			params = append(params, anthropic.MessageParam{
+				Role:    role,
+				Content: []anthropic.ContentBlockParamUnion{blk},
+			})
+		} else {
+			params[len(params)-1].Content = append(params[len(params)-1].Content, blk)
+		}
+		txtLen += len(step.content) + len(step.input)
+	}
+
+	return params, txtLen
 }
 
 func (clnt *anthropicClient) Generate(ctx context.Context, amdl Model, ast State,
@@ -375,6 +342,39 @@ func (clnt *anthropicClient) Generate(ctx context.Context, amdl Model, ast State
 	}
 
 	return nil
+}
+
+func (st *anthropicState) SystemPrompt(s string) {
+	st.systemPrompt = s
+}
+
+func (st *anthropicState) Prompt(s string) {
+	st.steps = append(st.steps, anthropicStep{
+		typ:     PromptStep,
+		content: s,
+	})
+}
+
+func (st *anthropicState) Len() int {
+	return len(st.steps)
+}
+
+func (st *anthropicState) Step(n int) Step {
+	step := st.steps[n]
+	return Step{
+		Type:    step.typ,
+		Content: step.content,
+		Name:    step.name,
+		Input:   step.input,
+	}
+}
+
+func (st *anthropicState) Clear() {
+	st.steps = st.steps[:0]
+}
+
+func (st *anthropicState) Usage() (int64, int64, int64) {
+	return st.inputTokens, st.outputTokens, st.contextTokens
 }
 
 func ListAnthropicModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {

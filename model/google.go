@@ -46,6 +46,12 @@ type googleState struct {
 	contextTokens int32
 }
 
+type googleToolCall struct {
+	buf []byte
+	err error
+	prt *genai.Part
+}
+
 func newGoogleClient(apiKey string) (Client, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -66,37 +72,86 @@ func (clnt *googleClient) EffortLevels() []string {
 	return []string{"minimal", "low", "medium", "high"}
 }
 
-func (st *googleState) SystemPrompt(s string) {
-	st.systemPrompt = s
-}
-
-func (st *googleState) Prompt(s string) {
-	st.steps = append(st.steps, googleStep{
-		typ:     PromptStep,
-		content: s,
-	})
-}
-
-func (st *googleState) Len() int {
-	return len(st.steps)
-}
-
-func (st *googleState) Step(n int) Step {
-	step := st.steps[n]
-	return Step{
-		Type:    step.typ,
-		Content: step.content,
-		Name:    step.name,
-		Input:   step.input,
+func toGoogleFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
+	var decls []*genai.FunctionDeclaration
+	for _, tl := range tools {
+		decls = append(decls, &genai.FunctionDeclaration{
+			Description:          tl.Description,
+			Name:                 tl.Name,
+			ParametersJsonSchema: tl.Schema,
+		})
 	}
+
+	return decls
 }
 
-func (st *googleState) Clear() {
-	st.steps = st.steps[:0]
+func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
+	error) {
+
+	var thinkingLevel genai.ThinkingLevel
+	switch mdlCfg.Effort {
+	case "", "default":
+		thinkingLevel = genai.ThinkingLevelUnspecified
+	case "minimal":
+		thinkingLevel = genai.ThinkingLevelMinimal
+	case "low":
+		thinkingLevel = genai.ThinkingLevelLow
+	case "medium":
+		thinkingLevel = genai.ThinkingLevelMedium
+	case "high":
+		thinkingLevel = genai.ThinkingLevelHigh
+	default:
+		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	}
+
+	var maxOutputTokens int32
+	if mdlCfg.MaxTokens > 0 {
+		maxOutputTokens = int32(mdlCfg.MaxTokens)
+	} else {
+		maxOutputTokens = 65536
+	}
+
+	return &googleModel{
+		model:           mdlCfg.Model,
+		includeThoughts: mdlCfg.IncludeThoughts,
+		thinkingLevel:   thinkingLevel,
+		maxOutputTokens: maxOutputTokens,
+		tools:           tools,
+		funcDecls:       toGoogleFuncDecls(tools),
+	}, nil
 }
 
-func (st *googleState) Usage() (int64, int64, int64) {
-	return int64(st.inputTokens), int64(st.outputTokens), int64(st.contextTokens)
+func (clnt *googleClient) NewState() State {
+	return &googleState{}
+}
+
+func partType(prt *genai.Part) string {
+	if prt.MediaResolution != nil {
+		return "media resolution"
+	} else if prt.CodeExecutionResult != nil {
+		return "code execution result"
+	} else if prt.ExecutableCode != nil {
+		return "executable code"
+	} else if prt.FileData != nil {
+		return "file data"
+	} else if prt.FunctionCall != nil {
+		return "function call"
+	} else if prt.FunctionResponse != nil {
+		return "function response"
+	} else if prt.InlineData != nil {
+		return "inline data"
+	} else if prt.Text != "" {
+		if prt.Thought {
+			return "thought"
+		}
+		return "text"
+	} else if prt.ThoughtSignature != nil {
+		return "thought signature"
+	} else if prt.VideoMetadata != nil {
+		return "video metadata"
+	}
+
+	return "--empty--"
 }
 
 func (st *googleState) toContents() ([]*genai.Content, int) {
@@ -171,94 +226,6 @@ func (st *googleState) toContents() ([]*genai.Content, int) {
 	}
 
 	return cnts, txtLen
-}
-
-func toGoogleFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
-	var decls []*genai.FunctionDeclaration
-	for _, tl := range tools {
-		decls = append(decls, &genai.FunctionDeclaration{
-			Description:          tl.Description,
-			Name:                 tl.Name,
-			ParametersJsonSchema: tl.Schema,
-		})
-	}
-
-	return decls
-}
-
-func partType(prt *genai.Part) string {
-	if prt.MediaResolution != nil {
-		return "media resolution"
-	} else if prt.CodeExecutionResult != nil {
-		return "code execution result"
-	} else if prt.ExecutableCode != nil {
-		return "executable code"
-	} else if prt.FileData != nil {
-		return "file data"
-	} else if prt.FunctionCall != nil {
-		return "function call"
-	} else if prt.FunctionResponse != nil {
-		return "function response"
-	} else if prt.InlineData != nil {
-		return "inline data"
-	} else if prt.Text != "" {
-		if prt.Thought {
-			return "thought"
-		}
-		return "text"
-	} else if prt.ThoughtSignature != nil {
-		return "thought signature"
-	} else if prt.VideoMetadata != nil {
-		return "video metadata"
-	}
-
-	return "--empty--"
-}
-
-func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
-	error) {
-
-	var thinkingLevel genai.ThinkingLevel
-	switch mdlCfg.Effort {
-	case "", "default":
-		thinkingLevel = genai.ThinkingLevelUnspecified
-	case "minimal":
-		thinkingLevel = genai.ThinkingLevelMinimal
-	case "low":
-		thinkingLevel = genai.ThinkingLevelLow
-	case "medium":
-		thinkingLevel = genai.ThinkingLevelMedium
-	case "high":
-		thinkingLevel = genai.ThinkingLevelHigh
-	default:
-		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
-	}
-
-	var maxOutputTokens int32
-	if mdlCfg.MaxTokens > 0 {
-		maxOutputTokens = int32(mdlCfg.MaxTokens)
-	} else {
-		maxOutputTokens = 65536
-	}
-
-	return &googleModel{
-		model:           mdlCfg.Model,
-		includeThoughts: mdlCfg.IncludeThoughts,
-		thinkingLevel:   thinkingLevel,
-		maxOutputTokens: maxOutputTokens,
-		tools:           tools,
-		funcDecls:       toGoogleFuncDecls(tools),
-	}, nil
-}
-
-func (clnt *googleClient) NewState() State {
-	return &googleState{}
-}
-
-type googleToolCall struct {
-	buf []byte
-	err error
-	prt *genai.Part
 }
 
 func (clnt *googleClient) Generate(ctx context.Context, amdl Model, ast State,
@@ -431,6 +398,39 @@ func (clnt *googleClient) Generate(ctx context.Context, amdl Model, ast State,
 	}
 
 	return nil
+}
+
+func (st *googleState) SystemPrompt(s string) {
+	st.systemPrompt = s
+}
+
+func (st *googleState) Prompt(s string) {
+	st.steps = append(st.steps, googleStep{
+		typ:     PromptStep,
+		content: s,
+	})
+}
+
+func (st *googleState) Len() int {
+	return len(st.steps)
+}
+
+func (st *googleState) Step(n int) Step {
+	step := st.steps[n]
+	return Step{
+		Type:    step.typ,
+		Content: step.content,
+		Name:    step.name,
+		Input:   step.input,
+	}
+}
+
+func (st *googleState) Clear() {
+	st.steps = st.steps[:0]
+}
+
+func (st *googleState) Usage() (int64, int64, int64) {
+	return int64(st.inputTokens), int64(st.outputTokens), int64(st.contextTokens)
 }
 
 func ListGoogleModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {

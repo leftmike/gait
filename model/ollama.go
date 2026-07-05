@@ -48,6 +48,62 @@ func (clnt *ollamaClient) EffortLevels() []string {
 	return []string{"low", "medium", "high", "max"}
 }
 
+func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
+	var toolDefs ollama.Tools
+	for _, tl := range tools {
+		schemaJSON, err := json.Marshal(tl.Schema)
+		if err != nil {
+			return nil, err
+		}
+		var params ollama.ToolFunctionParameters
+		if err := json.Unmarshal(schemaJSON, &params); err != nil {
+			return nil, err
+		}
+		toolDefs = append(toolDefs, ollama.Tool{
+			Type: "function",
+			Function: ollama.ToolFunction{
+				Name:        tl.Name,
+				Description: tl.Description,
+				Parameters:  params,
+			},
+		})
+	}
+	return toolDefs, nil
+}
+
+func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
+	error) {
+
+	var think *ollama.ThinkValue
+	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
+		think = &ollama.ThinkValue{Value: mdlCfg.Effort}
+	} else if mdlCfg.IncludeThoughts {
+		think = &ollama.ThinkValue{Value: true}
+	}
+
+	numPredict := 8192
+	if mdlCfg.MaxTokens > 0 {
+		numPredict = mdlCfg.MaxTokens
+	}
+
+	toolDefs, err := toOllamaTools(tools)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ollamaModel{
+		model:      mdlCfg.Model,
+		think:      think,
+		numPredict: numPredict,
+		tools:      tools,
+		toolDefs:   toolDefs,
+	}, nil
+}
+
+func (clnt *ollamaClient) NewState() State {
+	return &chatAPIState{}
+}
+
 func (st *chatAPIState) toOllamaMessages() ([]ollama.Message, int) {
 	var msgs []ollama.Message
 	var txtLen int
@@ -110,62 +166,6 @@ func (st *chatAPIState) toOllamaMessages() ([]ollama.Message, int) {
 	}
 
 	return msgs, txtLen
-}
-
-func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
-	var toolDefs ollama.Tools
-	for _, tl := range tools {
-		schemaJSON, err := json.Marshal(tl.Schema)
-		if err != nil {
-			return nil, err
-		}
-		var params ollama.ToolFunctionParameters
-		if err := json.Unmarshal(schemaJSON, &params); err != nil {
-			return nil, err
-		}
-		toolDefs = append(toolDefs, ollama.Tool{
-			Type: "function",
-			Function: ollama.ToolFunction{
-				Name:        tl.Name,
-				Description: tl.Description,
-				Parameters:  params,
-			},
-		})
-	}
-	return toolDefs, nil
-}
-
-func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
-	error) {
-
-	var think *ollama.ThinkValue
-	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
-		think = &ollama.ThinkValue{Value: mdlCfg.Effort}
-	} else if mdlCfg.IncludeThoughts {
-		think = &ollama.ThinkValue{Value: true}
-	}
-
-	numPredict := 8192
-	if mdlCfg.MaxTokens > 0 {
-		numPredict = mdlCfg.MaxTokens
-	}
-
-	toolDefs, err := toOllamaTools(tools)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ollamaModel{
-		model:      mdlCfg.Model,
-		think:      think,
-		numPredict: numPredict,
-		tools:      tools,
-		toolDefs:   toolDefs,
-	}, nil
-}
-
-func (clnt *ollamaClient) NewState() State {
-	return &chatAPIState{}
 }
 
 func (clnt *ollamaClient) Generate(ctx context.Context, amdl Model, ast State,
