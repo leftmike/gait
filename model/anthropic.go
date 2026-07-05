@@ -19,15 +19,13 @@ type anthropicClient struct {
 	apiKey string
 }
 
-func NewAnthropicClient(apiKey string) (Client, error) {
-	return &anthropicClient{
-		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
-		apiKey: apiKey,
-	}, nil
-}
-
-func (clnt *anthropicClient) EffortLevels() []string {
-	return []string{"low", "medium", "high", "xhigh", "max"}
+type anthropicModel struct {
+	model           anthropic.Model
+	includeThoughts bool
+	effort          anthropic.OutputConfigEffort
+	maxTokens       int64
+	tools           map[string]Tool
+	toolParams      []anthropic.ToolUnionParam
 }
 
 type anthropicStep struct {
@@ -46,6 +44,17 @@ type anthropicState struct {
 	inputTokens   int64
 	outputTokens  int64
 	contextTokens int64
+}
+
+func NewAnthropicClient(apiKey string) (Client, error) {
+	return &anthropicClient{
+		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
+		apiKey: apiKey,
+	}, nil
+}
+
+func (clnt *anthropicClient) EffortLevels() []string {
+	return []string{"low", "medium", "high", "xhigh", "max"}
 }
 
 func (st *anthropicState) SystemPrompt(s string) {
@@ -156,69 +165,79 @@ func toAnthropicTools(tools map[string]Tool) []anthropic.ToolUnionParam {
 	return toolParams
 }
 
-func toAnthropicEffort(opts *config.Options) anthropic.OutputConfigEffort {
-	switch opts.Effort {
-	case "", "default":
-		return ""
-	case "low":
-		return anthropic.OutputConfigEffortLow
-	case "medium":
-		return anthropic.OutputConfigEffortMedium
-	case "high":
-		return anthropic.OutputConfigEffortHigh
-	case "xhigh":
-		return anthropic.OutputConfigEffortXhigh
-	case "max":
-		return anthropic.OutputConfigEffortMax
+func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
+	error) {
+
+	maxTokens := int64(64000)
+	if mdlCfg.MaxTokens > 0 {
+		maxTokens = int64(mdlCfg.MaxTokens)
 	}
 
-	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
+	var effort anthropic.OutputConfigEffort
+	switch mdlCfg.Effort {
+	case "", "default":
+		effort = ""
+	case "low":
+		effort = anthropic.OutputConfigEffortLow
+	case "medium":
+		effort = anthropic.OutputConfigEffortMedium
+	case "high":
+		effort = anthropic.OutputConfigEffortHigh
+	case "xhigh":
+		effort = anthropic.OutputConfigEffortXhigh
+	case "max":
+		effort = anthropic.OutputConfigEffortMax
+	default:
+		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	}
+
+	return &anthropicModel{
+		model:           anthropic.Model(mdlCfg.Model),
+		includeThoughts: mdlCfg.IncludeThoughts,
+		effort:          effort,
+		maxTokens:       maxTokens,
+		tools:           tools,
+		toolParams:      toAnthropicTools(tools),
+	}, nil
 }
 
 func (clnt *anthropicClient) NewState() State {
 	return &anthropicState{}
 }
 
-func anthropicMaxTokens(opts *config.Options) int64 {
-	if opts.MaxTokens > 0 {
-		return int64(opts.MaxTokens)
-	}
-	return 64000
-}
+func (clnt *anthropicClient) Generate(ctx context.Context, amdl Model, ast State,
+	opts *Options) error {
 
-func (clnt *anthropicClient) Generate(ctx context.Context, opts *config.Options, ast State,
-	tools map[string]Tool) error {
-
+	mdl := amdl.(*anthropicModel)
 	st := ast.(*anthropicState)
-	toolParams := toAnthropicTools(tools)
-	effort := toAnthropicEffort(opts)
 
 	for {
 		msgParams, txtLen := st.toMessageParams()
 		req := anthropic.MessageNewParams{
-			MaxTokens: anthropicMaxTokens(opts),
+			MaxTokens: mdl.maxTokens,
 			Messages:  msgParams,
-			Model:     anthropic.Model(opts.Model),
-			Tools:     toolParams,
+			Model:     mdl.model,
+			Tools:     mdl.toolParams,
 		}
 		if st.systemPrompt != "" {
 			req.System = []anthropic.TextBlockParam{{Text: st.systemPrompt}}
 			txtLen += len(st.systemPrompt)
 		}
 
-		if strings.Contains(opts.Model, "-4-5-") || strings.Contains(opts.Model, "-4-1-") {
+		// XXX: move to NewModel
+		if strings.Contains(mdl.model, "-4-5-") || strings.Contains(mdl.model, "-4-1-") {
 			req.Thinking.OfEnabled = &anthropic.ThinkingConfigEnabledParam{
 				BudgetTokens: 4096,
 			}
 		} else {
 			req.OutputConfig = anthropic.OutputConfigParam{
-				Effort: effort,
+				Effort: mdl.effort,
 			}
-			if opts.IncludeThoughts {
+			if mdl.includeThoughts {
 				req.Thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
 					Display: "summarized",
 				}
-			} else if effort != "" {
+			} else if mdl.effort != "" {
 				req.Thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
 					Display: "omitted",
 				}
@@ -228,8 +247,7 @@ func (clnt *anthropicClient) Generate(ctx context.Context, opts *config.Options,
 		if opts.Trace {
 			fmt.Print("Trace: Anthropic Messages.NewStreaming(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", anthropic.Model(opts.Model), len(tools),
-					txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
@@ -337,7 +355,7 @@ func (clnt *anthropicClient) Generate(ctx context.Context, opts *config.Options,
 				fmt.Println()
 			}
 
-			out, err := callTool(ctx, tools, blk.Name, []byte(blk.Input), opts)
+			out, err := callTool(ctx, mdl.tools, blk.Name, []byte(blk.Input))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", blk.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)

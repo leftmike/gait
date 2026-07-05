@@ -10,9 +10,20 @@ import (
 )
 
 type Client interface {
-	EffortLevels() []string
+	EffortLevels() []string // XXX: move to Model?
+	NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model, error)
 	NewState() State
-	Generate(ctx context.Context, opts *config.Options, st State, tools map[string]Tool) error
+	Generate(ctx context.Context, mdl Model, st State, opts *Options) error
+}
+
+type Model interface {
+	// XXX: SetTools(tools map[string]Tool)
+	// XXX: Set*
+}
+
+type Options struct {
+	Verbose bool
+	Trace   bool
 }
 
 type ModelInfo struct {

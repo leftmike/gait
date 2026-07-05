@@ -12,17 +12,15 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsimple"
 )
 
-type Options struct {
+type ModelConfig struct {
 	Model           string
-	Verbose         bool
-	Trace           bool
 	IncludeThoughts bool
 	Effort          string
 	MaxTokens       int
 }
 
-type Provider struct {
-	Name      string `hcl:"name,label"`
+type ClientConfig struct {
+	Provider  string `hcl:"provider,label"`
 	Model     string `hcl:"model,optional"`
 	APIKey    string `hcl:"api_key,optional"`
 	BaseURL   string `hcl:"base_url,optional"`
@@ -54,21 +52,21 @@ type MCPServer struct {
 }
 
 type Config struct {
-	Provider    string      `hcl:"provider,optional"`
-	Providers   []Provider  `hcl:"provider,block"`
-	MCPServers  []MCPServer `hcl:"mcpserver,block"`
-	Skills      []string    `hcl:"skills,optional"`
-	BraveAPIKey string      `hcl:"brave_api_key,optional"`
+	Provider      string         `hcl:"provider,optional"`
+	ClientConfigs []ClientConfig `hcl:"provider,block"`
+	MCPServers    []MCPServer    `hcl:"mcpserver,block"`
+	Skills        []string       `hcl:"skills,optional"`
+	BraveAPIKey   string         `hcl:"brave_api_key,optional"`
 }
 
-func (cfg *Config) FindProvider(name string) *Provider {
-	for _, provider := range cfg.Providers {
-		if strings.EqualFold(name, provider.Name) {
-			return &provider
+func (cfg *Config) FindClientConfig(provider string) (ClientConfig, bool) {
+	for _, clntCfg := range cfg.ClientConfigs {
+		if strings.EqualFold(provider, clntCfg.Provider) {
+			return clntCfg, true
 		}
 	}
 
-	return nil
+	return ClientConfig{}, false
 }
 
 func configFilenames() []string {
@@ -92,7 +90,7 @@ func ReadConfig(filenames []string) (*Config, error) {
 	return nil, fmt.Errorf("config file not found: %v", filenames)
 }
 
-func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
+func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	var configFilename string
 	var noConfig bool
 	var useOpenAI bool
@@ -100,7 +98,7 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	var useGemini bool
 	var useOllama bool
 	var useLlamaCpp bool
-	var modelName string
+	var model string
 	var apiKey string
 	var baseURL string
 	var thoughts, hasThoughts bool
@@ -115,7 +113,7 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	fs.BoolVar(&useGemini, "gemini", false, "use gemini")
 	fs.BoolVar(&useOllama, "ollama", false, "use ollama")
 	fs.BoolVar(&useLlamaCpp, "llamacpp", false, "use llama.cpp")
-	fs.StringVar(&modelName, "model", "", "generate using this model `model`")
+	fs.StringVar(&model, "model", "", "generate using this model `model`")
 	fs.StringVar(&apiKey, "apikey", "", "`api key` to use")
 	fs.StringVar(&baseURL, "baseurl", "", "`base url` of the model server")
 	fs.BoolFunc("thoughts", "include `thoughts`", func(s string) error {
@@ -133,7 +131,7 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	fs.Parse(os.Args[1:])
 
 	if maxTokens < 0 {
-		return nil, nil, nil, fmt.Errorf("max-tokens must be positive")
+		return ModelConfig{}, ClientConfig{}, nil, fmt.Errorf("max-tokens must be positive")
 	}
 
 	providers := map[string]bool{
@@ -148,7 +146,8 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 	for name, use := range providers {
 		if use {
 			if provider != "" {
-				return nil, nil, nil, errors.New("multiple providers specified")
+				return ModelConfig{}, ClientConfig{}, nil,
+					errors.New("multiple providers specified")
 			}
 			provider = name
 		}
@@ -166,31 +165,31 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 		var err error
 		cfg, err = ReadConfig(filenames)
 		if err != nil {
-			return nil, nil, nil, err
+			return ModelConfig{}, ClientConfig{}, nil, err
 		}
 
 		if provider == "" {
 			provider = cfg.Provider
 		}
-		p := cfg.FindProvider(provider)
+		clntCfg, ok := cfg.FindClientConfig(provider)
 
-		if modelName == "" && p != nil {
-			modelName = p.Model
+		if model == "" && ok {
+			model = clntCfg.Model
 		}
-		if apiKey == "" && p != nil {
-			apiKey = p.APIKey
+		if apiKey == "" && ok {
+			apiKey = clntCfg.APIKey
 		}
-		if baseURL == "" && p != nil {
-			baseURL = p.BaseURL
+		if baseURL == "" && ok {
+			baseURL = clntCfg.BaseURL
 		}
-		if !hasThoughts && p != nil {
-			thoughts = p.Thoughts
+		if !hasThoughts && ok {
+			thoughts = clntCfg.Thoughts
 		}
-		if effort == "" && p != nil {
-			effort = p.Effort
+		if effort == "" && ok {
+			effort = clntCfg.Effort
 		}
-		if maxTokens == 0 && p != nil {
-			maxTokens = p.MaxTokens
+		if maxTokens == 0 && ok {
+			maxTokens = clntCfg.MaxTokens
 		}
 
 		if braveAPIKey != "" {
@@ -200,14 +199,14 @@ func ParseFlags(fs *flag.FlagSet) (*Options, *Provider, *Config, error) {
 		}
 	}
 
-	return &Options{
+	return ModelConfig{
+			Model:           model,
 			IncludeThoughts: thoughts,
 			Effort:          effort,
-			Model:           modelName,
 			MaxTokens:       maxTokens,
-		}, &Provider{
-			Name:    provider,
-			APIKey:  apiKey,
-			BaseURL: baseURL,
+		}, ClientConfig{
+			Provider: provider,
+			APIKey:   apiKey,
+			BaseURL:  baseURL,
 		}, cfg, nil
 }

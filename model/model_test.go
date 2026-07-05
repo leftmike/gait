@@ -23,9 +23,10 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-type testModelFunc func(t *testing.T, clnt model.Client, provider, name string, opts *config.Options)
+type testModelFunc func(t *testing.T, clnt model.Client, provider, name string,
+	mdlCfg config.ModelConfig)
 
-func testModels(t *testing.T, test testModelFunc, opts *config.Options) {
+func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 	t.Helper()
 
 	cfg, err := config.ReadConfig([]string{"./gait.hcl", "../gait.hcl"})
@@ -50,7 +51,7 @@ func testModels(t *testing.T, test testModelFunc, opts *config.Options) {
 	for _, c := range cases {
 		if *provider != "" && *provider != c.provider {
 			continue
-		} else if opts.IncludeThoughts && !c.thoughts {
+		} else if mdlCfg.IncludeThoughts && !c.thoughts {
 			continue
 		} else if testing.Short() && !c.short {
 			fmt.Printf("skipping %s %s\n", c.provider, c.model)
@@ -60,39 +61,35 @@ func testModels(t *testing.T, test testModelFunc, opts *config.Options) {
 			continue
 		}
 
-		p := cfg.FindProvider(c.provider)
-		if c.local {
-			if p == nil {
-				p = &config.Provider{}
-			}
-		} else if p == nil || p.APIKey == "" {
+		clntCfg, ok := cfg.FindClientConfig(c.provider)
+		if !c.local && (!ok || clntCfg.APIKey == "") {
 			t.Fatalf("missing api key for provider: %s", c.provider)
 		}
 
 		var clnt model.Client
 		switch c.provider {
 		case "openai":
-			clnt, err = model.NewOpenAIClient(p.APIKey)
+			clnt, err = model.NewOpenAIClient(clntCfg.APIKey)
 			if err != nil {
 				t.Fatalf("NewOpenAIClient() failed with %s", err)
 			}
 		case "anthropic":
-			clnt, err = model.NewAnthropicClient(p.APIKey)
+			clnt, err = model.NewAnthropicClient(clntCfg.APIKey)
 			if err != nil {
 				t.Fatalf("NewAnthropicClient() failed with %s", err)
 			}
 		case "gemini":
-			clnt, err = model.NewGeminiClient(p.APIKey)
+			clnt, err = model.NewGeminiClient(clntCfg.APIKey)
 			if err != nil {
 				t.Fatalf("NewGeminiClient() failed with %s", err)
 			}
 		case "ollama":
-			clnt, err = model.NewOllamaClient(p)
+			clnt, err = model.NewOllamaClient(clntCfg)
 			if err != nil {
 				t.Fatalf("NewOllamaClient() failed with %s", err)
 			}
 		case "llamacpp":
-			clnt, err = model.NewLlamaCppClient(p)
+			clnt, err = model.NewLlamaCppClient(clntCfg)
 			if err != nil {
 				t.Fatalf("NewLlamaCppClient() failed with %s", err)
 			}
@@ -100,21 +97,27 @@ func testModels(t *testing.T, test testModelFunc, opts *config.Options) {
 			t.Fatalf("unknown provider: %s", c.provider)
 		}
 
-		testOpts := *opts
-		testOpts.Model = c.model
-		test(t, clnt, c.provider, c.model, &testOpts)
+		mdlCfg.Model = c.model
+		test(t, clnt, c.provider, c.model, mdlCfg)
 	}
 }
 
-func testSimple(t *testing.T, clnt model.Client, provider, name string, opts *config.Options) {
+func testSimple(t *testing.T, clnt model.Client, provider, name string,
+	mdlCfg config.ModelConfig) {
+
 	fmt.Println(provider, name)
 
-	ctx := context.Background()
+	mdl, err := clnt.NewModel(mdlCfg, nil)
+	if err != nil {
+		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
+	}
+
 	st := clnt.NewState()
 	st.Prompt("Hello")
 	n := st.Len()
 
-	err := clnt.Generate(ctx, opts, st, nil)
+	ctx := context.Background()
+	err = clnt.Generate(ctx, mdl, st, &model.Options{})
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -131,7 +134,7 @@ func testSimple(t *testing.T, clnt model.Client, provider, name string, opts *co
 }
 
 func TestSimple(t *testing.T) {
-	testModels(t, testSimple, &config.Options{})
+	testModels(t, testSimple, config.ModelConfig{})
 }
 
 var (
@@ -171,7 +174,9 @@ func currentWeather(ctx context.Context, buf []byte) (string, error) {
 	return "sunny and 70", nil
 }
 
-func testSimpleTool(t *testing.T, clnt model.Client, provider, name string, opts *config.Options) {
+func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
+	mdlCfg config.ModelConfig) {
+
 	fmt.Println(provider, name)
 
 	tools := map[string]model.Tool{
@@ -183,14 +188,20 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string, opts
 		},
 	}
 
-	ctx := context.Background()
+	mdl, err := clnt.NewModel(mdlCfg, tools)
+	if err != nil {
+		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
+	}
+
 	st := clnt.NewState()
 	st.Prompt(`What is the current temperature for seattle? You must call the
 current_temperature tool.`)
 	n := st.Len()
 
 	temperatureLocation = ""
-	err := clnt.Generate(ctx, opts, st, tools)
+
+	ctx := context.Background()
+	err = clnt.Generate(ctx, mdl, st, &model.Options{})
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -222,10 +233,12 @@ current_temperature tool.`)
 }
 
 func TestSimpleTool(t *testing.T) {
-	testModels(t, testSimpleTool, &config.Options{})
+	testModels(t, testSimpleTool, config.ModelConfig{})
 }
 
-func testMultiTool(t *testing.T, clnt model.Client, provider, name string, opts *config.Options) {
+func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
+	mdlCfg config.ModelConfig) {
+
 	fmt.Println(provider, name)
 
 	tools := map[string]model.Tool{
@@ -243,7 +256,11 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string, opts 
 		},
 	}
 
-	ctx := context.Background()
+	mdl, err := clnt.NewModel(mdlCfg, tools)
+	if err != nil {
+		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
+	}
+
 	st := clnt.NewState()
 	st.Prompt(`What is the current temperature and weather for seattle? You must call both the
 current_temperature and current_weather tools.`)
@@ -251,7 +268,9 @@ current_temperature and current_weather tools.`)
 
 	temperatureLocation = ""
 	weatherLocation = ""
-	err := clnt.Generate(ctx, opts, st, tools)
+
+	ctx := context.Background()
+	err = clnt.Generate(ctx, mdl, st, &model.Options{})
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
@@ -280,6 +299,8 @@ current_temperature and current_weather tools.`)
 			toolOutputs += 1
 		}
 	}
+
+	// XXX
 	if (provider != "openai" && toolCalls != 2) || (provider == "openai" && toolCalls < 2) {
 		t.Errorf("Generate(%s %s) tool call steps: got %d want 2", provider, name, toolCalls)
 	}
@@ -289,9 +310,9 @@ current_temperature and current_weather tools.`)
 }
 
 func TestMultiTool(t *testing.T) {
-	testModels(t, testMultiTool, &config.Options{})
+	testModels(t, testMultiTool, config.ModelConfig{})
 }
 
 func TestMultiToolThinking(t *testing.T) {
-	testModels(t, testMultiTool, &config.Options{IncludeThoughts: true})
+	testModels(t, testMultiTool, config.ModelConfig{IncludeThoughts: true})
 }

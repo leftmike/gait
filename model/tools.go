@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-
-	"github.com/leftmike/gait/config"
 )
 
 type ToolFunc func(ctx context.Context, buf []byte) (string, error)
@@ -180,8 +178,8 @@ func MustToolSchema[T any]() ToolSchema {
 	return ts
 }
 
-func callTool(ctx context.Context, tools map[string]Tool, name string, args []byte,
-	opts *config.Options) (string, error) {
+func callTool(ctx context.Context, tools map[string]Tool, name string, args []byte) (string,
+	error) {
 
 	for _, tl := range tools {
 		if tl.Name == name {

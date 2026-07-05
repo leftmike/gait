@@ -21,15 +21,13 @@ type openAIClient struct {
 	apiKey string
 }
 
-func NewOpenAIClient(apiKey string) (Client, error) {
-	return &openAIClient{
-		client: openai.NewClient(option.WithAPIKey(apiKey)),
-		apiKey: apiKey,
-	}, nil
-}
-
-func (clnt *openAIClient) EffortLevels() []string {
-	return []string{"none", "minimal", "low", "medium", "high", "xhigh"}
+type openAIModel struct {
+	model           string
+	includeThoughts bool
+	effort          responses.ReasoningEffort
+	maxOutputTokens int64
+	toolParams      []responses.ToolUnionParam
+	tools           map[string]Tool
 }
 
 type openAIStep struct {
@@ -47,6 +45,17 @@ type openAIState struct {
 	inputTokens   int64
 	outputTokens  int64
 	contextTokens int64
+}
+
+func NewOpenAIClient(apiKey string) (Client, error) {
+	return &openAIClient{
+		client: openai.NewClient(option.WithAPIKey(apiKey)),
+		apiKey: apiKey,
+	}, nil
+}
+
+func (clnt *openAIClient) EffortLevels() []string {
+	return []string{"none", "minimal", "low", "medium", "high", "xhigh"}
 }
 
 func (st *openAIState) SystemPrompt(s string) {
@@ -183,42 +192,55 @@ func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
 	return toolParams
 }
 
-func toOpenAIEffort(opts *config.Options) responses.ReasoningEffort {
-	switch opts.Effort {
+func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
+	error) {
+
+	var effort responses.ReasoningEffort
+	switch mdlCfg.Effort {
 	case "", "default":
-		return ""
+		effort = ""
 	case "none":
-		return responses.ReasoningEffortNone
+		effort = responses.ReasoningEffortNone
 	case "minimal":
-		return responses.ReasoningEffortMinimal
+		effort = responses.ReasoningEffortMinimal
 	case "low":
-		return responses.ReasoningEffortLow
+		effort = responses.ReasoningEffortLow
 	case "medium":
-		return responses.ReasoningEffortMedium
+		effort = responses.ReasoningEffortMedium
 	case "high":
-		return responses.ReasoningEffortHigh
+		effort = responses.ReasoningEffortHigh
 	case "xhigh":
-		return responses.ReasoningEffortXhigh
+		effort = responses.ReasoningEffortXhigh
+	default:
+		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
 	}
 
-	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
+	return &openAIModel{
+		model:           mdlCfg.Model,
+		includeThoughts: mdlCfg.IncludeThoughts,
+		effort:          effort,
+		maxOutputTokens: int64(mdlCfg.MaxTokens),
+		toolParams:      toOpenAITools(tools),
+		tools:           tools,
+	}, nil
 }
 
 func (clnt *openAIClient) NewState() State {
 	return &openAIState{}
 }
 
-func (clnt *openAIClient) Generate(ctx context.Context, opts *config.Options, ast State,
-	tools map[string]Tool) error {
+func (clnt *openAIClient) Generate(ctx context.Context, amdl Model, ast State,
+	opts *Options) error {
 
+	mdl := amdl.(*openAIModel)
 	st := ast.(*openAIState)
 
 	reasoningParam := responses.ReasoningParam{
-		Effort: toOpenAIEffort(opts),
+		Effort: mdl.effort,
 	}
 
 	var include []responses.ResponseIncludable
-	if opts.IncludeThoughts {
+	if mdl.includeThoughts {
 		if opts.Verbose {
 			reasoningParam.Summary = "detailed"
 		} else {
@@ -227,30 +249,28 @@ func (clnt *openAIClient) Generate(ctx context.Context, opts *config.Options, as
 		include = []responses.ResponseIncludable{"reasoning.encrypted_content"}
 	}
 
-	toolParams := toOpenAITools(tools)
-
 	for {
 		lst, txtLen := st.toInputItemList()
 
 		if opts.Trace {
 			fmt.Print("Trace: OpenAI Responses.New(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", opts.Model, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
 		rspParams := responses.ResponseNewParams{
-			Model: opts.Model,
-			Tools: toolParams,
+			Model: mdl.model,
+			Tools: mdl.toolParams,
 			Input: responses.ResponseNewParamsInputUnion{
 				OfInputItemList: lst,
 			},
 			Reasoning: reasoningParam,
 			Include:   include,
 		}
-		if opts.MaxTokens > 0 {
-			rspParams.MaxOutputTokens = openai.Int(int64(opts.MaxTokens))
+		if mdl.maxOutputTokens > 0 {
+			rspParams.MaxOutputTokens = openai.Int(mdl.maxOutputTokens)
 		}
 
 		rsp, err := clnt.client.Responses.New(ctx, rspParams)
@@ -363,7 +383,7 @@ func (clnt *openAIClient) Generate(ctx context.Context, opts *config.Options, as
 				fmt.Printf("Trace: calling %s(%s)\n", item.Name, item.Arguments)
 			}
 
-			out, err := callTool(ctx, tools, item.Name, []byte(item.Arguments), opts)
+			out, err := callTool(ctx, mdl.tools, item.Name, []byte(item.Arguments))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", item.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)

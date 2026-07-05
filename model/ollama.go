@@ -17,6 +17,14 @@ type ollamaClient struct {
 	client *ollama.Client
 }
 
+type ollamaModel struct {
+	model      string
+	think      *ollama.ThinkValue
+	numPredict int
+	tools      map[string]Tool
+	toolDefs   ollama.Tools
+}
+
 func newOllamaClient(baseURL string) (*ollama.Client, error) {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
@@ -28,8 +36,8 @@ func newOllamaClient(baseURL string) (*ollama.Client, error) {
 	return ollama.NewClient(base, http.DefaultClient), nil
 }
 
-func NewOllamaClient(provider *config.Provider) (Client, error) {
-	client, err := newOllamaClient(provider.BaseURL)
+func NewOllamaClient(clntCfg config.ClientConfig) (Client, error) {
+	client, err := newOllamaClient(clntCfg.BaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -38,20 +46,6 @@ func NewOllamaClient(provider *config.Provider) (Client, error) {
 
 func (clnt *ollamaClient) EffortLevels() []string {
 	return []string{"low", "medium", "high", "max"}
-}
-
-func toOllamaThink(opts *config.Options) *ollama.ThinkValue {
-	if opts.Effort != "" && opts.Effort != "default" {
-		return &ollama.ThinkValue{Value: opts.Effort}
-	}
-	if opts.IncludeThoughts {
-		return &ollama.ThinkValue{Value: true}
-	}
-	return nil
-}
-
-func (clnt *ollamaClient) NewState() State {
-	return &chatAPIState{}
 }
 
 func (st *chatAPIState) toOllamaMessages() ([]ollama.Message, int) {
@@ -141,39 +135,62 @@ func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
 	return toolDefs, nil
 }
 
-func (clnt *ollamaClient) Generate(ctx context.Context, opts *config.Options, ast State,
-	tools map[string]Tool) error {
+func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
+	error) {
 
-	st := ast.(*chatAPIState)
-	toolDefs, err := toOllamaTools(tools)
-	if err != nil {
-		return err
+	var think *ollama.ThinkValue
+	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
+		think = &ollama.ThinkValue{Value: mdlCfg.Effort}
+	} else if mdlCfg.IncludeThoughts {
+		think = &ollama.ThinkValue{Value: true}
 	}
-
-	stream := false
-	think := toOllamaThink(opts)
 
 	numPredict := 8192
-	if opts.MaxTokens > 0 {
-		numPredict = opts.MaxTokens
+	if mdlCfg.MaxTokens > 0 {
+		numPredict = mdlCfg.MaxTokens
 	}
+
+	toolDefs, err := toOllamaTools(tools)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ollamaModel{
+		model:      mdlCfg.Model,
+		think:      think,
+		numPredict: numPredict,
+		tools:      tools,
+		toolDefs:   toolDefs,
+	}, nil
+}
+
+func (clnt *ollamaClient) NewState() State {
+	return &chatAPIState{}
+}
+
+func (clnt *ollamaClient) Generate(ctx context.Context, amdl Model, ast State,
+	opts *Options) error {
+
+	mdl := amdl.(*ollamaModel)
+	st := ast.(*chatAPIState)
 
 	for {
 		msgs, txtLen := st.toOllamaMessages()
 
-		numCtx := (txtLen/4 + numPredict) * 6 / 5
+		numCtx := (txtLen/4 + mdl.numPredict) * 6 / 5
 		if numCtx < 4096 {
 			numCtx = 4096
 		}
 
+		var stream bool
 		req := &ollama.ChatRequest{
-			Model:    opts.Model,
+			Model:    mdl.model,
 			Messages: msgs,
-			Tools:    toolDefs,
+			Tools:    mdl.toolDefs,
 			Stream:   &stream,
-			Think:    think,
+			Think:    mdl.think,
 			Options: map[string]any{
-				"num_predict": numPredict,
+				"num_predict": mdl.numPredict,
 				"num_ctx":     numCtx,
 			},
 		}
@@ -181,7 +198,7 @@ func (clnt *ollamaClient) Generate(ctx context.Context, opts *config.Options, as
 		if opts.Trace {
 			fmt.Print("Trace: ollama Chat(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", opts.Model, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
@@ -243,7 +260,7 @@ func (clnt *ollamaClient) Generate(ctx context.Context, opts *config.Options, as
 				fmt.Printf("Trace: calling %s(%s)\n", tc.Function.Name, args)
 			}
 
-			out, err := callTool(ctx, tools, tc.Function.Name, args, opts)
+			out, err := callTool(ctx, mdl.tools, tc.Function.Name, args)
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", tc.Function.Name,
 					util.Lines(out, 1, 160))

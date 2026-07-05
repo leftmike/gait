@@ -18,24 +18,13 @@ type geminiClient struct {
 	apiKey string
 }
 
-func NewGeminiClient(apiKey string) (Client, error) {
-	ctx := context.Background()
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &geminiClient{
-		client: client,
-		apiKey: apiKey,
-	}, nil
-}
-
-func (clnt *geminiClient) EffortLevels() []string {
-	return []string{"minimal", "low", "medium", "high"}
+type geminiModel struct {
+	model           string
+	includeThoughts bool
+	thinkingLevel   genai.ThinkingLevel
+	maxOutputTokens int32
+	tools           map[string]Tool
+	funcDecls       []*genai.FunctionDeclaration
 }
 
 type geminiStep struct {
@@ -55,6 +44,26 @@ type geminiState struct {
 	inputTokens   int32
 	outputTokens  int32
 	contextTokens int32
+}
+
+func NewGeminiClient(apiKey string) (Client, error) {
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &geminiClient{
+		client: client,
+		apiKey: apiKey,
+	}, nil
+}
+
+func (clnt *geminiClient) EffortLevels() []string {
+	return []string{"minimal", "low", "medium", "high"}
 }
 
 func (st *geminiState) SystemPrompt(s string) {
@@ -164,7 +173,7 @@ func (st *geminiState) toContents() ([]*genai.Content, int) {
 	return cnts, txtLen
 }
 
-func toGeminiTools(tools map[string]Tool) []*genai.FunctionDeclaration {
+func toGeminiFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
 	var decls []*genai.FunctionDeclaration
 	for _, tl := range tools {
 		decls = append(decls, &genai.FunctionDeclaration{
@@ -206,21 +215,40 @@ func partType(prt *genai.Part) string {
 	return "--empty--"
 }
 
-func toGeminiThinkingLevel(opts *config.Options) genai.ThinkingLevel {
-	switch opts.Effort {
+func (clnt *geminiClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
+	error) {
+
+	var thinkingLevel genai.ThinkingLevel
+	switch mdlCfg.Effort {
 	case "", "default":
-		return genai.ThinkingLevelUnspecified
+		thinkingLevel = genai.ThinkingLevelUnspecified
 	case "minimal":
-		return genai.ThinkingLevelMinimal
+		thinkingLevel = genai.ThinkingLevelMinimal
 	case "low":
-		return genai.ThinkingLevelLow
+		thinkingLevel = genai.ThinkingLevelLow
 	case "medium":
-		return genai.ThinkingLevelMedium
+		thinkingLevel = genai.ThinkingLevelMedium
 	case "high":
-		return genai.ThinkingLevelHigh
+		thinkingLevel = genai.ThinkingLevelHigh
+	default:
+		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
 	}
 
-	panic(fmt.Sprintf("invalid effort %s", opts.Effort))
+	var maxOutputTokens int32
+	if mdlCfg.MaxTokens > 0 {
+		maxOutputTokens = int32(mdlCfg.MaxTokens)
+	} else {
+		maxOutputTokens = 65536
+	}
+
+	return &geminiModel{
+		model:           mdlCfg.Model,
+		includeThoughts: mdlCfg.IncludeThoughts,
+		thinkingLevel:   thinkingLevel,
+		maxOutputTokens: maxOutputTokens,
+		tools:           tools,
+		funcDecls:       toGeminiFuncDecls(tools),
+	}, nil
 }
 
 func (clnt *geminiClient) NewState() State {
@@ -233,31 +261,29 @@ type geminiToolCall struct {
 	prt *genai.Part
 }
 
-func (clnt *geminiClient) Generate(ctx context.Context, opts *config.Options, ast State,
-	tools map[string]Tool) error {
+func (clnt *geminiClient) Generate(ctx context.Context, amdl Model, ast State,
+	opts *Options) error {
 
+	mdl := amdl.(*geminiModel)
 	st := ast.(*geminiState)
-	thinkingLevel := toGeminiThinkingLevel(opts)
 
-	var gccfg genai.GenerateContentConfig
-	if opts.MaxTokens > 0 {
-		gccfg.MaxOutputTokens = int32(opts.MaxTokens)
-	} else {
-		gccfg.MaxOutputTokens = 65536
+	gccfg := genai.GenerateContentConfig{
+		MaxOutputTokens: mdl.maxOutputTokens,
 	}
+
 	if st.systemPrompt != "" {
 		gccfg.SystemInstruction = genai.NewContentFromText(st.systemPrompt, genai.RoleUser)
 	}
-	if opts.IncludeThoughts || thinkingLevel != genai.ThinkingLevelUnspecified {
+	if mdl.includeThoughts || mdl.thinkingLevel != genai.ThinkingLevelUnspecified {
 		gccfg.ThinkingConfig = &genai.ThinkingConfig{
-			IncludeThoughts: opts.IncludeThoughts,
-			ThinkingLevel:   thinkingLevel,
+			IncludeThoughts: mdl.includeThoughts,
+			ThinkingLevel:   mdl.thinkingLevel,
 		}
 	}
-	if len(tools) > 0 {
+	if len(mdl.tools) > 0 {
 		gccfg.Tools = []*genai.Tool{
 			{
-				FunctionDeclarations: toGeminiTools(tools),
+				FunctionDeclarations: mdl.funcDecls,
 			},
 		}
 	}
@@ -269,12 +295,12 @@ func (clnt *geminiClient) Generate(ctx context.Context, opts *config.Options, as
 		if opts.Trace {
 			fmt.Print("Trace: Gemini GenerateContent(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", opts.Model, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := clnt.client.Models.GenerateContent(ctx, opts.Model, cnts, &gccfg)
+		rsp, err := clnt.client.Models.GenerateContent(ctx, mdl.model, cnts, &gccfg)
 
 		if opts.Trace {
 			fmt.Print(err)
@@ -382,7 +408,7 @@ func (clnt *geminiClient) Generate(ctx context.Context, opts *config.Options, as
 					}
 					fmt.Println()
 				}
-				out, err = callTool(ctx, tools, tc.prt.FunctionCall.Name, tc.buf, opts)
+				out, err = callTool(ctx, mdl.tools, tc.prt.FunctionCall.Name, tc.buf)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%s, ", tc.prt.FunctionCall.Name,
 						util.Lines(out, 1, 160))

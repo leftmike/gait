@@ -29,10 +29,11 @@ To Do:
 
 - mcp servers: at startup, load them in separate go routines and don't wait on them
 
-- Rename gemini to google
-
 - OpenAI Codex
 -- API access via codex: https://simonwillison.net/2026/Apr/23/gpt-5-5/
+
+- Rename gemini to google
+- Reorder funcs in the model go files to match the types
 */
 
 package main
@@ -59,26 +60,32 @@ var (
 	trace   bool
 )
 
-func newClient(provider *config.Provider) (model.Client, error) {
-	switch provider.Name {
+// XXX: move into ./model
+func newClient(clntCfg config.ClientConfig) (model.Client, error) {
+	switch clntCfg.Provider {
 	case "openai":
-		return model.NewOpenAIClient(provider.APIKey)
+		return model.NewOpenAIClient(clntCfg.APIKey)
 	case "anthropic":
-		return model.NewAnthropicClient(provider.APIKey)
+		return model.NewAnthropicClient(clntCfg.APIKey)
 	case "gemini":
-		return model.NewGeminiClient(provider.APIKey)
+		return model.NewGeminiClient(clntCfg.APIKey)
 	case "ollama":
-		return model.NewOllamaClient(provider)
+		return model.NewOllamaClient(clntCfg)
 	case "llamacpp":
-		return model.NewLlamaCppClient(provider)
+		return model.NewLlamaCppClient(clntCfg)
 	default:
-		return nil, fmt.Errorf("unknown provider: %s", provider.Name)
+		return nil, fmt.Errorf("unknown provider: %s", clntCfg.Provider)
 	}
 }
 
-func interact(ag *agent.Agent, opts *config.Options) error {
+func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) error {
 	line := liner.NewLiner()
 	defer line.Close()
+
+	mdl, err := ag.Client().NewModel(mdlCfg, ag.Tools())
+	if err != nil {
+		return err
+	}
 
 	st := ag.Client().NewState()
 	ag.SystemPrompt(st)
@@ -95,7 +102,7 @@ func interact(ag *agent.Agent, opts *config.Options) error {
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			err := slash(ag, opts, st, s)
+			err := slash(ag, mdlCfg, st, s)
 			if err == io.EOF {
 				fmt.Println()
 				break
@@ -110,7 +117,7 @@ func interact(ag *agent.Agent, opts *config.Options) error {
 		st.Prompt(s)
 		n := st.Len()
 
-		err = ag.Generate(ctx, opts, st)
+		err = ag.Generate(ctx, mdl, st, opts)
 		if err != nil {
 			return err
 		}
@@ -125,7 +132,7 @@ func interact(ag *agent.Agent, opts *config.Options) error {
 			case model.ModelResponseStep:
 				fmt.Println(step.Content)
 			case model.ThinkingStep:
-				if opts.IncludeThoughts {
+				if mdlCfg.IncludeThoughts {
 					fmt.Printf("Thinking: [%s]\n", step.Content)
 				}
 			case model.ToolCallStep:
@@ -152,7 +159,7 @@ func main() {
 	fs.BoolVar(&trace, "trace", false, "trace model interaction")
 	fs.BoolVar(&trace, "t", false, "trace model interaction")
 
-	opts, provider, cfg, err := config.ParseFlags(fs)
+	mdlCfg, clntCfg, cfg, err := config.ParseFlags(fs)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
@@ -169,16 +176,19 @@ func main() {
 		}
 	*/
 
-	opts.Verbose = verbose
-	opts.Trace = trace
+	opts := &model.Options{
+		Verbose: verbose,
+		Trace:   trace,
+	}
 
-	clnt, err := newClient(provider)
+	clnt, err := newClient(clntCfg)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
 	}
 
-	effort := opts.Effort
+	// XXX
+	effort := mdlCfg.Effort
 	if effort != "" && effort != "default" && !slices.Contains(clnt.EffortLevels(), effort) {
 		fmt.Printf("%s: effort must be default, %s: %s\n", os.Args[0],
 			strings.Join(clnt.EffortLevels(), ", "), effort)
@@ -186,10 +196,10 @@ func main() {
 	}
 
 	if verbose {
-		fmt.Println(provider.Name, opts.Model)
+		fmt.Println(clntCfg.Provider, mdlCfg.Model)
 	}
 
-	ag := agent.NewAgent(provider, clnt)
+	ag := agent.NewAgent(clntCfg, clnt)
 
 	for _, dir := range cfg.Skills {
 		err := ag.AddSkill(dir)
@@ -215,7 +225,7 @@ func main() {
 		ag.AddWebSearchTool(cfg.BraveAPIKey)
 	}
 
-	err = interact(ag, opts)
+	err = interact(ag, mdlCfg, opts)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 	}

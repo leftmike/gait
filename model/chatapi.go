@@ -20,25 +20,10 @@ type chatAPIClient struct {
 	provider string
 }
 
-func newLlamaCppClient(baseURL, apiKey string) openai.Client {
-	if baseURL == "" {
-		baseURL = "http://localhost:8080/v1"
-	}
-	if apiKey == "" {
-		apiKey = "no-api-key"
-	}
-	return openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey))
-}
-
-func NewLlamaCppClient(provider *config.Provider) (Client, error) {
-	return &chatAPIClient{
-		client:   newLlamaCppClient(provider.BaseURL, provider.APIKey),
-		provider: provider.Name,
-	}, nil
-}
-
-func (clnt *chatAPIClient) EffortLevels() []string {
-	return nil
+type chatAPIModel struct {
+	model      string
+	tools      map[string]Tool
+	toolParams []openai.ChatCompletionToolUnionParam
 }
 
 type chatAPIStep struct {
@@ -55,6 +40,27 @@ type chatAPIState struct {
 	inputTokens   int64
 	outputTokens  int64
 	contextTokens int64
+}
+
+func newLlamaCppClient(baseURL, apiKey string) openai.Client {
+	if baseURL == "" {
+		baseURL = "http://localhost:8080/v1"
+	}
+	if apiKey == "" {
+		apiKey = "no-api-key"
+	}
+	return openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey))
+}
+
+func NewLlamaCppClient(clntCfg config.ClientConfig) (Client, error) {
+	return &chatAPIClient{
+		client:   newLlamaCppClient(clntCfg.BaseURL, clntCfg.APIKey),
+		provider: clntCfg.Provider,
+	}, nil
+}
+
+func (clnt *chatAPIClient) EffortLevels() []string {
+	return nil
 }
 
 func (st *chatAPIState) SystemPrompt(s string) {
@@ -168,17 +174,27 @@ func toOpenAICompatTools(tools map[string]Tool) []openai.ChatCompletionToolUnion
 	return toolParams
 }
 
+func (clnt *chatAPIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
+	error) {
+
+	// XXX: mdlCfg.IncludeThoughts and mdlCfg.Effort
+	// XXX: mdlCfg.MaxTokens
+
+	return &chatAPIModel{
+		model:      mdlCfg.Model,
+		toolParams: toOpenAICompatTools(tools),
+	}, nil
+}
+
 func (clnt *chatAPIClient) NewState() State {
 	return &chatAPIState{}
 }
 
-func (clnt *chatAPIClient) Generate(ctx context.Context, opts *config.Options, ast State,
-	tools map[string]Tool) error {
-
-	// XXX: opts.IncludeThoughts and opts.Effort
+func (clnt *chatAPIClient) Generate(ctx context.Context, amdl Model, ast State,
+	opts *Options) error {
 
 	st := ast.(*chatAPIState)
-	toolParams := toOpenAICompatTools(tools)
+	mdl := amdl.(*chatAPIModel)
 
 	for {
 		msgs, txtLen := st.toMessages()
@@ -186,17 +202,17 @@ func (clnt *chatAPIClient) Generate(ctx context.Context, opts *config.Options, a
 		if opts.Trace {
 			fmt.Printf("Trace: %s Chat.Completions.New(", clnt.provider)
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", opts.Model, len(tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
 
 		params := openai.ChatCompletionNewParams{
-			Model:    opts.Model,
+			Model:    mdl.model,
 			Messages: msgs,
 		}
-		if len(toolParams) > 0 {
-			params.Tools = toolParams
+		if len(mdl.toolParams) > 0 {
+			params.Tools = mdl.toolParams
 		}
 
 		rsp, err := clnt.client.Chat.Completions.New(ctx, params)
@@ -251,7 +267,7 @@ func (clnt *chatAPIClient) Generate(ctx context.Context, opts *config.Options, a
 				fmt.Printf("Trace: calling %s(%s)\n", tc.Function.Name, tc.Function.Arguments)
 			}
 
-			out, err := callTool(ctx, tools, tc.Function.Name, []byte(tc.Function.Arguments), opts)
+			out, err := callTool(ctx, mdl.tools, tc.Function.Name, []byte(tc.Function.Arguments))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", tc.Function.Name,
 					util.Lines(out, 1, 160))

@@ -20,10 +20,10 @@ type Agent struct {
 	clnts    []*mcpclient.Client // XXX: rename field
 }
 
-func NewAgent(provider *config.Provider, clnt model.Client) *Agent {
+func NewAgent(clntCfg config.ClientConfig, clnt model.Client) *Agent {
 	return &Agent{
-		provider: provider.Name,
-		apiKey:   provider.APIKey,
+		provider: clntCfg.Provider,
+		apiKey:   clntCfg.APIKey,
 		clnt:     clnt,
 		tools:    map[string]model.Tool{},
 	}
@@ -39,6 +39,10 @@ func (ag *Agent) Provider() string {
 
 func (ag *Agent) APIKey() string {
 	return ag.apiKey
+}
+
+func (ag *Agent) Tools() map[string]model.Tool {
+	return ag.tools
 }
 
 func (ag *Agent) AddTool(name, desc string, fn model.ToolFunc, scm model.ToolSchema) {
@@ -87,8 +91,10 @@ func (ag *Agent) SystemPrompt(st model.State) {
 	}
 }
 
-func (ag *Agent) Generate(ctx context.Context, opts *config.Options, st model.State) error {
-	return ag.clnt.Generate(ctx, opts, st, ag.tools)
+func (ag *Agent) Generate(ctx context.Context, mdl model.Model, st model.State,
+	opts *model.Options) error {
+
+	return ag.clnt.Generate(ctx, mdl, st, opts)
 }
 
 type readFileArgs struct {
