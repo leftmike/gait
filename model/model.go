@@ -32,10 +32,8 @@ type ModelMetadata struct {
 }
 
 type Model interface {
-	// XXX: Metadata() ModelMetadata
-	// XXX: ModelConfig() config.ModelConfig
-	// XXX: SetModelConfig(mdlCfg config.ModelConfig) error
-	// XXX: SetTools(tools map[string]Tool) error
+	SetModelConfig(mdlCfg config.ModelConfig) error
+	SetTools(tools map[string]Tool) error
 }
 
 type Options struct {

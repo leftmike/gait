@@ -79,52 +79,21 @@ func (clnt *openAIClient) ListModels() map[string]ModelMetadata {
 	return clnt.models
 }
 
-func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
-	var toolParams []responses.ToolUnionParam
-	for _, tl := range tools {
-		toolParams = append(toolParams, responses.ToolUnionParam{
-			OfFunction: &responses.FunctionToolParam{
-				Parameters:  tl.Schema,
-				Name:        tl.Name,
-				Description: openai_param.NewOpt(tl.Description),
-			},
-		})
-	}
-
-	return toolParams
-}
-
 func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	var effort responses.ReasoningEffort
-	switch mdlCfg.Effort {
-	case "", "default":
-		effort = ""
-	case "none":
-		effort = responses.ReasoningEffortNone
-	case "minimal":
-		effort = responses.ReasoningEffortMinimal
-	case "low":
-		effort = responses.ReasoningEffortLow
-	case "medium":
-		effort = responses.ReasoningEffortMedium
-	case "high":
-		effort = responses.ReasoningEffortHigh
-	case "xhigh":
-		effort = responses.ReasoningEffortXhigh
-	default:
-		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	var mdl openAIModel
+	err := mdl.SetModelConfig(mdlCfg)
+	if err != nil {
+		return nil, err
 	}
 
-	return &openAIModel{
-		model:           mdlCfg.Model,
-		includeThoughts: mdlCfg.IncludeThoughts,
-		effort:          effort,
-		maxOutputTokens: int64(mdlCfg.MaxTokens),
-		toolParams:      toOpenAITools(tools),
-		tools:           tools,
-	}, nil
+	err = mdl.SetTools(tools)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mdl, nil
 }
 
 func (clnt *openAIClient) NewState() State {
@@ -303,6 +272,56 @@ func (clnt *openAIClient) Generate(ctx context.Context, amdl Model, ast State,
 		}
 	}
 
+	return nil
+}
+
+func (mdl *openAIModel) SetModelConfig(mdlCfg config.ModelConfig) error {
+	var effort responses.ReasoningEffort
+	switch mdlCfg.Effort {
+	case "", "default":
+		effort = ""
+	case "none":
+		effort = responses.ReasoningEffortNone
+	case "minimal":
+		effort = responses.ReasoningEffortMinimal
+	case "low":
+		effort = responses.ReasoningEffortLow
+	case "medium":
+		effort = responses.ReasoningEffortMedium
+	case "high":
+		effort = responses.ReasoningEffortHigh
+	case "xhigh":
+		effort = responses.ReasoningEffortXhigh
+	default:
+		return fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	}
+
+	mdl.model = mdlCfg.Model
+	mdl.includeThoughts = mdlCfg.IncludeThoughts
+	mdl.effort = effort
+	mdl.maxOutputTokens = int64(mdlCfg.MaxTokens)
+
+	return nil
+}
+
+func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
+	var toolParams []responses.ToolUnionParam
+	for _, tl := range tools {
+		toolParams = append(toolParams, responses.ToolUnionParam{
+			OfFunction: &responses.FunctionToolParam{
+				Parameters:  tl.Schema,
+				Name:        tl.Name,
+				Description: openai_param.NewOpt(tl.Description),
+			},
+		})
+	}
+
+	return toolParams
+}
+
+func (mdl *openAIModel) SetTools(tools map[string]Tool) error {
+	mdl.tools = tools
+	mdl.toolParams = toOpenAITools(tools)
 	return nil
 }
 

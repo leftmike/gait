@@ -79,69 +79,21 @@ func (clnt *anthropicClient) ListModels() map[string]ModelMetadata {
 	return clnt.models
 }
 
-func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
-	var req []string
-	if val, ok := scm["required"]; ok {
-		for _, v := range val.([]any) {
-			req = append(req, v.(string))
-		}
-	}
-
-	return anthropic.ToolInputSchemaParam{
-		Properties: scm["properties"],
-		Required:   req,
-	}
-}
-
-func toAnthropicTools(tools map[string]Tool) []anthropic.ToolUnionParam {
-	var toolParams []anthropic.ToolUnionParam
-	for _, tl := range tools {
-		toolParams = append(toolParams, anthropic.ToolUnionParam{
-			OfTool: &anthropic.ToolParam{
-				InputSchema: toAnthropicInputSchema(tl.Schema),
-				Name:        tl.Name,
-				Description: anthropic_param.NewOpt(tl.Description),
-				Type:        anthropic.ToolTypeCustom,
-			},
-		})
-	}
-	return toolParams
-}
-
 func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	maxTokens := int64(64000)
-	if mdlCfg.MaxTokens > 0 {
-		maxTokens = int64(mdlCfg.MaxTokens)
+	var mdl anthropicModel
+	err := mdl.SetModelConfig(mdlCfg)
+	if err != nil {
+		return nil, err
 	}
 
-	var effort anthropic.OutputConfigEffort
-	switch mdlCfg.Effort {
-	case "", "default":
-		effort = ""
-	case "low":
-		effort = anthropic.OutputConfigEffortLow
-	case "medium":
-		effort = anthropic.OutputConfigEffortMedium
-	case "high":
-		effort = anthropic.OutputConfigEffortHigh
-	case "xhigh":
-		effort = anthropic.OutputConfigEffortXhigh
-	case "max":
-		effort = anthropic.OutputConfigEffortMax
-	default:
-		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	err = mdl.SetTools(tools)
+	if err != nil {
+		return nil, err
 	}
 
-	return &anthropicModel{
-		model:           anthropic.Model(mdlCfg.Model),
-		includeThoughts: mdlCfg.IncludeThoughts,
-		effort:          effort,
-		maxTokens:       maxTokens,
-		tools:           tools,
-		toolParams:      toAnthropicTools(tools),
-	}, nil
+	return &mdl, nil
 }
 
 func (clnt *anthropicClient) NewState() State {
@@ -363,6 +315,73 @@ func (clnt *anthropicClient) Generate(ctx context.Context, amdl Model, ast State
 		}
 	}
 
+	return nil
+}
+
+func (mdl *anthropicModel) SetModelConfig(mdlCfg config.ModelConfig) error {
+	maxTokens := int64(64000)
+	if mdlCfg.MaxTokens > 0 {
+		maxTokens = int64(mdlCfg.MaxTokens)
+	}
+
+	var effort anthropic.OutputConfigEffort
+	switch mdlCfg.Effort {
+	case "", "default":
+		effort = ""
+	case "low":
+		effort = anthropic.OutputConfigEffortLow
+	case "medium":
+		effort = anthropic.OutputConfigEffortMedium
+	case "high":
+		effort = anthropic.OutputConfigEffortHigh
+	case "xhigh":
+		effort = anthropic.OutputConfigEffortXhigh
+	case "max":
+		effort = anthropic.OutputConfigEffortMax
+	default:
+		return fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	}
+
+	mdl.model = anthropic.Model(mdlCfg.Model)
+	mdl.includeThoughts = mdlCfg.IncludeThoughts
+	mdl.effort = effort
+	mdl.maxTokens = maxTokens
+
+	return nil
+}
+
+func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
+	var req []string
+	if val, ok := scm["required"]; ok {
+		for _, v := range val.([]any) {
+			req = append(req, v.(string))
+		}
+	}
+
+	return anthropic.ToolInputSchemaParam{
+		Properties: scm["properties"],
+		Required:   req,
+	}
+}
+
+func toAnthropicTools(tools map[string]Tool) []anthropic.ToolUnionParam {
+	var toolParams []anthropic.ToolUnionParam
+	for _, tl := range tools {
+		toolParams = append(toolParams, anthropic.ToolUnionParam{
+			OfTool: &anthropic.ToolParam{
+				InputSchema: toAnthropicInputSchema(tl.Schema),
+				Name:        tl.Name,
+				Description: anthropic_param.NewOpt(tl.Description),
+				Type:        anthropic.ToolTypeCustom,
+			},
+		})
+	}
+	return toolParams
+}
+
+func (mdl *anthropicModel) SetTools(tools map[string]Tool) error {
+	mdl.tools = tools
+	mdl.toolParams = toAnthropicTools(tools)
 	return nil
 }
 

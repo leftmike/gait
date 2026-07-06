@@ -80,56 +80,21 @@ func (clnt *ollamaClient) ListModels() map[string]ModelMetadata {
 	return map[string]ModelMetadata{}
 }
 
-func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
-	var toolDefs ollama.Tools
-	for _, tl := range tools {
-		schemaJSON, err := json.Marshal(tl.Schema)
-		if err != nil {
-			return nil, err
-		}
-		var params ollama.ToolFunctionParameters
-		if err := json.Unmarshal(schemaJSON, &params); err != nil {
-			return nil, err
-		}
-		toolDefs = append(toolDefs, ollama.Tool{
-			Type: "function",
-			Function: ollama.ToolFunction{
-				Name:        tl.Name,
-				Description: tl.Description,
-				Parameters:  params,
-			},
-		})
-	}
-	return toolDefs, nil
-}
-
 func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	var think *ollama.ThinkValue
-	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
-		think = &ollama.ThinkValue{Value: mdlCfg.Effort}
-	} else if mdlCfg.IncludeThoughts {
-		think = &ollama.ThinkValue{Value: true}
-	}
-
-	numPredict := 8192
-	if mdlCfg.MaxTokens > 0 {
-		numPredict = mdlCfg.MaxTokens
-	}
-
-	toolDefs, err := toOllamaTools(tools)
+	var mdl ollamaModel
+	err := mdl.SetModelConfig(mdlCfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ollamaModel{
-		model:      mdlCfg.Model,
-		think:      think,
-		numPredict: numPredict,
-		tools:      tools,
-		toolDefs:   toolDefs,
-	}, nil
+	err = mdl.SetTools(tools)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mdl, nil
 }
 
 func (clnt *ollamaClient) NewState() State {
@@ -309,6 +274,61 @@ func (clnt *ollamaClient) Generate(ctx context.Context, amdl Model, ast State,
 			})
 		}
 	}
+
+	return nil
+}
+
+func (mdl *ollamaModel) SetModelConfig(mdlCfg config.ModelConfig) error {
+	var think *ollama.ThinkValue
+	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
+		think = &ollama.ThinkValue{Value: mdlCfg.Effort}
+	} else if mdlCfg.IncludeThoughts {
+		think = &ollama.ThinkValue{Value: true}
+	}
+
+	numPredict := 8192
+	if mdlCfg.MaxTokens > 0 {
+		numPredict = mdlCfg.MaxTokens
+	}
+
+	mdl.model = mdlCfg.Model
+	mdl.think = think
+	mdl.numPredict = numPredict
+
+	return nil
+}
+
+func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
+	var toolDefs ollama.Tools
+	for _, tl := range tools {
+		schemaJSON, err := json.Marshal(tl.Schema)
+		if err != nil {
+			return nil, err
+		}
+		var params ollama.ToolFunctionParameters
+		if err := json.Unmarshal(schemaJSON, &params); err != nil {
+			return nil, err
+		}
+		toolDefs = append(toolDefs, ollama.Tool{
+			Type: "function",
+			Function: ollama.ToolFunction{
+				Name:        tl.Name,
+				Description: tl.Description,
+				Parameters:  params,
+			},
+		})
+	}
+	return toolDefs, nil
+}
+
+func (mdl *ollamaModel) SetTools(tools map[string]Tool) error {
+	toolDefs, err := toOllamaTools(tools)
+	if err != nil {
+		return err
+	}
+
+	mdl.tools = tools
+	mdl.toolDefs = toolDefs
 
 	return nil
 }

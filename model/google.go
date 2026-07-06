@@ -92,53 +92,21 @@ func (clnt *googleClient) ListModels() map[string]ModelMetadata {
 	return clnt.models
 }
 
-func toGoogleFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
-	var decls []*genai.FunctionDeclaration
-	for _, tl := range tools {
-		decls = append(decls, &genai.FunctionDeclaration{
-			Description:          tl.Description,
-			Name:                 tl.Name,
-			ParametersJsonSchema: tl.Schema,
-		})
-	}
-
-	return decls
-}
-
 func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	var thinkingLevel genai.ThinkingLevel
-	switch mdlCfg.Effort {
-	case "", "default":
-		thinkingLevel = genai.ThinkingLevelUnspecified
-	case "minimal":
-		thinkingLevel = genai.ThinkingLevelMinimal
-	case "low":
-		thinkingLevel = genai.ThinkingLevelLow
-	case "medium":
-		thinkingLevel = genai.ThinkingLevelMedium
-	case "high":
-		thinkingLevel = genai.ThinkingLevelHigh
-	default:
-		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	var mdl googleModel
+	err := mdl.SetModelConfig(mdlCfg)
+	if err != nil {
+		return nil, err
 	}
 
-	var maxOutputTokens int32
-	if mdlCfg.MaxTokens > 0 {
-		maxOutputTokens = int32(mdlCfg.MaxTokens)
-	} else {
-		maxOutputTokens = 65536
+	err = mdl.SetTools(tools)
+	if err != nil {
+		return nil, err
 	}
 
-	return &googleModel{
-		model:           mdlCfg.Model,
-		includeThoughts: mdlCfg.IncludeThoughts,
-		thinkingLevel:   thinkingLevel,
-		maxOutputTokens: maxOutputTokens,
-		tools:           tools,
-		funcDecls:       toGoogleFuncDecls(tools),
-	}, nil
+	return &mdl, nil
 }
 
 func (clnt *googleClient) NewState() State {
@@ -418,6 +386,58 @@ func (clnt *googleClient) Generate(ctx context.Context, amdl Model, ast State,
 	}
 
 	return nil
+}
+
+func (mdl *googleModel) SetModelConfig(mdlCfg config.ModelConfig) error {
+	var thinkingLevel genai.ThinkingLevel
+	switch mdlCfg.Effort {
+	case "", "default":
+		thinkingLevel = genai.ThinkingLevelUnspecified
+	case "minimal":
+		thinkingLevel = genai.ThinkingLevelMinimal
+	case "low":
+		thinkingLevel = genai.ThinkingLevelLow
+	case "medium":
+		thinkingLevel = genai.ThinkingLevelMedium
+	case "high":
+		thinkingLevel = genai.ThinkingLevelHigh
+	default:
+		return fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	}
+
+	var maxOutputTokens int32
+	if mdlCfg.MaxTokens > 0 {
+		maxOutputTokens = int32(mdlCfg.MaxTokens)
+	} else {
+		maxOutputTokens = 65536
+	}
+
+	mdl.model = mdlCfg.Model
+	mdl.includeThoughts = mdlCfg.IncludeThoughts
+	mdl.thinkingLevel = thinkingLevel
+	mdl.maxOutputTokens = maxOutputTokens
+
+	return nil
+}
+
+func toGoogleFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
+	var decls []*genai.FunctionDeclaration
+	for _, tl := range tools {
+		decls = append(decls, &genai.FunctionDeclaration{
+			Description:          tl.Description,
+			Name:                 tl.Name,
+			ParametersJsonSchema: tl.Schema,
+		})
+	}
+
+	return decls
+}
+
+func (mdl *googleModel) SetTools(tools map[string]Tool) error {
+	mdl.tools = tools
+	mdl.funcDecls = toGoogleFuncDecls(tools)
+	return nil
+
 }
 
 func (st *googleState) SystemPrompt(s string) {

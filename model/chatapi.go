@@ -73,30 +73,21 @@ func (clnt *chatAPIClient) ListModels() map[string]ModelMetadata {
 	return map[string]ModelMetadata{} // XXX
 }
 
-func toOpenAICompatTools(tools map[string]Tool) []openai.ChatCompletionToolUnionParam {
-	var toolParams []openai.ChatCompletionToolUnionParam
-	for _, tl := range tools {
-		toolParams = append(toolParams,
-			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
-				Name:        tl.Name,
-				Description: openai_param.NewOpt(tl.Description),
-				Parameters:  shared.FunctionParameters(tl.Schema),
-			}))
-	}
-
-	return toolParams
-}
-
 func (clnt *chatAPIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	// XXX: mdlCfg.IncludeThoughts and mdlCfg.Effort
-	// XXX: mdlCfg.MaxTokens
+	var mdl chatAPIModel
+	err := mdl.SetModelConfig(mdlCfg)
+	if err != nil {
+		return nil, err
+	}
 
-	return &chatAPIModel{
-		model:      mdlCfg.Model,
-		toolParams: toOpenAICompatTools(tools),
-	}, nil
+	err = mdl.SetTools(tools)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mdl, nil
 }
 
 func (clnt *chatAPIClient) NewState() State {
@@ -199,6 +190,34 @@ func (clnt *chatAPIClient) Generate(ctx context.Context, amdl Model, ast State,
 		}
 	}
 
+	return nil
+}
+
+func (mdl *chatAPIModel) SetModelConfig(mdlCfg config.ModelConfig) error {
+	// XXX: mdlCfg.IncludeThoughts and mdlCfg.Effort
+	// XXX: mdlCfg.MaxTokens
+
+	mdl.model = mdlCfg.Model
+	return nil
+}
+
+func toOpenAICompatTools(tools map[string]Tool) []openai.ChatCompletionToolUnionParam {
+	var toolParams []openai.ChatCompletionToolUnionParam
+	for _, tl := range tools {
+		toolParams = append(toolParams,
+			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
+				Name:        tl.Name,
+				Description: openai_param.NewOpt(tl.Description),
+				Parameters:  shared.FunctionParameters(tl.Schema),
+			}))
+	}
+
+	return toolParams
+}
+
+func (mdl *chatAPIModel) SetTools(tools map[string]Tool) error {
+	mdl.tools = tools
+	mdl.toolParams = toOpenAICompatTools(tools)
 	return nil
 }
 
