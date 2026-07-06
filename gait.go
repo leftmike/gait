@@ -31,8 +31,6 @@ To Do:
 
 - OpenAI Codex
 -- API access via codex: https://simonwillison.net/2026/Apr/23/gpt-5-5/
-
-- Reorder funcs in the model go files to match the types
 */
 
 package main
@@ -50,6 +48,7 @@ import (
 
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/llmreg"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/util"
 )
@@ -132,6 +131,31 @@ func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) e
 	return nil
 }
 
+func listProviders() {
+	providers, err := llmreg.Providers(false)
+	if err != nil {
+		fmt.Printf("%s: %s\n", os.Args[0], err)
+		os.Exit(1)
+	}
+
+	for _, id := range []string{"anthropic", "google", "ollama-cloud", "openai"} {
+		p := providers[id]
+		// ID, Name
+		fmt.Printf("%s %s\n", id, p.Name)
+		for id, m := range p.Models {
+			if !m.ToolCall || !slices.Contains(m.Modalities.Input, "text") ||
+				!slices.Contains(m.Modalities.Output, "text") {
+				continue
+			}
+
+			// ID, Name, Reasoning, Limits, Costs
+			fmt.Printf("    %s %v %v %v\n", id, m.Reasoning, m.Limit, m.Cost)
+		}
+	}
+
+	os.Exit(0)
+}
+
 func main() {
 	fs := flag.NewFlagSet("gait", flag.ExitOnError)
 
@@ -146,16 +170,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	/*
-		providers, err := llmreg.Providers(false)
-		if err != nil {
-			fmt.Printf("%s: %s\n", os.Args[0], err)
-			os.Exit(1)
-		}
-		for id, p := range providers {
-			fmt.Printf("%s %s %s\n", id, p.ID, p.Name)
-		}
-	*/
+	// XXX: remove
+	// listProviders()
 
 	opts := &model.Options{
 		Verbose: verbose,

@@ -4,18 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
-	"strings"
 
 	"google.golang.org/genai"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/llmreg"
 	"github.com/leftmike/gait/util"
 )
 
 type googleClient struct {
 	client *genai.Client
 	apiKey string
+	name   string
+	models map[string]ModelMetadata
 }
 
 type googleModel struct {
@@ -53,6 +54,11 @@ type googleToolCall struct {
 }
 
 func newGoogleClient(apiKey string) (Client, error) {
+	pvdr, err := llmreg.FindProvider("google")
+	if err != nil {
+		return nil, err
+	}
+
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
@@ -65,11 +71,25 @@ func newGoogleClient(apiKey string) (Client, error) {
 	return &googleClient{
 		client: client,
 		apiKey: apiKey,
+		name:   pvdr.Name,
+		models: listModels(pvdr),
 	}, nil
 }
 
 func (clnt *googleClient) EffortLevels() []string {
 	return []string{"minimal", "low", "medium", "high"}
+}
+
+func (clnt *googleClient) Provider() string {
+	return "google"
+}
+
+func (clnt *googleClient) ProviderName() string {
+	return clnt.name
+}
+
+func (clnt *googleClient) ListModels() map[string]ModelMetadata {
+	return clnt.models
 }
 
 func toGoogleFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
@@ -431,36 +451,4 @@ func (st *googleState) Clear() {
 
 func (st *googleState) Usage() (int64, int64, int64) {
 	return int64(st.inputTokens), int64(st.outputTokens), int64(st.contextTokens)
-}
-
-func ListGoogleModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	pg, err := client.Models.List(ctx, &genai.ListModelsConfig{PageSize: 999})
-	if err != nil {
-		return nil, err
-	}
-
-	var models []ModelInfo
-	for _, m := range pg.Items {
-		if slices.Contains(m.SupportedActions, "generateContent") {
-			name := strings.SplitN(m.Name, "/", 2)
-			if name[0] != "models" || len(name) != 2 {
-				continue
-			}
-
-			models = append(models, ModelInfo{
-				Name:        name[1],
-				DisplayName: m.DisplayName,
-			})
-		}
-	}
-
-	return models, nil
 }

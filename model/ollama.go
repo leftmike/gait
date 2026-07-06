@@ -25,7 +25,8 @@ type ollamaModel struct {
 	toolDefs   ollama.Tools
 }
 
-func newOllama(baseURL string) (*ollama.Client, error) {
+func newOllamaClient(clntCfg config.ClientConfig) (Client, error) {
+	baseURL := clntCfg.BaseURL
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -33,19 +34,50 @@ func newOllama(baseURL string) (*ollama.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ollama.NewClient(base, http.DefaultClient), nil
-}
 
-func newOllamaClient(clntCfg config.ClientConfig) (Client, error) {
-	client, err := newOllama(clntCfg.BaseURL)
-	if err != nil {
-		return nil, err
-	}
-	return &ollamaClient{client: client}, nil
+	return &ollamaClient{
+		client: ollama.NewClient(base, http.DefaultClient),
+	}, nil
 }
 
 func (clnt *ollamaClient) EffortLevels() []string {
 	return []string{"low", "medium", "high", "max"}
+}
+
+func (clnt *ollamaClient) Provider() string {
+	return "ollama"
+}
+
+func (clnt *ollamaClient) ProviderName() string {
+	return "Ollama"
+}
+
+/*
+func ListOllamaModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
+	client, err := newOllama(baseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	lst, err := client.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var models []ModelInfo
+	for _, m := range lst.Models {
+		models = append(models, ModelInfo{
+			Name:    m.Name,
+			Created: m.ModifiedAt,
+		})
+	}
+	return models, nil
+}
+*/
+
+func (clnt *ollamaClient) ListModels() map[string]ModelMetadata {
+	// XXX: use ListOllamaModels
+	return map[string]ModelMetadata{}
 }
 
 func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
@@ -279,25 +311,4 @@ func (clnt *ollamaClient) Generate(ctx context.Context, amdl Model, ast State,
 	}
 
 	return nil
-}
-
-func ListOllamaModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
-	client, err := newOllama(baseURL)
-	if err != nil {
-		return nil, err
-	}
-
-	lst, err := client.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var models []ModelInfo
-	for _, m := range lst.Models {
-		models = append(models, ModelInfo{
-			Name:    m.Name,
-			Created: m.ModifiedAt,
-		})
-	}
-	return models, nil
 }

@@ -1,11 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
-	"time"
 
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
@@ -121,34 +120,17 @@ func slashModels(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, arg
 		return fmt.Errorf("/models: no arguments allowed: %s", args)
 	}
 
-	var infos []model.ModelInfo
-	var err error
-
-	ctx := context.Background()
-	switch ag.Provider() {
-	case "openai":
-		infos, err = model.ListOpenAIModels(ctx, ag.APIKey())
-	case "anthropic":
-		infos, err = model.ListAnthropicModels(ctx, ag.APIKey())
-	case "google":
-		infos, err = model.ListGoogleModels(ctx, ag.APIKey())
-	default:
-		panic(fmt.Sprintf("unknown provider: %s", ag.Provider()))
+	models := ag.Client().ListModels()
+	var ids []string
+	for id := range models {
+		ids = append(ids, id)
 	}
+	sort.Strings(ids)
 
-	if err != nil {
-		return fmt.Errorf("list models for %s: %s\n", ag.Provider(), err)
-	}
-
-	for _, info := range infos {
-		fmt.Printf("%s", info.Name)
-		if info.DisplayName != "" {
-			fmt.Printf(" [%s]", info.DisplayName)
-		}
-		if !info.Created.Equal(time.Time{}) {
-			fmt.Printf(" (%s)", info.Created.Format("02 Jan 2006"))
-		}
-		fmt.Println()
+	for _, id := range ids {
+		mdl := models[id]
+		fmt.Printf("%s [%s]\n", mdl.Name, id)
+		// XXX: provide more detailed listing, maybe a table
 	}
 
 	return nil

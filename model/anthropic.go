@@ -11,12 +11,15 @@ import (
 	anthropic_param "github.com/anthropics/anthropic-sdk-go/packages/param"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/llmreg"
 	"github.com/leftmike/gait/util"
 )
 
 type anthropicClient struct {
 	client anthropic.Client
 	apiKey string
+	name   string
+	models map[string]ModelMetadata
 }
 
 type anthropicModel struct {
@@ -47,14 +50,33 @@ type anthropicState struct {
 }
 
 func newAnthropicClient(apiKey string) (Client, error) {
+	pvdr, err := llmreg.FindProvider("anthropic")
+	if err != nil {
+		return nil, err
+	}
+
 	return &anthropicClient{
 		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
 		apiKey: apiKey,
+		name:   pvdr.Name,
+		models: listModels(pvdr),
 	}, nil
 }
 
 func (clnt *anthropicClient) EffortLevels() []string {
 	return []string{"low", "medium", "high", "xhigh", "max"}
+}
+
+func (clnt *anthropicClient) Provider() string {
+	return "anthropic"
+}
+
+func (clnt *anthropicClient) ProviderName() string {
+	return clnt.name
+}
+
+func (clnt *anthropicClient) ListModels() map[string]ModelMetadata {
+	return clnt.models
 }
 
 func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
@@ -375,23 +397,4 @@ func (st *anthropicState) Clear() {
 
 func (st *anthropicState) Usage() (int64, int64, int64) {
 	return st.inputTokens, st.outputTokens, st.contextTokens
-}
-
-func ListAnthropicModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
-	client := anthropic.NewClient(option.WithAPIKey(apiKey))
-	lst, err := client.Models.List(ctx, anthropic.ModelListParams{Limit: anthropic.Int(999)})
-	if err != nil {
-		return nil, err
-	}
-
-	var models []ModelInfo
-	for _, mi := range lst.Data {
-		models = append(models, ModelInfo{
-			Name:        mi.ID,
-			DisplayName: mi.DisplayName,
-			Created:     mi.CreatedAt,
-		})
-	}
-
-	return models, nil
 }

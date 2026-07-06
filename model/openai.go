@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -13,12 +12,15 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/llmreg"
 	"github.com/leftmike/gait/util"
 )
 
 type openAIClient struct {
 	client openai.Client
 	apiKey string
+	name   string
+	models map[string]ModelMetadata
 }
 
 type openAIModel struct {
@@ -48,14 +50,33 @@ type openAIState struct {
 }
 
 func newOpenAIClient(apiKey string) (Client, error) {
+	pvdr, err := llmreg.FindProvider("openai")
+	if err != nil {
+		return nil, err
+	}
+
 	return &openAIClient{
 		client: openai.NewClient(option.WithAPIKey(apiKey)),
 		apiKey: apiKey,
+		name:   pvdr.Name,
+		models: listModels(pvdr),
 	}, nil
 }
 
 func (clnt *openAIClient) EffortLevels() []string {
 	return []string{"none", "minimal", "low", "medium", "high", "xhigh"}
+}
+
+func (clnt *openAIClient) Provider() string {
+	return "openai"
+}
+
+func (clnt *openAIClient) ProviderName() string {
+	return clnt.name
+}
+
+func (clnt *openAIClient) ListModels() map[string]ModelMetadata {
+	return clnt.models
 }
 
 func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
@@ -402,22 +423,4 @@ func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionPara
 	}
 
 	return lst, txtLen
-}
-
-func ListOpenAIModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
-	client := openai.NewClient(option.WithAPIKey(apiKey))
-	lst, err := client.Models.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var models []ModelInfo
-	for _, md := range lst.Data {
-		models = append(models, ModelInfo{
-			Name:    md.ID,
-			Created: time.Unix(md.Created, 0),
-		})
-	}
-
-	return models, nil
 }

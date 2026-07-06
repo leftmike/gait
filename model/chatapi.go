@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -42,25 +41,36 @@ type chatAPIState struct {
 	contextTokens int64
 }
 
-func newLlamaCpp(baseURL, apiKey string) openai.Client {
+func newLlamaCppClient(clntCfg config.ClientConfig) (Client, error) {
+	baseURL := clntCfg.BaseURL
 	if baseURL == "" {
 		baseURL = "http://localhost:8080/v1"
 	}
+	apiKey := clntCfg.APIKey
 	if apiKey == "" {
 		apiKey = "no-api-key"
 	}
-	return openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey))
-}
 
-func newLlamaCppClient(clntCfg config.ClientConfig) (Client, error) {
 	return &chatAPIClient{
-		client:   newLlamaCpp(clntCfg.BaseURL, clntCfg.APIKey),
+		client:   openai.NewClient(option.WithBaseURL(baseURL), option.WithAPIKey(apiKey)),
 		provider: clntCfg.Provider,
 	}, nil
 }
 
 func (clnt *chatAPIClient) EffortLevels() []string {
 	return nil
+}
+
+func (clnt *chatAPIClient) Provider() string {
+	return clnt.provider
+}
+
+func (clnt *chatAPIClient) ProviderName() string {
+	return clnt.provider // XXX
+}
+
+func (clnt *chatAPIClient) ListModels() map[string]ModelMetadata {
+	return map[string]ModelMetadata{} // XXX
 }
 
 func toOpenAICompatTools(tools map[string]Tool) []openai.ChatCompletionToolUnionParam {
@@ -287,25 +297,4 @@ func (st *chatAPIState) toMessages() ([]openai.ChatCompletionMessageParamUnion, 
 	}
 
 	return msgs, txtLen
-}
-
-func listOpenAICompatModels(ctx context.Context, client openai.Client) ([]ModelInfo, error) {
-	lst, err := client.Models.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var models []ModelInfo
-	for _, md := range lst.Data {
-		models = append(models, ModelInfo{
-			Name:    md.ID,
-			Created: time.Unix(md.Created, 0),
-		})
-	}
-
-	return models, nil
-}
-
-func ListLlamaCppModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
-	return listOpenAICompatModels(ctx, newLlamaCpp(baseURL, apiKey))
 }

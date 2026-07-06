@@ -4,22 +4,38 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/llmreg"
 )
 
 type Client interface {
-	// XXX: ListModels
-	EffortLevels() []string // XXX: move to Model?
+	Provider() string
+	ProviderName() string
+	ListModels() map[string]ModelMetadata
+	EffortLevels() []string // XXX: add to ListModels?
 	NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model, error)
 	NewState() State
 	Generate(ctx context.Context, mdl Model, st State, opts *Options) error
 }
 
+type ModelMetadata struct {
+	Model        string
+	Name         string
+	Reasoning    bool
+	ContextLimit int
+	OutputLimit  int
+	InputCost    float64
+	OutputCost   float64
+}
+
 type Model interface {
-	// XXX: SetTools(tools map[string]Tool)
-	// XXX: Set*
+	// XXX: Metadata() ModelMetadata
+	// XXX: ModelConfig() config.ModelConfig
+	// XXX: SetModelConfig(mdlCfg config.ModelConfig) error
+	// XXX: SetTools(tools map[string]Tool) error
 }
 
 type Options struct {
@@ -91,4 +107,28 @@ func NewClient(clntCfg config.ClientConfig) (Client, error) {
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", clntCfg.Provider)
 	}
+}
+
+func listModels(pvdr llmreg.Provider) map[string]ModelMetadata {
+	mmdm := map[string]ModelMetadata{}
+
+	for id, mdl := range pvdr.Models {
+		if !mdl.ToolCall || !slices.Contains(mdl.Modalities.Input, "text") ||
+			!slices.Contains(mdl.Modalities.Output, "text") {
+
+			continue
+		}
+
+		mmdm[id] = ModelMetadata{
+			Model:        mdl.ID,
+			Name:         mdl.Name,
+			Reasoning:    mdl.Reasoning,
+			ContextLimit: mdl.Limit.Context,
+			OutputLimit:  mdl.Limit.Output,
+			InputCost:    mdl.Cost.Input,
+			OutputCost:   mdl.Cost.Output,
+		}
+	}
+
+	return mmdm
 }
