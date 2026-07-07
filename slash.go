@@ -127,10 +127,17 @@ func slashModels(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, arg
 	}
 	sort.Strings(ids)
 
+	fmt.Printf("%-24s %-20s %-5s %-10s %-10s %s\n",
+		"ID", "NAME", "REAS", "CONTEXT", "OUTPUT", "COST (IN/OUT per M)")
 	for _, id := range ids {
 		mdl := models[id]
-		fmt.Printf("%s [%s]\n", mdl.Name, id)
-		// XXX: provide more detailed listing, maybe a table
+		reas := "no"
+		if mdl.Reasoning {
+			reas = "yes"
+		}
+		fmt.Printf("%-24s %-20s %-5s %-10d %-10d $%.2f / $%.2f\n",
+			id, mdl.Name, reas, mdl.ContextLimit, mdl.OutputLimit,
+			mdl.InputCost, mdl.OutputCost)
 	}
 
 	return nil
