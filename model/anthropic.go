@@ -166,7 +166,7 @@ func (clnt *anthropicClient) Generate(ctx context.Context, amdl Model, ast State
 		}
 
 		// XXX: move to NewModel
-		if strings.Contains(mdl.model, "-4-5-") || strings.Contains(mdl.model, "-4-1-") {
+		if strings.Contains(mdl.model, "-4-5") || strings.Contains(mdl.model, "-4-1") {
 			req.Thinking.OfEnabled = &anthropic.ThinkingConfigEnabledParam{
 				BudgetTokens: 4096,
 			}

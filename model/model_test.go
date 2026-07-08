@@ -42,7 +42,7 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 	}{
 		{provider: "openai", model: "gpt-5.4-nano", thoughts: true},
 		{provider: "anthropic", model: "claude-sonnet-4-6", thoughts: true},
-		{provider: "anthropic", model: "claude-haiku-4-5-20251001", thoughts: true},
+		{provider: "anthropic", model: "claude-haiku-4-5", thoughts: true},
 		{provider: "google", model: "gemini-3.1-flash-lite", short: true, thoughts: true},
 		{provider: "ollama", model: "llama3.2:3b", local: true},
 		{provider: "llamacpp", local: true},
