@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 
 	ollama "github.com/ollama/ollama/api"
 
@@ -15,15 +16,40 @@ import (
 
 type ollamaClient struct {
 	client *ollama.Client
+	models map[string]ModelMetadata
 }
 
 type ollamaModel struct {
-	clnt       *ollamaClient
-	model      string
-	think      *ollama.ThinkValue
-	numPredict int
-	tools      map[string]Tool
-	toolDefs   ollama.Tools
+	clnt         *ollamaClient
+	model        string
+	think        *ollama.ThinkValue
+	numPredict   int
+	contextLimit int
+	tools        map[string]Tool
+	toolDefs     ollama.Tools
+}
+
+func listOllamaModels(client *ollama.Client) map[string]ModelMetadata {
+	lst, err := client.List(context.Background())
+	if err != nil {
+		return map[string]ModelMetadata{}
+	}
+
+	mmdm := map[string]ModelMetadata{}
+	for _, m := range lst.Models {
+		if !slices.Contains(m.Capabilities, "tools") {
+			continue
+		}
+
+		mmdm[m.Model] = ModelMetadata{
+			Model:        m.Model,
+			Name:         m.Name,
+			Reasoning:    slices.Contains(m.Capabilities, "thinking"),
+			ContextLimit: m.Details.ContextLength,
+			// XXX: OutputLimit
+		}
+	}
+	return mmdm
 }
 
 func newOllamaClient(clntCfg config.ClientConfig) (Client, error) {
@@ -35,9 +61,11 @@ func newOllamaClient(clntCfg config.ClientConfig) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	client := ollama.NewClient(base, http.DefaultClient)
 
 	return &ollamaClient{
-		client: ollama.NewClient(base, http.DefaultClient),
+		client: client,
+		models: listOllamaModels(client),
 	}, nil
 }
 
@@ -49,35 +77,16 @@ func (clnt *ollamaClient) ProviderName() string {
 	return "Ollama"
 }
 
-/*
-func ListOllamaModels(ctx context.Context, baseURL, apiKey string) ([]ModelInfo, error) {
-	client, err := newOllama(baseURL)
-	if err != nil {
-		return nil, err
-	}
-
-	lst, err := client.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var models []ModelInfo
-	for _, m := range lst.Models {
-		models = append(models, ModelInfo{
-			Name:    m.Name,
-			Created: m.ModifiedAt,
-		})
-	}
-	return models, nil
-}
-*/
-
 func (clnt *ollamaClient) ListModels() map[string]ModelMetadata {
-	// XXX: use ListOllamaModels
-	return map[string]ModelMetadata{}
+	return clnt.models
 }
 
 func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig) (Model, error) {
+	mmd, ok := clnt.models[mdlCfg.Model]
+	if !ok {
+		return nil, fmt.Errorf("unknown model: %s", mdlCfg.Model)
+	}
+
 	var think *ollama.ThinkValue
 	switch mdlCfg.Effort {
 	case "", "default":
@@ -96,10 +105,11 @@ func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig) (Model, error) {
 	}
 
 	return &ollamaModel{
-		clnt:       clnt,
-		model:      mdlCfg.Model,
-		think:      think,
-		numPredict: numPredict,
+		clnt:         clnt,
+		model:        mdlCfg.Model,
+		think:        think,
+		numPredict:   numPredict,
+		contextLimit: mmd.ContextLimit,
 	}, nil
 }
 
@@ -317,5 +327,5 @@ func (mdl *ollamaModel) SetTools(tools map[string]Tool) error {
 }
 
 func (mdl *ollamaModel) ContextLimit() int {
-	return 0 // XXX: no model metadata available
+	return mdl.contextLimit
 }
