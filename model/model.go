@@ -15,8 +15,7 @@ type Client interface {
 	Provider() string
 	ProviderName() string
 	ListModels() map[string]ModelMetadata
-	// XXX: remove tools as an argument?
-	NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model, error)
+	NewModel(mdlCfg config.ModelConfig) (Model, error)
 	NewState() State
 }
 

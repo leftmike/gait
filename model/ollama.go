@@ -77,9 +77,7 @@ func (clnt *ollamaClient) ListModels() map[string]ModelMetadata {
 	return map[string]ModelMetadata{}
 }
 
-func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
-	error) {
-
+func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig) (Model, error) {
 	var think *ollama.ThinkValue
 	switch mdlCfg.Effort {
 	case "", "default":
@@ -97,19 +95,12 @@ func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 		numPredict = mdlCfg.MaxTokens
 	}
 
-	mdl := ollamaModel{
+	return &ollamaModel{
 		clnt:       clnt,
 		model:      mdlCfg.Model,
 		think:      think,
 		numPredict: numPredict,
-	}
-
-	err := mdl.SetTools(tools)
-	if err != nil {
-		return nil, err
-	}
-
-	return &mdl, nil
+	}, nil
 }
 
 func (clnt *ollamaClient) NewState() State {

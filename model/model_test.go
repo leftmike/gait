@@ -83,7 +83,7 @@ func testSimple(t *testing.T, clnt model.Client, provider, name string,
 
 	fmt.Println(provider, name)
 
-	mdl, err := clnt.NewModel(mdlCfg, nil)
+	mdl, err := clnt.NewModel(mdlCfg)
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
@@ -164,9 +164,13 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 		},
 	}
 
-	mdl, err := clnt.NewModel(mdlCfg, tools)
+	mdl, err := clnt.NewModel(mdlCfg)
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
+	}
+	err = mdl.SetTools(tools)
+	if err != nil {
+		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}
 
 	st := clnt.NewState()
@@ -232,9 +236,13 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 		},
 	}
 
-	mdl, err := clnt.NewModel(mdlCfg, tools)
+	mdl, err := clnt.NewModel(mdlCfg)
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
+	}
+	err = mdl.SetTools(tools)
+	if err != nil {
+		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}
 
 	st := clnt.NewState()

@@ -60,12 +60,12 @@ func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) e
 	line := liner.NewLiner()
 	defer line.Close()
 
-	mdl, err := ag.Client().NewModel(mdlCfg, ag.Tools())
+	err := ag.Model.SetTools(ag.Tools)
 	if err != nil {
 		return err
 	}
 
-	st := ag.Client().NewState()
+	st := ag.Client.NewState()
 	ag.SystemPrompt(st)
 
 	ctx := context.Background()
@@ -80,7 +80,7 @@ func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) e
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			err := slash(ag, mdlCfg, mdl, st, s)
+			err := slash(ag, mdlCfg, st, s)
 			if err == io.EOF {
 				fmt.Println()
 				break
@@ -95,7 +95,7 @@ func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) e
 		st.Prompt(s)
 		n := st.Len()
 
-		err = ag.Generate(ctx, mdl, st, opts)
+		err = ag.Model.Generate(ctx, st, opts)
 		if err != nil {
 			return err
 		}
@@ -154,11 +154,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	mdl, err := clnt.NewModel(mdlCfg)
+	if err != nil {
+		fmt.Printf("%s: %s\n", os.Args[0], err)
+		os.Exit(1)
+	}
+
 	if verbose {
 		fmt.Println(clntCfg.Provider, mdlCfg.Model)
 	}
 
-	ag := agent.NewAgent(clntCfg, clnt)
+	ag := agent.Agent{
+		Client: clnt,
+		Model:  mdl,
+	}
 
 	for _, dir := range cfg.Skills {
 		err := ag.AddSkill(dir)
@@ -184,7 +193,7 @@ func main() {
 		ag.AddWebSearchTool(cfg.BraveAPIKey)
 	}
 
-	err = interact(ag, mdlCfg, opts)
+	err = interact(&ag, mdlCfg, opts)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 	}

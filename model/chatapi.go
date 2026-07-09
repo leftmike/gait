@@ -70,9 +70,7 @@ func (clnt *chatAPIClient) ListModels() map[string]ModelMetadata {
 	return map[string]ModelMetadata{} // XXX
 }
 
-func (clnt *chatAPIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
-	error) {
-
+func (clnt *chatAPIClient) NewModel(mdlCfg config.ModelConfig) (Model, error) {
 	// XXX: mdlCfg.IncludeThoughts
 	// XXX: mdlCfg.MaxTokens
 
@@ -80,17 +78,10 @@ func (clnt *chatAPIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]
 		return nil, fmt.Errorf("%s: effort is not supported: %s", clnt.provider, mdlCfg.Effort)
 	}
 
-	mdl := chatAPIModel{
+	return &chatAPIModel{
 		clnt:  clnt,
 		model: mdlCfg.Model,
-	}
-
-	err := mdl.SetTools(tools)
-	if err != nil {
-		return nil, err
-	}
-
-	return &mdl, nil
+	}, nil
 }
 
 func (clnt *chatAPIClient) NewState() State {

@@ -16,8 +16,7 @@ var (
 	slashCommands = map[string]struct {
 		cmd  string
 		desc string
-		fn   func(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-			args []string) error
+		fn   func(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args []string) error
 	}{
 		"/clear": {
 			cmd:  "/clear",
@@ -58,12 +57,10 @@ func init() {
 	slashCommands["/help"] = sc
 }
 
-func slash(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-	s string) error {
-
+func slash(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, s string) error {
 	cmd, args := parseSlash(s)
 	if sc, ok := slashCommands[cmd]; ok {
-		return sc.fn(ag, mdlCfg, mdl, st, args)
+		return sc.fn(ag, mdlCfg, st, args)
 	}
 
 	fmt.Print("commands:")
@@ -90,9 +87,7 @@ func parseSlash(s string) (string, []string) {
 	return args[0], args[1:i]
 }
 
-func slashClear(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-	args []string) error {
-
+func slashClear(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/clear: no arguments allowed: %s", args)
 	}
@@ -101,15 +96,11 @@ func slashClear(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st 
 	return nil
 }
 
-func slashExit(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-	args []string) error {
-
+func slashExit(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args []string) error {
 	return io.EOF
 }
 
-func slashHelp(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-	args []string) error {
-
+func slashHelp(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/help: no arguments allowed: %s", args)
 	}
@@ -124,14 +115,12 @@ func slashHelp(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st m
 	return nil
 }
 
-func slashModels(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-	args []string) error {
-
+func slashModels(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/models: no arguments allowed: %s", args)
 	}
 
-	models := ag.Client().ListModels()
+	models := ag.Client.ListModels()
 	var ids []string
 	for id := range models {
 		ids = append(ids, id)
@@ -154,11 +143,9 @@ func slashModels(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st
 	return nil
 }
 
-func slashSkills(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-	args []string) error {
-
+func slashSkills(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args []string) error {
 	if len(args) == 0 {
-		for _, sk := range ag.Skills() {
+		for _, sk := range ag.Skills {
 			fmt.Println(sk.Name)
 		}
 	} else {
@@ -167,7 +154,7 @@ func slashSkills(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st
 				fmt.Println()
 			}
 
-			sk := skill.FindSkill(ag.Skills(), arg)
+			sk := skill.FindSkill(ag.Skills, arg)
 			if sk == nil {
 				return fmt.Errorf("skill not found: %s", arg)
 			}
@@ -196,9 +183,7 @@ func slashSkills(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st
 	return nil
 }
 
-func slashCost(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-	args []string) error {
-
+func slashCost(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/cost: no arguments allowed: %s", args)
 	}
@@ -212,14 +197,14 @@ func slashCost(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st m
 	return nil
 }
 
-func slashContext(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
+func slashContext(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State,
 	args []string) error {
 
 	if len(args) > 0 {
 		return fmt.Errorf("/context: no arguments allowed: %s", args)
 	}
 
-	printContext(mdl, st)
+	printContext(ag.Model, st)
 	return nil
 }
 
@@ -235,14 +220,12 @@ func printContext(mdl model.Model, st model.State) {
 	}
 }
 
-func slashStatus(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st model.State,
-	args []string) error {
-
+func slashStatus(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/status: no arguments allowed: %s", args)
 	}
 
-	fmt.Printf("provider: %s\n", ag.Provider())
+	fmt.Printf("provider: %s\n", ag.Client.Provider())
 	fmt.Printf("model:    %s\n", mdlCfg.Model)
 	if mdlCfg.Effort != "" {
 		fmt.Printf("effort:   %s\n", mdlCfg.Effort)
@@ -253,7 +236,7 @@ func slashStatus(ag *agent.Agent, mdlCfg config.ModelConfig, mdl model.Model, st
 	inputCost, outputCost := st.Cost()
 	fmt.Printf("input tokens:  %d ($%.4f)\n", inputTokens, inputCost)
 	fmt.Printf("output tokens: %d ($%.4f)\n", outputTokens, outputCost)
-	printContext(mdl, st)
+	printContext(ag.Model, st)
 
 	return nil
 }

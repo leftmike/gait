@@ -12,35 +12,19 @@ import (
 )
 
 type Agent struct {
-	provider string
-	clnt     model.Client
-	tools    map[string]model.Tool
-	skills   []*skill.Skill
-	clnts    []*mcpclient.Client // XXX: rename field
-}
-
-func NewAgent(clntCfg config.ClientConfig, clnt model.Client) *Agent {
-	return &Agent{
-		provider: clntCfg.Provider,
-		clnt:     clnt,
-		tools:    map[string]model.Tool{},
-	}
-}
-
-func (ag *Agent) Client() model.Client {
-	return ag.clnt
-}
-
-func (ag *Agent) Provider() string {
-	return ag.provider
-}
-
-func (ag *Agent) Tools() map[string]model.Tool {
-	return ag.tools
+	Client model.Client
+	Model  model.Model
+	Tools  map[string]model.Tool
+	Skills []*skill.Skill
+	clnts  []*mcpclient.Client // XXX: rename field
 }
 
 func (ag *Agent) AddTool(name, desc string, fn model.ToolFunc, scm model.ToolSchema) {
-	ag.tools[name] = model.Tool{
+	if ag.Tools == nil {
+		ag.Tools = map[string]model.Tool{}
+	}
+
+	ag.Tools[name] = model.Tool{
 		Name:        name,
 		Description: desc,
 		Func:        fn,
@@ -53,7 +37,7 @@ func (ag *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose
 	if err != nil {
 		return err
 	}
-	clnt.AddTools(ag.tools)
+	clnt.AddTools(ag.Tools)
 	ag.clnts = append(ag.clnts, clnt)
 	return nil
 }
@@ -69,27 +53,16 @@ func (ag *Agent) AddSkill(dir string) error {
 
 	for _, sk := range skills {
 		// XXX: ag.fs.AddTree(sk.Dir, false)
-		ag.skills = append(ag.skills, sk)
+		ag.Skills = append(ag.Skills, sk)
 	}
 
 	return nil
 }
 
-func (ag *Agent) Skills() []*skill.Skill {
-	return ag.skills
-}
-
 func (ag *Agent) SystemPrompt(st model.State) {
-	if len(ag.skills) > 0 {
-		st.SystemPrompt(skill.SystemPrompt(ag.skills))
+	if len(ag.Skills) > 0 {
+		st.SystemPrompt(skill.SystemPrompt(ag.Skills))
 	}
-}
-
-// XXX: is this still necessary?
-func (ag *Agent) Generate(ctx context.Context, mdl model.Model, st model.State,
-	opts *model.Options) error {
-
-	return mdl.Generate(ctx, st, opts)
 }
 
 type readFileArgs struct {
@@ -111,12 +84,8 @@ func (ag *Agent) readFile(ctx context.Context, buf []byte) (string, error) {
 }
 
 func (ag *Agent) AddReadFileTool() {
-	if _, ok := ag.tools["read_file"]; !ok {
-		ag.tools["read_file"] = model.Tool{
-			Name:        "read_file",
-			Description: "reads the contents of a file",
-			Func:        ag.readFile,
-			Schema:      model.MustToolSchema[readFileArgs](),
-		}
+	if _, ok := ag.Tools["read_file"]; !ok {
+		ag.AddTool("read_file", "reads the contents of a file", ag.readFile,
+			model.MustToolSchema[readFileArgs]())
 	}
 }

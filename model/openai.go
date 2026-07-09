@@ -79,9 +79,7 @@ func (clnt *openAIClient) ListModels() map[string]ModelMetadata {
 	return clnt.models
 }
 
-func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
-	error) {
-
+func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig) (Model, error) {
 	mmd, ok := clnt.models[mdlCfg.Model]
 	if !ok {
 		return nil, fmt.Errorf("unknown model: %s", mdlCfg.Model)
@@ -117,7 +115,7 @@ func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 			mdlCfg.Effort)
 	}
 
-	mdl := openAIModel{
+	return &openAIModel{
 		clnt:            clnt,
 		model:           mdlCfg.Model,
 		includeThoughts: mdlCfg.IncludeThoughts,
@@ -126,14 +124,7 @@ func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 		contextLimit:    mmd.ContextLimit,
 		inputCost:       mmd.InputCost,
 		outputCost:      mmd.OutputCost,
-	}
-
-	err := mdl.SetTools(tools)
-	if err != nil {
-		return nil, err
-	}
-
-	return &mdl, nil
+	}, nil
 }
 
 func (clnt *openAIClient) NewState() State {

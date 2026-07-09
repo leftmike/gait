@@ -79,9 +79,7 @@ func (clnt *anthropicClient) ListModels() map[string]ModelMetadata {
 	return clnt.models
 }
 
-func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
-	error) {
-
+func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig) (Model, error) {
 	mmd, ok := clnt.models[mdlCfg.Model]
 	if !ok {
 		return nil, fmt.Errorf("unknown model: %s", mdlCfg.Model)
@@ -115,7 +113,7 @@ func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[strin
 			mdlCfg.Effort)
 	}
 
-	mdl := anthropicModel{
+	return &anthropicModel{
 		clnt:            clnt,
 		model:           anthropic.Model(mdlCfg.Model),
 		includeThoughts: mdlCfg.IncludeThoughts,
@@ -124,14 +122,7 @@ func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[strin
 		contextLimit:    mmd.ContextLimit,
 		inputCost:       mmd.InputCost,
 		outputCost:      mmd.OutputCost,
-	}
-
-	err := mdl.SetTools(tools)
-	if err != nil {
-		return nil, err
-	}
-
-	return &mdl, nil
+	}, nil
 }
 
 func (clnt *anthropicClient) NewState() State {
