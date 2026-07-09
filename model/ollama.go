@@ -41,10 +41,6 @@ func newOllamaClient(clntCfg config.ClientConfig) (Client, error) {
 	}, nil
 }
 
-func (clnt *ollamaClient) EffortLevels() []string {
-	return []string{"low", "medium", "high", "max"}
-}
-
 func (clnt *ollamaClient) Provider() string {
 	return "ollama"
 }
@@ -85,10 +81,15 @@ func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 	error) {
 
 	var think *ollama.ThinkValue
-	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
+	switch mdlCfg.Effort {
+	case "", "default":
+		if mdlCfg.IncludeThoughts {
+			think = &ollama.ThinkValue{Value: true}
+		}
+	case "low", "medium", "high", "max":
 		think = &ollama.ThinkValue{Value: mdlCfg.Effort}
-	} else if mdlCfg.IncludeThoughts {
-		think = &ollama.ThinkValue{Value: true}
+	default:
+		return nil, fmt.Errorf("effort must be low, medium, high, or max: %s", mdlCfg.Effort)
 	}
 
 	numPredict := 8192

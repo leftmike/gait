@@ -58,10 +58,6 @@ func newLlamaCppClient(clntCfg config.ClientConfig) (Client, error) {
 	}, nil
 }
 
-func (clnt *chatAPIClient) EffortLevels() []string {
-	return nil
-}
-
 func (clnt *chatAPIClient) Provider() string {
 	return clnt.provider
 }
@@ -77,8 +73,12 @@ func (clnt *chatAPIClient) ListModels() map[string]ModelMetadata {
 func (clnt *chatAPIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	// XXX: mdlCfg.IncludeThoughts and mdlCfg.Effort
+	// XXX: mdlCfg.IncludeThoughts
 	// XXX: mdlCfg.MaxTokens
+
+	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
+		return nil, fmt.Errorf("%s: effort is not supported: %s", clnt.provider, mdlCfg.Effort)
+	}
 
 	mdl := chatAPIModel{
 		clnt:  clnt,

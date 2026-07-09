@@ -41,7 +41,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strings"
 
 	"github.com/peterh/liner"
@@ -152,14 +151,6 @@ func main() {
 	clnt, err := model.NewClient(clntCfg)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
-		os.Exit(1)
-	}
-
-	// XXX
-	effort := mdlCfg.Effort
-	if effort != "" && effort != "default" && !slices.Contains(clnt.EffortLevels(), effort) {
-		fmt.Printf("%s: effort must be default, %s: %s\n", os.Args[0],
-			strings.Join(clnt.EffortLevels(), ", "), effort)
 		os.Exit(1)
 	}
 

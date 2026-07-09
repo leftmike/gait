@@ -62,10 +62,6 @@ func newOpenAIClient(apiKey string) (Client, error) {
 	}, nil
 }
 
-func (clnt *openAIClient) EffortLevels() []string {
-	return []string{"none", "minimal", "low", "medium", "high", "xhigh"}
-}
-
 func (clnt *openAIClient) Provider() string {
 	return "openai"
 }
@@ -98,7 +94,8 @@ func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 	case "xhigh":
 		effort = responses.ReasoningEffortXhigh
 	default:
-		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+		return nil, fmt.Errorf("effort must be none, minimal, low, medium, high, or xhigh: %s",
+			mdlCfg.Effort)
 	}
 
 	mdl := openAIModel{

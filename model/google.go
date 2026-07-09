@@ -75,10 +75,6 @@ func newGoogleClient(apiKey string) (Client, error) {
 	}, nil
 }
 
-func (clnt *googleClient) EffortLevels() []string {
-	return []string{"minimal", "low", "medium", "high"}
-}
-
 func (clnt *googleClient) Provider() string {
 	return "google"
 }
@@ -107,7 +103,7 @@ func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 	case "high":
 		thinkingLevel = genai.ThinkingLevelHigh
 	default:
-		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+		return nil, fmt.Errorf("effort must be minimal, low, medium, or high: %s", mdlCfg.Effort)
 	}
 
 	var maxOutputTokens int32

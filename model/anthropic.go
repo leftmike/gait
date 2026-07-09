@@ -62,10 +62,6 @@ func newAnthropicClient(apiKey string) (Client, error) {
 	}, nil
 }
 
-func (clnt *anthropicClient) EffortLevels() []string {
-	return []string{"low", "medium", "high", "xhigh", "max"}
-}
-
 func (clnt *anthropicClient) Provider() string {
 	return "anthropic"
 }
@@ -101,7 +97,8 @@ func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[strin
 	case "max":
 		effort = anthropic.OutputConfigEffortMax
 	default:
-		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+		return nil, fmt.Errorf("effort must be low, medium, high, xhigh, or max: %s",
+			mdlCfg.Effort)
 	}
 
 	mdl := anthropicModel{
