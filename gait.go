@@ -80,7 +80,7 @@ func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) e
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			err := slash(ag, mdlCfg, st, s)
+			err := slash(ag, mdlCfg, mdl, st, s)
 			if err == io.EOF {
 				fmt.Println()
 				break

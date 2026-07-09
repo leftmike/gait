@@ -213,6 +213,10 @@ func (mdl *chatAPIModel) SetTools(tools map[string]Tool) error {
 	return nil
 }
 
+func (mdl *chatAPIModel) ContextLimit() int {
+	return 0 // XXX: no model metadata available
+}
+
 func (st *chatAPIState) SystemPrompt(s string) {
 	st.systemPrompt = s
 }

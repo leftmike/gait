@@ -390,6 +390,10 @@ func (mdl *anthropicModel) SetTools(tools map[string]Tool) error {
 	return nil
 }
 
+func (mdl *anthropicModel) ContextLimit() int {
+	return mdl.contextLimit
+}
+
 func (st *anthropicState) SystemPrompt(s string) {
 	st.systemPrompt = s
 }

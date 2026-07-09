@@ -442,6 +442,10 @@ func (mdl *googleModel) SetTools(tools map[string]Tool) error {
 
 }
 
+func (mdl *googleModel) ContextLimit() int {
+	return mdl.contextLimit
+}
+
 func (st *googleState) SystemPrompt(s string) {
 	st.systemPrompt = s
 }

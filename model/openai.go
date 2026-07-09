@@ -335,6 +335,10 @@ func (mdl *openAIModel) SetTools(tools map[string]Tool) error {
 	return nil
 }
 
+func (mdl *openAIModel) ContextLimit() int {
+	return mdl.contextLimit
+}
+
 func (st *openAIState) SystemPrompt(s string) {
 	st.systemPrompt = s
 }

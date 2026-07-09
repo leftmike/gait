@@ -324,3 +324,7 @@ func (mdl *ollamaModel) SetTools(tools map[string]Tool) error {
 
 	return nil
 }
+
+func (mdl *ollamaModel) ContextLimit() int {
+	return 0 // XXX: no model metadata available
+}
