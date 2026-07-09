@@ -24,6 +24,9 @@ type googleModel struct {
 	includeThoughts bool
 	thinkingLevel   genai.ThinkingLevel
 	maxOutputTokens int32
+	contextLimit    int
+	inputCost       float64
+	outputCost      float64
 	tools           map[string]Tool
 	funcDecls       []*genai.FunctionDeclaration
 }
@@ -90,6 +93,11 @@ func (clnt *googleClient) ListModels() map[string]ModelMetadata {
 func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
+	mmd, ok := clnt.models[mdlCfg.Model]
+	if !ok {
+		return nil, fmt.Errorf("unknown model: %s", mdlCfg.Model)
+	}
+
 	var thinkingLevel genai.ThinkingLevel
 	switch mdlCfg.Effort {
 	case "", "default":
@@ -106,11 +114,13 @@ func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 		return nil, fmt.Errorf("effort must be minimal, low, medium, or high: %s", mdlCfg.Effort)
 	}
 
-	var maxOutputTokens int32
+	maxOutputTokens := int32(mmd.OutputLimit) / 4
 	if mdlCfg.MaxTokens > 0 {
 		maxOutputTokens = int32(mdlCfg.MaxTokens)
-	} else {
-		maxOutputTokens = 65536
+	}
+	if mmd.OutputLimit > 0 && maxOutputTokens > int32(mmd.OutputLimit) {
+		return nil, fmt.Errorf("max tokens %d exceeds output limit %d for model %s",
+			maxOutputTokens, mmd.OutputLimit, mdlCfg.Model)
 	}
 
 	mdl := googleModel{
@@ -119,6 +129,9 @@ func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 		includeThoughts: mdlCfg.IncludeThoughts,
 		thinkingLevel:   thinkingLevel,
 		maxOutputTokens: maxOutputTokens,
+		contextLimit:    mmd.ContextLimit,
+		inputCost:       mmd.InputCost,
+		outputCost:      mmd.OutputCost,
 	}
 
 	err := mdl.SetTools(tools)

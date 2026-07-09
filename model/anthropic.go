@@ -27,6 +27,9 @@ type anthropicModel struct {
 	includeThoughts bool
 	effort          anthropic.OutputConfigEffort
 	maxTokens       int64
+	contextLimit    int
+	inputCost       float64
+	outputCost      float64
 	tools           map[string]Tool
 	toolParams      []anthropic.ToolUnionParam
 }
@@ -77,9 +80,18 @@ func (clnt *anthropicClient) ListModels() map[string]ModelMetadata {
 func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	maxTokens := int64(64000)
+	mmd, ok := clnt.models[mdlCfg.Model]
+	if !ok {
+		return nil, fmt.Errorf("unknown model: %s", mdlCfg.Model)
+	}
+
+	maxTokens := int64(mmd.OutputLimit) / 4
 	if mdlCfg.MaxTokens > 0 {
 		maxTokens = int64(mdlCfg.MaxTokens)
+	}
+	if mmd.OutputLimit > 0 && maxTokens > int64(mmd.OutputLimit) {
+		return nil, fmt.Errorf("max tokens %d exceeds output limit %d for model %s",
+			maxTokens, mmd.OutputLimit, mdlCfg.Model)
 	}
 
 	var effort anthropic.OutputConfigEffort
@@ -107,6 +119,9 @@ func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[strin
 		includeThoughts: mdlCfg.IncludeThoughts,
 		effort:          effort,
 		maxTokens:       maxTokens,
+		contextLimit:    mmd.ContextLimit,
+		inputCost:       mmd.InputCost,
+		outputCost:      mmd.OutputCost,
 	}
 
 	err := mdl.SetTools(tools)

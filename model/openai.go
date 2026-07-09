@@ -28,6 +28,9 @@ type openAIModel struct {
 	includeThoughts bool
 	effort          responses.ReasoningEffort
 	maxOutputTokens int64
+	contextLimit    int
+	inputCost       float64
+	outputCost      float64
 	toolParams      []responses.ToolUnionParam
 	tools           map[string]Tool
 }
@@ -77,6 +80,20 @@ func (clnt *openAIClient) ListModels() map[string]ModelMetadata {
 func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
+	mmd, ok := clnt.models[mdlCfg.Model]
+	if !ok {
+		return nil, fmt.Errorf("unknown model: %s", mdlCfg.Model)
+	}
+
+	maxOutputTokens := int64(mmd.OutputLimit) / 4
+	if mdlCfg.MaxTokens > 0 {
+		maxOutputTokens = int64(mdlCfg.MaxTokens)
+	}
+	if mmd.OutputLimit > 0 && maxOutputTokens > int64(mmd.OutputLimit) {
+		return nil, fmt.Errorf("max tokens %d exceeds output limit %d for model %s",
+			maxOutputTokens, mmd.OutputLimit, mdlCfg.Model)
+	}
+
 	var effort responses.ReasoningEffort
 	switch mdlCfg.Effort {
 	case "", "default":
@@ -103,7 +120,10 @@ func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]T
 		model:           mdlCfg.Model,
 		includeThoughts: mdlCfg.IncludeThoughts,
 		effort:          effort,
-		maxOutputTokens: int64(mdlCfg.MaxTokens),
+		maxOutputTokens: maxOutputTokens,
+		contextLimit:    mmd.ContextLimit,
+		inputCost:       mmd.InputCost,
+		outputCost:      mmd.OutputCost,
 	}
 
 	err := mdl.SetTools(tools)
