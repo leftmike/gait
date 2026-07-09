@@ -87,6 +87,7 @@ type State interface {
 	Step(n int) Step
 	Clear()
 	Usage() (int64, int64, int64) // input tokens, output tokens, contextTokens
+	Cost() (float64, float64)     // input cost, output cost
 }
 
 func NewClient(clntCfg config.ClientConfig) (Client, error) {

@@ -246,6 +246,10 @@ func (st *chatAPIState) Usage() (int64, int64, int64) {
 	return st.inputTokens, st.outputTokens, st.contextTokens
 }
 
+func (st *chatAPIState) Cost() (float64, float64) {
+	return 0, 0
+}
+
 func (step chatAPIStep) toolCall() openai.ChatCompletionMessageToolCallUnionParam {
 	if step.typ != ToolCallStep {
 		panic("must be a tool call step")

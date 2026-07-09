@@ -48,6 +48,8 @@ type googleState struct {
 	inputTokens   int32
 	outputTokens  int32
 	contextTokens int32
+	inputCost     float64 // cents
+	outputCost    float64 // cents
 }
 
 type googleToolCall struct {
@@ -304,6 +306,8 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 		st.outputTokens += rsp.UsageMetadata.CandidatesTokenCount
 		st.contextTokens = rsp.UsageMetadata.PromptTokenCount +
 			rsp.UsageMetadata.CandidatesTokenCount
+		st.inputCost += float64(rsp.UsageMetadata.PromptTokenCount) / 10_000 * mdl.inputCost
+		st.outputCost += float64(rsp.UsageMetadata.CandidatesTokenCount) / 10_000 * mdl.outputCost
 
 		if opts.Trace {
 			if opts.Verbose {
@@ -469,4 +473,8 @@ func (st *googleState) Clear() {
 
 func (st *googleState) Usage() (int64, int64, int64) {
 	return int64(st.inputTokens), int64(st.outputTokens), int64(st.contextTokens)
+}
+
+func (st *googleState) Cost() (float64, float64) {
+	return st.inputCost / 100, st.outputCost / 100
 }

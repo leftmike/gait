@@ -50,6 +50,8 @@ type anthropicState struct {
 	inputTokens   int64
 	outputTokens  int64
 	contextTokens int64
+	inputCost     float64 // cents
+	outputCost    float64 // cents
 }
 
 func newAnthropicClient(apiKey string) (Client, error) {
@@ -256,6 +258,8 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, opts *Option
 		st.inputTokens += rsp.Usage.InputTokens
 		st.outputTokens += rsp.Usage.OutputTokens
 		st.contextTokens = rsp.Usage.InputTokens + rsp.Usage.OutputTokens
+		st.inputCost += float64(rsp.Usage.InputTokens) / 10_000 * mdl.inputCost
+		st.outputCost += float64(rsp.Usage.OutputTokens) / 10_000 * mdl.outputCost
 
 		if rsp.StopReason == anthropic.StopReasonMaxTokens {
 			return fmt.Errorf("max tokens reached: output was truncated")
@@ -417,4 +421,8 @@ func (st *anthropicState) Clear() {
 
 func (st *anthropicState) Usage() (int64, int64, int64) {
 	return st.inputTokens, st.outputTokens, st.contextTokens
+}
+
+func (st *anthropicState) Cost() (float64, float64) {
+	return st.inputCost / 100, st.outputCost / 100
 }

@@ -50,6 +50,8 @@ type openAIState struct {
 	inputTokens   int64
 	outputTokens  int64
 	contextTokens int64
+	inputCost     float64 // cents
+	outputCost    float64 // cents
 }
 
 func newOpenAIClient(apiKey string) (Client, error) {
@@ -195,6 +197,8 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) 
 		st.inputTokens += rsp.Usage.InputTokens
 		st.outputTokens += rsp.Usage.OutputTokens
 		st.contextTokens = rsp.Usage.InputTokens + rsp.Usage.OutputTokens
+		st.inputCost += float64(rsp.Usage.InputTokens) / 10_000 * mdl.inputCost
+		st.outputCost += float64(rsp.Usage.OutputTokens) / 10_000 * mdl.outputCost
 
 		if rsp.Status == responses.ResponseStatusIncomplete {
 			return fmt.Errorf("max tokens reached: output was truncated")
@@ -362,6 +366,10 @@ func (st *openAIState) Clear() {
 
 func (st *openAIState) Usage() (int64, int64, int64) {
 	return st.inputTokens, st.outputTokens, st.contextTokens
+}
+
+func (st *openAIState) Cost() (float64, float64) {
+	return st.inputCost / 100, st.outputCost / 100
 }
 
 func openAIInputText(role, text string) responses.ResponseInputItemUnionParam {
