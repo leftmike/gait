@@ -16,9 +16,9 @@ type Client interface {
 	ProviderName() string
 	ListModels() map[string]ModelMetadata
 	EffortLevels() []string // XXX: add to ListModels?
+	// XXX: remove tools as an argument?
 	NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model, error)
 	NewState() State
-	Generate(ctx context.Context, mdl Model, st State, opts *Options) error
 }
 
 type ModelMetadata struct {
@@ -32,6 +32,8 @@ type ModelMetadata struct {
 }
 
 type Model interface {
+	Generate(ctx context.Context, st State, opts *Options) error
+	// XXX: SetModelConfig vs creating a new model and reuse the state?
 	SetModelConfig(mdlCfg config.ModelConfig) error
 	SetTools(tools map[string]Tool) error
 }

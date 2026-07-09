@@ -20,6 +20,7 @@ type chatAPIClient struct {
 }
 
 type chatAPIModel struct {
+	clnt       *chatAPIClient
 	model      string
 	tools      map[string]Tool
 	toolParams []openai.ChatCompletionToolUnionParam
@@ -76,7 +77,10 @@ func (clnt *chatAPIClient) ListModels() map[string]ModelMetadata {
 func (clnt *chatAPIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	var mdl chatAPIModel
+	mdl := chatAPIModel{
+		clnt: clnt,
+	}
+
 	err := mdl.SetModelConfig(mdlCfg)
 	if err != nil {
 		return nil, err
@@ -94,17 +98,14 @@ func (clnt *chatAPIClient) NewState() State {
 	return &chatAPIState{}
 }
 
-func (clnt *chatAPIClient) Generate(ctx context.Context, amdl Model, ast State,
-	opts *Options) error {
-
+func (mdl *chatAPIModel) Generate(ctx context.Context, ast State, opts *Options) error {
 	st := ast.(*chatAPIState)
-	mdl := amdl.(*chatAPIModel)
 
 	for {
 		msgs, txtLen := st.toMessages()
 
 		if opts.Trace {
-			fmt.Printf("Trace: %s Chat.Completions.New(", clnt.provider)
+			fmt.Printf("Trace: %s Chat.Completions.New(", mdl.clnt.provider)
 			if opts.Verbose {
 				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
 			}
@@ -119,7 +120,7 @@ func (clnt *chatAPIClient) Generate(ctx context.Context, amdl Model, ast State,
 			params.Tools = mdl.toolParams
 		}
 
-		rsp, err := clnt.client.Chat.Completions.New(ctx, params)
+		rsp, err := mdl.clnt.client.Chat.Completions.New(ctx, params)
 		if opts.Trace {
 			fmt.Print(err)
 			if opts.Verbose && rsp != nil {
@@ -137,7 +138,7 @@ func (clnt *chatAPIClient) Generate(ctx context.Context, amdl Model, ast State,
 		st.contextTokens = rsp.Usage.PromptTokens + rsp.Usage.CompletionTokens
 
 		if len(rsp.Choices) == 0 {
-			return fmt.Errorf("%s: no choices returned", clnt.provider)
+			return fmt.Errorf("%s: no choices returned", mdl.clnt.provider)
 		}
 		if rsp.Choices[0].FinishReason == "length" {
 			return fmt.Errorf("max tokens reached: output was truncated")

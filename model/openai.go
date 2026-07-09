@@ -23,6 +23,7 @@ type openAIClient struct {
 }
 
 type openAIModel struct {
+	clnt            *openAIClient
 	model           string
 	includeThoughts bool
 	effort          responses.ReasoningEffort
@@ -80,7 +81,10 @@ func (clnt *openAIClient) ListModels() map[string]ModelMetadata {
 func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	var mdl openAIModel
+	mdl := openAIModel{
+		clnt: clnt,
+	}
+
 	err := mdl.SetModelConfig(mdlCfg)
 	if err != nil {
 		return nil, err
@@ -98,10 +102,7 @@ func (clnt *openAIClient) NewState() State {
 	return &openAIState{}
 }
 
-func (clnt *openAIClient) Generate(ctx context.Context, amdl Model, ast State,
-	opts *Options) error {
-
-	mdl := amdl.(*openAIModel)
+func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) error {
 	st := ast.(*openAIState)
 
 	reasoningParam := responses.ReasoningParam{
@@ -142,7 +143,7 @@ func (clnt *openAIClient) Generate(ctx context.Context, amdl Model, ast State,
 			rspParams.MaxOutputTokens = openai.Int(mdl.maxOutputTokens)
 		}
 
-		rsp, err := clnt.client.Responses.New(ctx, rspParams)
+		rsp, err := mdl.clnt.client.Responses.New(ctx, rspParams)
 		if opts.Trace {
 			fmt.Print(err)
 			if opts.Verbose && rsp != nil {

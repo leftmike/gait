@@ -19,6 +19,7 @@ type googleClient struct {
 }
 
 type googleModel struct {
+	clnt            *googleClient
 	model           string
 	includeThoughts bool
 	thinkingLevel   genai.ThinkingLevel
@@ -93,7 +94,10 @@ func (clnt *googleClient) ListModels() map[string]ModelMetadata {
 func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	var mdl googleModel
+	mdl := googleModel{
+		clnt: clnt,
+	}
+
 	err := mdl.SetModelConfig(mdlCfg)
 	if err != nil {
 		return nil, err
@@ -214,10 +218,7 @@ func (st *googleState) toContents() ([]*genai.Content, int) {
 	return cnts, txtLen
 }
 
-func (clnt *googleClient) Generate(ctx context.Context, amdl Model, ast State,
-	opts *Options) error {
-
-	mdl := amdl.(*googleModel)
+func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) error {
 	st := ast.(*googleState)
 
 	gccfg := genai.GenerateContentConfig{
@@ -253,7 +254,7 @@ func (clnt *googleClient) Generate(ctx context.Context, amdl Model, ast State,
 			fmt.Print(") -> ")
 		}
 
-		rsp, err := clnt.client.Models.GenerateContent(ctx, mdl.model, cnts, &gccfg)
+		rsp, err := mdl.clnt.client.Models.GenerateContent(ctx, mdl.model, cnts, &gccfg)
 
 		if opts.Trace {
 			fmt.Print(err)

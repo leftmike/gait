@@ -18,6 +18,7 @@ type ollamaClient struct {
 }
 
 type ollamaModel struct {
+	clnt       *ollamaClient
 	model      string
 	think      *ollama.ThinkValue
 	numPredict int
@@ -83,7 +84,10 @@ func (clnt *ollamaClient) ListModels() map[string]ModelMetadata {
 func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	var mdl ollamaModel
+	mdl := ollamaModel{
+		clnt: clnt,
+	}
+
 	err := mdl.SetModelConfig(mdlCfg)
 	if err != nil {
 		return nil, err
@@ -165,10 +169,7 @@ func (st *chatAPIState) toOllamaMessages() ([]ollama.Message, int) {
 	return msgs, txtLen
 }
 
-func (clnt *ollamaClient) Generate(ctx context.Context, amdl Model, ast State,
-	opts *Options) error {
-
-	mdl := amdl.(*ollamaModel)
+func (mdl *ollamaModel) Generate(ctx context.Context, ast State, opts *Options) error {
 	st := ast.(*chatAPIState)
 
 	for {
@@ -201,7 +202,7 @@ func (clnt *ollamaClient) Generate(ctx context.Context, amdl Model, ast State,
 		}
 
 		var toolCalls []ollama.ToolCall
-		err := clnt.client.Chat(ctx, req, func(rsp ollama.ChatResponse) error {
+		err := mdl.clnt.client.Chat(ctx, req, func(rsp ollama.ChatResponse) error {
 			st.inputTokens += int64(rsp.PromptEvalCount)
 			st.outputTokens += int64(rsp.EvalCount)
 			st.contextTokens = int64(rsp.PromptEvalCount) + int64(rsp.EvalCount)

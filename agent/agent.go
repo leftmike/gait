@@ -85,10 +85,11 @@ func (ag *Agent) SystemPrompt(st model.State) {
 	}
 }
 
+// XXX: is this still necessary?
 func (ag *Agent) Generate(ctx context.Context, mdl model.Model, st model.State,
 	opts *model.Options) error {
 
-	return ag.clnt.Generate(ctx, mdl, st, opts)
+	return mdl.Generate(ctx, st, opts)
 }
 
 type readFileArgs struct {

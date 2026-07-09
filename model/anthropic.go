@@ -22,6 +22,7 @@ type anthropicClient struct {
 }
 
 type anthropicModel struct {
+	clnt            *anthropicClient
 	model           anthropic.Model
 	includeThoughts bool
 	effort          anthropic.OutputConfigEffort
@@ -80,7 +81,10 @@ func (clnt *anthropicClient) ListModels() map[string]ModelMetadata {
 func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
-	var mdl anthropicModel
+	mdl := anthropicModel{
+		clnt: clnt,
+	}
+
 	err := mdl.SetModelConfig(mdlCfg)
 	if err != nil {
 		return nil, err
@@ -144,10 +148,7 @@ func (st *anthropicState) toMessageParams() ([]anthropic.MessageParam, int) {
 	return params, txtLen
 }
 
-func (clnt *anthropicClient) Generate(ctx context.Context, amdl Model, ast State,
-	opts *Options) error {
-
-	mdl := amdl.(*anthropicModel)
+func (mdl *anthropicModel) Generate(ctx context.Context, ast State, opts *Options) error {
 	st := ast.(*anthropicState)
 
 	for {
@@ -191,7 +192,7 @@ func (clnt *anthropicClient) Generate(ctx context.Context, amdl Model, ast State
 			fmt.Print(") -> ")
 		}
 
-		strm := clnt.client.Messages.NewStreaming(ctx, req)
+		strm := mdl.clnt.client.Messages.NewStreaming(ctx, req)
 		defer strm.Close()
 
 		var rsp anthropic.Message
