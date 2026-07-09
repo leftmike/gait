@@ -26,6 +26,7 @@ type anthropicModel struct {
 	model           anthropic.Model
 	includeThoughts bool
 	effort          anthropic.OutputConfigEffort
+	fixedThinking   bool
 	maxTokens       int64
 	contextLimit    int
 	inputCost       float64
@@ -118,10 +119,12 @@ func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig) (Model, error) 
 		model:           anthropic.Model(mdlCfg.Model),
 		includeThoughts: mdlCfg.IncludeThoughts,
 		effort:          effort,
-		maxTokens:       maxTokens,
-		contextLimit:    mmd.ContextLimit,
-		inputCost:       mmd.InputCost,
-		outputCost:      mmd.OutputCost,
+		fixedThinking: strings.Contains(mdlCfg.Model, "-4-5") ||
+			strings.Contains(mdlCfg.Model, "-4-1"),
+		maxTokens:    maxTokens,
+		contextLimit: mmd.ContextLimit,
+		inputCost:    mmd.InputCost,
+		outputCost:   mmd.OutputCost,
 	}, nil
 }
 
@@ -191,8 +194,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, opts *Option
 			txtLen += len(st.systemPrompt)
 		}
 
-		// XXX: move to NewModel
-		if strings.Contains(mdl.model, "-4-5") || strings.Contains(mdl.model, "-4-1") {
+		if mdl.fixedThinking {
 			req.Thinking.OfEnabled = &anthropic.ThinkingConfigEnabledParam{
 				BudgetTokens: 4096,
 			}
