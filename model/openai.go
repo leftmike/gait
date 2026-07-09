@@ -18,7 +18,6 @@ import (
 
 type openAIClient struct {
 	client openai.Client
-	apiKey string
 	name   string
 	models map[string]ModelMetadata
 }
@@ -57,7 +56,6 @@ func newOpenAIClient(apiKey string) (Client, error) {
 
 	return &openAIClient{
 		client: openai.NewClient(option.WithAPIKey(apiKey)),
-		apiKey: apiKey,
 		name:   pvdr.Name,
 		models: listModels(pvdr),
 	}, nil

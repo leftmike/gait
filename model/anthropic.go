@@ -17,7 +17,6 @@ import (
 
 type anthropicClient struct {
 	client anthropic.Client
-	apiKey string
 	name   string
 	models map[string]ModelMetadata
 }
@@ -57,7 +56,6 @@ func newAnthropicClient(apiKey string) (Client, error) {
 
 	return &anthropicClient{
 		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
-		apiKey: apiKey,
 		name:   pvdr.Name,
 		models: listModels(pvdr),
 	}, nil

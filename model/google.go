@@ -14,7 +14,6 @@ import (
 
 type googleClient struct {
 	client *genai.Client
-	apiKey string
 	name   string
 	models map[string]ModelMetadata
 }
@@ -70,7 +69,6 @@ func newGoogleClient(apiKey string) (Client, error) {
 
 	return &googleClient{
 		client: client,
-		apiKey: apiKey,
 		name:   pvdr.Name,
 		models: listModels(pvdr),
 	}, nil

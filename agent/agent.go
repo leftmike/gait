@@ -13,7 +13,6 @@ import (
 
 type Agent struct {
 	provider string
-	apiKey   string
 	clnt     model.Client
 	tools    map[string]model.Tool
 	skills   []*skill.Skill
@@ -23,7 +22,6 @@ type Agent struct {
 func NewAgent(clntCfg config.ClientConfig, clnt model.Client) *Agent {
 	return &Agent{
 		provider: clntCfg.Provider,
-		apiKey:   clntCfg.APIKey,
 		clnt:     clnt,
 		tools:    map[string]model.Tool{},
 	}
@@ -35,10 +33,6 @@ func (ag *Agent) Client() model.Client {
 
 func (ag *Agent) Provider() string {
 	return ag.provider
-}
-
-func (ag *Agent) APIKey() string {
-	return ag.apiKey
 }
 
 func (ag *Agent) Tools() map[string]model.Tool {
