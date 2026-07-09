@@ -189,8 +189,10 @@ func slashCost(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, args 
 	}
 
 	inputTokens, outputTokens, _ := st.Usage()
-	fmt.Printf("input tokens:  %d\n", inputTokens)
-	fmt.Printf("output tokens: %d\n", outputTokens)
+	inputCost, outputCost := st.Cost()
+	fmt.Printf("input tokens:  %d ($%.4f)\n", inputTokens, inputCost)
+	fmt.Printf("output tokens: %d ($%.4f)\n", outputTokens, outputCost)
+	fmt.Printf("total cost:    $%.4f\n", inputCost+outputCost)
 
 	return nil
 }
@@ -231,8 +233,9 @@ func slashStatus(ag *agent.Agent, mdlCfg config.ModelConfig, st model.State, arg
 	fmt.Printf("thoughts: %t\n", mdlCfg.IncludeThoughts)
 
 	inputTokens, outputTokens, _ := st.Usage()
-	fmt.Printf("input tokens:  %d\n", inputTokens)
-	fmt.Printf("output tokens: %d\n", outputTokens)
+	inputCost, outputCost := st.Cost()
+	fmt.Printf("input tokens:  %d ($%.4f)\n", inputTokens, inputCost)
+	fmt.Printf("output tokens: %d ($%.4f)\n", outputTokens, outputCost)
 	printContext(ag, mdlCfg, st)
 
 	return nil
