@@ -81,16 +81,35 @@ func (clnt *openAIClient) ListModels() map[string]ModelMetadata {
 func (clnt *openAIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
+	var effort responses.ReasoningEffort
+	switch mdlCfg.Effort {
+	case "", "default":
+		effort = ""
+	case "none":
+		effort = responses.ReasoningEffortNone
+	case "minimal":
+		effort = responses.ReasoningEffortMinimal
+	case "low":
+		effort = responses.ReasoningEffortLow
+	case "medium":
+		effort = responses.ReasoningEffortMedium
+	case "high":
+		effort = responses.ReasoningEffortHigh
+	case "xhigh":
+		effort = responses.ReasoningEffortXhigh
+	default:
+		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	}
+
 	mdl := openAIModel{
-		clnt: clnt,
+		clnt:            clnt,
+		model:           mdlCfg.Model,
+		includeThoughts: mdlCfg.IncludeThoughts,
+		effort:          effort,
+		maxOutputTokens: int64(mdlCfg.MaxTokens),
 	}
 
-	err := mdl.SetModelConfig(mdlCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	err = mdl.SetTools(tools)
+	err := mdl.SetTools(tools)
 	if err != nil {
 		return nil, err
 	}
@@ -270,35 +289,6 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) 
 			})
 		}
 	}
-
-	return nil
-}
-
-func (mdl *openAIModel) SetModelConfig(mdlCfg config.ModelConfig) error {
-	var effort responses.ReasoningEffort
-	switch mdlCfg.Effort {
-	case "", "default":
-		effort = ""
-	case "none":
-		effort = responses.ReasoningEffortNone
-	case "minimal":
-		effort = responses.ReasoningEffortMinimal
-	case "low":
-		effort = responses.ReasoningEffortLow
-	case "medium":
-		effort = responses.ReasoningEffortMedium
-	case "high":
-		effort = responses.ReasoningEffortHigh
-	case "xhigh":
-		effort = responses.ReasoningEffortXhigh
-	default:
-		return fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
-	}
-
-	mdl.model = mdlCfg.Model
-	mdl.includeThoughts = mdlCfg.IncludeThoughts
-	mdl.effort = effort
-	mdl.maxOutputTokens = int64(mdlCfg.MaxTokens)
 
 	return nil
 }

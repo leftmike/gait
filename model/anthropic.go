@@ -81,16 +81,38 @@ func (clnt *anthropicClient) ListModels() map[string]ModelMetadata {
 func (clnt *anthropicClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
+	maxTokens := int64(64000)
+	if mdlCfg.MaxTokens > 0 {
+		maxTokens = int64(mdlCfg.MaxTokens)
+	}
+
+	var effort anthropic.OutputConfigEffort
+	switch mdlCfg.Effort {
+	case "", "default":
+		effort = ""
+	case "low":
+		effort = anthropic.OutputConfigEffortLow
+	case "medium":
+		effort = anthropic.OutputConfigEffortMedium
+	case "high":
+		effort = anthropic.OutputConfigEffortHigh
+	case "xhigh":
+		effort = anthropic.OutputConfigEffortXhigh
+	case "max":
+		effort = anthropic.OutputConfigEffortMax
+	default:
+		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	}
+
 	mdl := anthropicModel{
-		clnt: clnt,
+		clnt:            clnt,
+		model:           anthropic.Model(mdlCfg.Model),
+		includeThoughts: mdlCfg.IncludeThoughts,
+		effort:          effort,
+		maxTokens:       maxTokens,
 	}
 
-	err := mdl.SetModelConfig(mdlCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	err = mdl.SetTools(tools)
+	err := mdl.SetTools(tools)
 	if err != nil {
 		return nil, err
 	}
@@ -313,38 +335,6 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, opts *Option
 			})
 		}
 	}
-
-	return nil
-}
-
-func (mdl *anthropicModel) SetModelConfig(mdlCfg config.ModelConfig) error {
-	maxTokens := int64(64000)
-	if mdlCfg.MaxTokens > 0 {
-		maxTokens = int64(mdlCfg.MaxTokens)
-	}
-
-	var effort anthropic.OutputConfigEffort
-	switch mdlCfg.Effort {
-	case "", "default":
-		effort = ""
-	case "low":
-		effort = anthropic.OutputConfigEffortLow
-	case "medium":
-		effort = anthropic.OutputConfigEffortMedium
-	case "high":
-		effort = anthropic.OutputConfigEffortHigh
-	case "xhigh":
-		effort = anthropic.OutputConfigEffortXhigh
-	case "max":
-		effort = anthropic.OutputConfigEffortMax
-	default:
-		return fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
-	}
-
-	mdl.model = anthropic.Model(mdlCfg.Model)
-	mdl.includeThoughts = mdlCfg.IncludeThoughts
-	mdl.effort = effort
-	mdl.maxTokens = maxTokens
 
 	return nil
 }

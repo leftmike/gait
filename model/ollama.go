@@ -84,16 +84,26 @@ func (clnt *ollamaClient) ListModels() map[string]ModelMetadata {
 func (clnt *ollamaClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
+	var think *ollama.ThinkValue
+	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
+		think = &ollama.ThinkValue{Value: mdlCfg.Effort}
+	} else if mdlCfg.IncludeThoughts {
+		think = &ollama.ThinkValue{Value: true}
+	}
+
+	numPredict := 8192
+	if mdlCfg.MaxTokens > 0 {
+		numPredict = mdlCfg.MaxTokens
+	}
+
 	mdl := ollamaModel{
-		clnt: clnt,
+		clnt:       clnt,
+		model:      mdlCfg.Model,
+		think:      think,
+		numPredict: numPredict,
 	}
 
-	err := mdl.SetModelConfig(mdlCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	err = mdl.SetTools(tools)
+	err := mdl.SetTools(tools)
 	if err != nil {
 		return nil, err
 	}
@@ -275,26 +285,6 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State, opts *Options) 
 			})
 		}
 	}
-
-	return nil
-}
-
-func (mdl *ollamaModel) SetModelConfig(mdlCfg config.ModelConfig) error {
-	var think *ollama.ThinkValue
-	if mdlCfg.Effort != "" && mdlCfg.Effort != "default" {
-		think = &ollama.ThinkValue{Value: mdlCfg.Effort}
-	} else if mdlCfg.IncludeThoughts {
-		think = &ollama.ThinkValue{Value: true}
-	}
-
-	numPredict := 8192
-	if mdlCfg.MaxTokens > 0 {
-		numPredict = mdlCfg.MaxTokens
-	}
-
-	mdl.model = mdlCfg.Model
-	mdl.think = think
-	mdl.numPredict = numPredict
 
 	return nil
 }

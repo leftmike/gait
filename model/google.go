@@ -94,16 +94,38 @@ func (clnt *googleClient) ListModels() map[string]ModelMetadata {
 func (clnt *googleClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
+	var thinkingLevel genai.ThinkingLevel
+	switch mdlCfg.Effort {
+	case "", "default":
+		thinkingLevel = genai.ThinkingLevelUnspecified
+	case "minimal":
+		thinkingLevel = genai.ThinkingLevelMinimal
+	case "low":
+		thinkingLevel = genai.ThinkingLevelLow
+	case "medium":
+		thinkingLevel = genai.ThinkingLevelMedium
+	case "high":
+		thinkingLevel = genai.ThinkingLevelHigh
+	default:
+		return nil, fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
+	}
+
+	var maxOutputTokens int32
+	if mdlCfg.MaxTokens > 0 {
+		maxOutputTokens = int32(mdlCfg.MaxTokens)
+	} else {
+		maxOutputTokens = 65536
+	}
+
 	mdl := googleModel{
-		clnt: clnt,
+		clnt:            clnt,
+		model:           mdlCfg.Model,
+		includeThoughts: mdlCfg.IncludeThoughts,
+		thinkingLevel:   thinkingLevel,
+		maxOutputTokens: maxOutputTokens,
 	}
 
-	err := mdl.SetModelConfig(mdlCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	err = mdl.SetTools(tools)
+	err := mdl.SetTools(tools)
 	if err != nil {
 		return nil, err
 	}
@@ -383,38 +405,6 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 			})
 		}
 	}
-
-	return nil
-}
-
-func (mdl *googleModel) SetModelConfig(mdlCfg config.ModelConfig) error {
-	var thinkingLevel genai.ThinkingLevel
-	switch mdlCfg.Effort {
-	case "", "default":
-		thinkingLevel = genai.ThinkingLevelUnspecified
-	case "minimal":
-		thinkingLevel = genai.ThinkingLevelMinimal
-	case "low":
-		thinkingLevel = genai.ThinkingLevelLow
-	case "medium":
-		thinkingLevel = genai.ThinkingLevelMedium
-	case "high":
-		thinkingLevel = genai.ThinkingLevelHigh
-	default:
-		return fmt.Errorf("invalid effort: %s", mdlCfg.Effort)
-	}
-
-	var maxOutputTokens int32
-	if mdlCfg.MaxTokens > 0 {
-		maxOutputTokens = int32(mdlCfg.MaxTokens)
-	} else {
-		maxOutputTokens = 65536
-	}
-
-	mdl.model = mdlCfg.Model
-	mdl.includeThoughts = mdlCfg.IncludeThoughts
-	mdl.thinkingLevel = thinkingLevel
-	mdl.maxOutputTokens = maxOutputTokens
 
 	return nil
 }

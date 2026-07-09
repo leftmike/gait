@@ -77,16 +77,15 @@ func (clnt *chatAPIClient) ListModels() map[string]ModelMetadata {
 func (clnt *chatAPIClient) NewModel(mdlCfg config.ModelConfig, tools map[string]Tool) (Model,
 	error) {
 
+	// XXX: mdlCfg.IncludeThoughts and mdlCfg.Effort
+	// XXX: mdlCfg.MaxTokens
+
 	mdl := chatAPIModel{
-		clnt: clnt,
+		clnt:  clnt,
+		model: mdlCfg.Model,
 	}
 
-	err := mdl.SetModelConfig(mdlCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	err = mdl.SetTools(tools)
+	err := mdl.SetTools(tools)
 	if err != nil {
 		return nil, err
 	}
@@ -191,14 +190,6 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State, opts *Options)
 		}
 	}
 
-	return nil
-}
-
-func (mdl *chatAPIModel) SetModelConfig(mdlCfg config.ModelConfig) error {
-	// XXX: mdlCfg.IncludeThoughts and mdlCfg.Effort
-	// XXX: mdlCfg.MaxTokens
-
-	mdl.model = mdlCfg.Model
 	return nil
 }
 

@@ -33,8 +33,6 @@ type ModelMetadata struct {
 
 type Model interface {
 	Generate(ctx context.Context, st State, opts *Options) error
-	// XXX: SetModelConfig vs creating a new model and reuse the state?
-	SetModelConfig(mdlCfg config.ModelConfig) error
 	SetTools(tools map[string]Tool) error
 }
 
