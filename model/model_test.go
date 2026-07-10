@@ -284,11 +284,10 @@ current_temperature and current_weather tools.`)
 		}
 	}
 
-	// XXX
-	if (provider != "openai" && toolCalls != 2) || (provider == "openai" && toolCalls < 2) {
+	if toolCalls != 2 {
 		t.Errorf("Generate(%s %s) tool call steps: got %d want 2", provider, name, toolCalls)
 	}
-	if (provider != "openai" && toolCalls != 2) || (provider == "openai" && toolCalls < 2) {
+	if toolOutputs != 2 {
 		t.Errorf("Generate(%s %s) tool output steps: got %d want 2", provider, name, toolOutputs)
 	}
 }
