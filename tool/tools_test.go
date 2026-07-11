@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"sort"
@@ -8,6 +9,44 @@ import (
 
 	"github.com/invopop/jsonschema"
 )
+
+func callJSON(t *testing.T, fn func(context.Context, []byte) (string, error), v any) string {
+	t.Helper()
+	buf, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := fn(context.Background(), buf)
+	if err != nil {
+		t.Fatalf("tool returned error: %s", err)
+	}
+	return out
+}
+
+func callJSONErr(t *testing.T, fn func(context.Context, []byte) (string, error), v any) {
+	t.Helper()
+	buf, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fn(context.Background(), buf); err == nil {
+		t.Fatalf("expected error, got none")
+	}
+}
+
+// TestToolsNoPanic ensures every file tool's schema builds (MustToolSchema
+// panics on a bad gait tag, e.g. a comma in a description).
+func TestToolsNoPanic(t *testing.T) {
+	tools := map[string]Tool{}
+	for _, tl := range []Tool{ReadFile(), WriteFile(), EditFile(), Glob(), Grep()} {
+		tools[tl.Name] = tl
+	}
+	for _, name := range []string{"read_file", "write_file", "edit_file", "glob", "grep"} {
+		if _, ok := tools[name]; !ok {
+			t.Errorf("tool %q not registered", name)
+		}
+	}
+}
 
 func walkSchema(scm map[string]any, fn func(scm map[string]any)) {
 	fn(scm)
