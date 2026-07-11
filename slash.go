@@ -32,6 +32,11 @@ var (
 			desc: "show token usage statistics for the session",
 			fn:   slashCost,
 		},
+		"/effort": {
+			cmd:  "/effort",
+			desc: "show or set the reasoning effort level",
+			fn:   slashEffort,
+		},
 		"/exit": {cmd: "/exit", desc: "exit the REPL", fn: slashExit},
 		"/help": {cmd: "/help", desc: "show help and available commands"},
 		"/model": {
@@ -170,6 +175,36 @@ func slashModel(ag *agent.Agent, st model.State, args []string) error {
 	ag.Model = mdl
 	ag.ModelConfig = mdlCfg
 	fmt.Printf("model: %s\n", args[0])
+	return nil
+}
+
+func slashEffort(ag *agent.Agent, st model.State, args []string) error {
+	if len(args) == 0 {
+		if ag.ModelConfig.Effort == "" {
+			fmt.Println("effort: (default)")
+		} else {
+			fmt.Printf("effort: %s\n", ag.ModelConfig.Effort)
+		}
+		return nil
+	}
+	if len(args) > 1 {
+		return fmt.Errorf("/effort: expected a single effort level: %s", args)
+	}
+
+	mdlCfg := ag.ModelConfig
+	mdlCfg.Effort = args[0]
+	mdl, err := ag.Client.NewModel(mdlCfg)
+	if err != nil {
+		return err
+	}
+	err = mdl.SetTools(ag.Tools)
+	if err != nil {
+		return err
+	}
+
+	ag.Model = mdl
+	ag.ModelConfig = mdlCfg
+	fmt.Printf("effort: %s\n", args[0])
 	return nil
 }
 

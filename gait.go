@@ -3,7 +3,6 @@ To Do:
 - Slash commands
 -- /export: export the current conversation to a file or clipboard
 -- /mcp: manage mcp servers / list configured mcp tools
--- /effort: set the level of effort
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
 
