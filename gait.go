@@ -3,7 +3,6 @@ To Do:
 - Slash commands
 -- /export: export the current conversation to a file or clipboard
 -- /mcp: manage mcp servers / list configured mcp tools
--- /model: set the AI model to use / choose what model and reasoning effort to use
 -- /effort: set the level of effort
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
@@ -59,7 +58,7 @@ var (
 	trace   bool
 )
 
-func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) error {
+func interact(ag *agent.Agent, opts *model.Options) error {
 	line := liner.NewLiner()
 	defer line.Close()
 
@@ -83,13 +82,12 @@ func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) e
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			err := slash(ag, mdlCfg, st, s)
+			err := slash(ag, st, s)
 			if err == io.EOF {
 				fmt.Println()
 				break
 			} else if err != nil {
 				fmt.Printf("%s: %s\n", os.Args[0], err)
-				os.Exit(1)
 			}
 
 			continue
@@ -113,7 +111,7 @@ func interact(ag *agent.Agent, mdlCfg config.ModelConfig, opts *model.Options) e
 			case model.ModelResponseStep:
 				fmt.Println(step.Content)
 			case model.ThinkingStep:
-				if mdlCfg.IncludeThoughts {
+				if ag.ModelConfig.IncludeThoughts {
 					fmt.Printf("Thinking: [%s]\n", step.Content)
 				}
 			case model.ToolCallStep:
@@ -178,9 +176,10 @@ func main() {
 	}
 
 	ag := agent.Agent{
-		Client: clnt,
-		Model:  mdl,
-		Tools:  tools,
+		Client:      clnt,
+		Model:       mdl,
+		ModelConfig: mdlCfg,
+		Tools:       tools,
 	}
 
 	/*
@@ -204,7 +203,7 @@ func main() {
 		}
 	*/
 
-	err = interact(&ag, mdlCfg, opts)
+	err = interact(&ag, opts)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 	}

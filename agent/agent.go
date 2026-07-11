@@ -11,11 +11,12 @@ import (
 )
 
 type Agent struct {
-	Client model.Client
-	Model  model.Model
-	Tools  map[string]tool.Tool
-	Skills []*skill.Skill
-	clnts  []*mcpclient.Client // XXX: rename field
+	Client      model.Client
+	Model       model.Model
+	ModelConfig config.ModelConfig
+	Tools       map[string]tool.Tool
+	Skills      []*skill.Skill
+	clnts       []*mcpclient.Client // XXX: rename field
 }
 
 func (ag *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose bool) error {
