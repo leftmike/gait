@@ -203,15 +203,16 @@ func addWebSearch(apiKey string, tools map[string]Tool) map[string]Tool {
 func All(apiKey string) map[string]Tool {
 	return addWebSearch(apiKey,
 		map[string]Tool{
-			ApplyPatch.Name: ApplyPatch,
-			Bash.Name:       Bash,
-			EditFile.Name:   EditFile,
-			Glob.Name:       Glob,
-			Grep.Name:       Grep,
-			ReadFile.Name:   ReadFile,
-			Shell.Name:      Shell,
-			WebFetch.Name:   WebFetch,
-			WriteFile.Name:  WriteFile,
+			ApplyPatch.Name:   ApplyPatch,
+			Bash.Name:         Bash,
+			EditFile.Name:     EditFile,
+			Glob.Name:         Glob,
+			Grep.Name:         Grep,
+			ReadFile.Name:     ReadFile,
+			Shell.Name:        Shell,
+			ShellCommand.Name: ShellCommand,
+			WebFetch.Name:     WebFetch,
+			WriteFile.Name:    WriteFile,
 		})
 }
 
@@ -230,7 +231,8 @@ func Anthropic(apiKey string) map[string]Tool {
 
 func OpenAI() map[string]Tool {
 	return map[string]Tool{
-		ApplyPatch.Name: ApplyPatch,
-		Shell.Name:      Shell,
+		ApplyPatch.Name:   ApplyPatch,
+		Shell.Name:        Shell,
+		ShellCommand.Name: ShellCommand,
 	}
 }
