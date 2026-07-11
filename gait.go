@@ -188,7 +188,11 @@ func main() {
 		}
 	}
 
+	ag.AddReadFileTool()
+	ag.AddWriteFileTool()
+	ag.AddEditFileTool()
 	ag.AddGlobTool()
+	ag.AddGrepTool()
 	ag.AddWebFetchTool()
 	if cfg.BraveAPIKey != "" {
 		ag.AddWebSearchTool(cfg.BraveAPIKey)
