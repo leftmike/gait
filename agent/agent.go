@@ -2,8 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
-	"io/ioutil"
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/mcpclient"
@@ -62,30 +60,5 @@ func (ag *Agent) AddSkill(dir string) error {
 func (ag *Agent) SystemPrompt(st model.State) {
 	if len(ag.Skills) > 0 {
 		st.SystemPrompt(skill.SystemPrompt(ag.Skills))
-	}
-}
-
-type readFileArgs struct {
-	Path string `json:"path" gait:"the path of the file to read"`
-}
-
-func (ag *Agent) readFile(ctx context.Context, buf []byte) (string, error) {
-	var args readFileArgs
-	err := json.Unmarshal(buf, &args)
-	if err != nil {
-		return "", err
-	}
-
-	buf, err = ioutil.ReadFile(args.Path)
-	if err != nil {
-		return "", err
-	}
-	return string(buf), nil
-}
-
-func (ag *Agent) AddReadFileTool() {
-	if _, ok := ag.Tools["read_file"]; !ok {
-		ag.AddTool("read_file", "reads the contents of a file", ag.readFile,
-			model.MustToolSchema[readFileArgs]())
 	}
 }
