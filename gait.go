@@ -193,13 +193,13 @@ func main() {
 		}
 	}
 
-	ag.Add(tool.ReadFile())
-	ag.Add(tool.WriteFile())
-	ag.Add(tool.EditFile())
-	ag.Add(tool.Glob())
-	ag.Add(tool.Grep())
-	ag.Add(tool.ApplyPatch())
-	ag.Add(tool.WebFetch())
+	ag.Add(tool.ReadFile)
+	ag.Add(tool.WriteFile)
+	ag.Add(tool.EditFile)
+	ag.Add(tool.Glob)
+	ag.Add(tool.Grep)
+	ag.Add(tool.ApplyPatch)
+	ag.Add(tool.WebFetch)
 	if cfg.BraveAPIKey != "" {
 		ag.Add(tool.WebSearch(cfg.BraveAPIKey))
 	}

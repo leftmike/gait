@@ -118,13 +118,11 @@ func applyPatch(ctx context.Context, buf []byte) (string, error) {
 	return sb.String(), nil
 }
 
-func ApplyPatch() Tool {
-	return Tool{
-		Name:        "apply_patch",
-		Description: applyPatchDescription,
-		Func:        applyPatch,
-		Schema:      MustToolSchema[applyPatchArgs](),
-	}
+var ApplyPatch = Tool{
+	Name:        "apply_patch",
+	Description: applyPatchDescription,
+	Func:        applyPatch,
+	Schema:      MustToolSchema[applyPatchArgs](),
 }
 
 // The patch format is:

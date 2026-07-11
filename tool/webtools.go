@@ -61,13 +61,11 @@ func webFetch(ctx context.Context, buf []byte) (string, error) {
 	return string(body), nil
 }
 
-func WebFetch() Tool {
-	return Tool{
-		Name:        "web_fetch",
-		Description: "fetches the content of a URL and returns it as text",
-		Func:        webFetch,
-		Schema:      MustToolSchema[webFetchArgs](),
-	}
+var WebFetch = Tool{
+	Name:        "web_fetch",
+	Description: "fetches the content of a URL and returns it as text",
+	Func:        webFetch,
+	Schema:      MustToolSchema[webFetchArgs](),
 }
 
 type webSearchArgs struct {

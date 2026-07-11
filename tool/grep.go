@@ -242,14 +242,12 @@ func grepContentLines(path, content string, matched []int, before, after int,
 	return out
 }
 
-func Grep() Tool {
-	return Tool{
-		Name: "grep",
-		Description: "Fast content search over text files using regular expressions. Supports " +
-			"filtering files by glob, three output modes (content, " +
-			"files_with_matches, count), case-insensitive and multiline matching, " +
-			"and context lines. Binary files are skipped.",
-		Func:   grep,
-		Schema: MustToolSchema[grepArgs](),
-	}
+var Grep = Tool{
+	Name: "grep",
+	Description: "Fast content search over text files using regular expressions. Supports " +
+		"filtering files by glob, three output modes (content, " +
+		"files_with_matches, count), case-insensitive and multiline matching, " +
+		"and context lines. Binary files are skipped.",
+	Func:   grep,
+	Schema: MustToolSchema[grepArgs](),
 }

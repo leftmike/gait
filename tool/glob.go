@@ -111,13 +111,11 @@ func glob(ctx context.Context, buf []byte) (string, error) {
 	return strings.TrimRight(sb.String(), "\n"), nil
 }
 
-func Glob() Tool {
-	return Tool{
-		Name: "glob",
-		Description: "Fast file pattern matching tool that works with any codebase size. " +
-			"Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". " +
-			"Returns matching file paths sorted by modification time.",
-		Func:   glob,
-		Schema: MustToolSchema[globArgs](),
-	}
+var Glob = Tool{
+	Name: "glob",
+	Description: "Fast file pattern matching tool that works with any codebase size. " +
+		"Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". " +
+		"Returns matching file paths sorted by modification time.",
+	Func:   glob,
+	Schema: MustToolSchema[globArgs](),
 }

@@ -31,12 +31,10 @@ func writeFile(ctx context.Context, buf []byte) (string, error) {
 	return fmt.Sprintf("wrote %d bytes to %s", len(args.Content), args.Path), nil
 }
 
-func WriteFile() Tool {
-	return Tool{
-		Name: "write_file",
-		Description: "Writes a text file to the local filesystem, overwriting it if it already " +
-			"exists. Creates parent directories as needed.",
-		Func:   writeFile,
-		Schema: MustToolSchema[writeFileArgs](),
-	}
+var WriteFile = Tool{
+	Name: "write_file",
+	Description: "Writes a text file to the local filesystem, overwriting it if it already " +
+		"exists. Creates parent directories as needed.",
+	Func:   writeFile,
+	Schema: MustToolSchema[writeFileArgs](),
 }

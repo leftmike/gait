@@ -74,15 +74,13 @@ func formatReadFile(content string, offset, limit int) string {
 	return strings.TrimSuffix(sb.String(), "\n")
 }
 
-func ReadFile() Tool {
-	return Tool{
-		Name: "read_file",
-		Description: "Reads a text file from the local filesystem and returns its contents in " +
-			"`cat -n` format, with each line prefixed by its 1-based line number. " +
-			"Reads up to 2000 lines by default; use offset and limit to read a " +
-			"specific range of a large file. Lines longer than 2000 characters are " +
-			"truncated.",
-		Func:   readFile,
-		Schema: MustToolSchema[readFileArgs](),
-	}
+var ReadFile = Tool{
+	Name: "read_file",
+	Description: "Reads a text file from the local filesystem and returns its contents in " +
+		"`cat -n` format, with each line prefixed by its 1-based line number. " +
+		"Reads up to 2000 lines by default; use offset and limit to read a " +
+		"specific range of a large file. Lines longer than 2000 characters are " +
+		"truncated.",
+	Func:   readFile,
+	Schema: MustToolSchema[readFileArgs](),
 }

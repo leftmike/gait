@@ -42,7 +42,7 @@ func (ag *Agent) AddSkill(dir string) error {
 		return err
 	}
 
-	ag.Add(tool.ReadFile())
+	ag.Add(tool.ReadFile)
 	// XXX: ag.Add(tool.ListFiles()) -- maybe GlobFiles instead?
 
 	for _, sk := range skills {
