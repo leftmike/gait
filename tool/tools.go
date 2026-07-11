@@ -178,6 +178,18 @@ func MustToolSchema[T any]() ToolSchema {
 	return ts
 }
 
+func Sorted(tools map[string]Tool) []Tool {
+	sorted := make([]Tool, 0, len(tools))
+	for _, tl := range tools {
+		sorted = append(sorted, tl)
+	}
+	sort.Slice(sorted,
+		func(i, j int) bool {
+			return sorted[i].Name < sorted[j].Name
+		})
+	return sorted
+}
+
 func CallTool(ctx context.Context, tools map[string]Tool, name string, args []byte) (string,
 	error) {
 

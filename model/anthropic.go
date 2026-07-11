@@ -365,7 +365,7 @@ func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
 
 func toAnthropicTools(tools map[string]tool.Tool) []anthropic.ToolUnionParam {
 	var toolParams []anthropic.ToolUnionParam
-	for _, tl := range tools {
+	for _, tl := range tool.Sorted(tools) {
 		toolParams = append(toolParams, anthropic.ToolUnionParam{
 			OfTool: &anthropic.ToolParam{
 				InputSchema: toAnthropicInputSchema(tl.Schema),

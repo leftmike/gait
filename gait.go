@@ -14,8 +14,6 @@ To Do:
 - claude code builtin tools: Bash, Edit, Write, Read, Glob, Grep, Agent, WebFetch, WebSearch,
   AskUserQuestion, ExitPlanMode
 - remove brave search?
-- tools in alphabetical order to the model
-- make the provided tools specific to the model family/provider
 
 - tool search tool: https://www.anthropic.com/engineering/advanced-tool-use
 

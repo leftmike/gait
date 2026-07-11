@@ -294,7 +294,7 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State, opts *Options) 
 
 func toOllamaTools(tools map[string]tool.Tool) (ollama.Tools, error) {
 	var toolDefs ollama.Tools
-	for _, tl := range tools {
+	for _, tl := range tool.Sorted(tools) {
 		schemaJSON, err := json.Marshal(tl.Schema)
 		if err != nil {
 			return nil, err

@@ -416,7 +416,7 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 
 func toGoogleFuncDecls(tools map[string]tool.Tool) []*genai.FunctionDeclaration {
 	var decls []*genai.FunctionDeclaration
-	for _, tl := range tools {
+	for _, tl := range tool.Sorted(tools) {
 		decls = append(decls, &genai.FunctionDeclaration{
 			Description:          tl.Description,
 			Name:                 tl.Name,

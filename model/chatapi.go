@@ -187,7 +187,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State, opts *Options)
 
 func toOpenAICompatTools(tools map[string]tool.Tool) []openai.ChatCompletionToolUnionParam {
 	var toolParams []openai.ChatCompletionToolUnionParam
-	for _, tl := range tools {
+	for _, tl := range tool.Sorted(tools) {
 		toolParams = append(toolParams,
 			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
 				Name:        tl.Name,

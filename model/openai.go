@@ -308,7 +308,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) 
 
 func toOpenAITools(tools map[string]tool.Tool) []responses.ToolUnionParam {
 	var toolParams []responses.ToolUnionParam
-	for _, tl := range tools {
+	for _, tl := range tool.Sorted(tools) {
 		toolParams = append(toolParams, responses.ToolUnionParam{
 			OfFunction: &responses.FunctionToolParam{
 				Parameters:  tl.Schema,
