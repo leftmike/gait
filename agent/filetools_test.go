@@ -33,11 +33,10 @@ func callJSONErr(t *testing.T, fn func(context.Context, []byte) (string, error),
 }
 
 func TestWriteAndEditFile(t *testing.T) {
-	var ag Agent
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sub", "hello.txt")
 
-	callJSON(t, ag.writeFile, writeFileArgs{Path: path, Content: "hello world\n"})
+	callJSON(t, writeFile, writeFileArgs{Path: path, Content: "hello world\n"})
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -46,22 +45,22 @@ func TestWriteAndEditFile(t *testing.T) {
 		t.Fatalf("unexpected content: %q", string(data))
 	}
 
-	callJSON(t, ag.editFile, editFileArgs{Path: path, OldString: "world", NewString: "gait"})
+	callJSON(t, editFile, editFileArgs{Path: path, OldString: "world", NewString: "gait"})
 	data, _ = os.ReadFile(path)
 	if string(data) != "hello gait\n" {
 		t.Fatalf("edit failed: %q", string(data))
 	}
 
 	// old_string not found.
-	callJSONErr(t, ag.editFile, editFileArgs{Path: path, OldString: "nope", NewString: "x"})
+	callJSONErr(t, editFile, editFileArgs{Path: path, OldString: "nope", NewString: "x"})
 	// identical strings.
-	callJSONErr(t, ag.editFile, editFileArgs{Path: path, OldString: "a", NewString: "a"})
+	callJSONErr(t, editFile, editFileArgs{Path: path, OldString: "a", NewString: "a"})
 
 	// non-unique without replace_all.
-	callJSON(t, ag.writeFile, writeFileArgs{Path: path, Content: "a a a\n"})
-	callJSONErr(t, ag.editFile, editFileArgs{Path: path, OldString: "a", NewString: "b"})
+	callJSON(t, writeFile, writeFileArgs{Path: path, Content: "a a a\n"})
+	callJSONErr(t, editFile, editFileArgs{Path: path, OldString: "a", NewString: "b"})
 	// replace_all succeeds.
-	callJSON(t, ag.editFile,
+	callJSON(t, editFile,
 		editFileArgs{Path: path, OldString: "a", NewString: "b", ReplaceAll: true})
 	data, _ = os.ReadFile(path)
 	if string(data) != "b b b\n" {
@@ -70,12 +69,11 @@ func TestWriteAndEditFile(t *testing.T) {
 }
 
 func TestEditBinaryFileRefused(t *testing.T) {
-	var ag Agent
 	path := filepath.Join(t.TempDir(), "bin")
 	if err := os.WriteFile(path, []byte{'a', 0, 'b'}, 0644); err != nil {
 		t.Fatal(err)
 	}
-	callJSONErr(t, ag.editFile, editFileArgs{Path: path, OldString: "a", NewString: "x"})
+	callJSONErr(t, editFile, editFileArgs{Path: path, OldString: "a", NewString: "x"})
 }
 
 // TestAddToolsNoPanic ensures every file tool's schema builds (MustToolSchema

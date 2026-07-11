@@ -26,7 +26,7 @@ type readFileArgs struct {
 	Limit  int    `json:"limit,omitempty" gait:"the maximum number of lines to read; defaults to 2000"`
 }
 
-func (ag *Agent) readFile(ctx context.Context, buf []byte) (string, error) {
+func readFile(ctx context.Context, buf []byte) (string, error) {
 	var args readFileArgs
 	if err := json.Unmarshal(buf, &args); err != nil {
 		return "", err
@@ -84,6 +84,6 @@ func (ag *Agent) AddReadFileTool() {
 				"Reads up to 2000 lines by default; use offset and limit to read a "+
 				"specific range of a large file. Lines longer than 2000 characters are "+
 				"truncated.",
-			ag.readFile, model.MustToolSchema[readFileArgs]())
+			readFile, model.MustToolSchema[readFileArgs]())
 	}
 }

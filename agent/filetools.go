@@ -28,7 +28,7 @@ type writeFileArgs struct {
 	Content string `json:"content" gait:"the content to write to the file"`
 }
 
-func (ag *Agent) writeFile(ctx context.Context, buf []byte) (string, error) {
+func writeFile(ctx context.Context, buf []byte) (string, error) {
 	var args writeFileArgs
 	if err := json.Unmarshal(buf, &args); err != nil {
 		return "", err
@@ -51,7 +51,7 @@ func (ag *Agent) AddWriteFileTool() {
 		ag.AddTool("write_file",
 			"Writes a text file to the local filesystem, overwriting it if it already "+
 				"exists. Creates parent directories as needed.",
-			ag.writeFile, model.MustToolSchema[writeFileArgs]())
+			writeFile, model.MustToolSchema[writeFileArgs]())
 	}
 }
 
@@ -62,7 +62,7 @@ type editFileArgs struct {
 	ReplaceAll bool   `json:"replace_all,omitempty" gait:"replace all occurrences of old_string (default false)"`
 }
 
-func (ag *Agent) editFile(ctx context.Context, buf []byte) (string, error) {
+func editFile(ctx context.Context, buf []byte) (string, error) {
 	var args editFileArgs
 	if err := json.Unmarshal(buf, &args); err != nil {
 		return "", err
@@ -122,6 +122,6 @@ func (ag *Agent) AddEditFileTool() {
 			"Performs exact string replacement in a text file. Unless replace_all is "+
 				"set, old_string must match exactly once, so include enough surrounding "+
 				"context to make it unique.",
-			ag.editFile, model.MustToolSchema[editFileArgs]())
+			editFile, model.MustToolSchema[editFileArgs]())
 	}
 }
