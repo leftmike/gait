@@ -188,6 +188,7 @@ func main() {
 		}
 	}
 
+	// XXX: ag.AddGlobTool()
 	ag.AddWebFetchTool()
 	if cfg.BraveAPIKey != "" {
 		ag.AddWebSearchTool(cfg.BraveAPIKey)

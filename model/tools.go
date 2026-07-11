@@ -181,11 +181,12 @@ func MustToolSchema[T any]() ToolSchema {
 func callTool(ctx context.Context, tools map[string]Tool, name string, args []byte) (string,
 	error) {
 
-	for _, tl := range tools {
-		if tl.Name == name {
-			return tl.Func(ctx, args)
-		}
+	tl, ok := tools[name]
+	if !ok {
+		return "", fmt.Errorf("function not found: %s", name)
+	} else if tl.Name != name {
+		panic(fmt.Sprintf("tool names not the same: %s %s", tl.Name, name))
 	}
 
-	return "", fmt.Errorf("function not found: %s", name)
+	return tl.Func(ctx, args)
 }
