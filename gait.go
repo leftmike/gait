@@ -185,24 +185,26 @@ func main() {
 		Tools:  tools,
 	}
 
-	for _, dir := range cfg.Skills {
-		err := ag.AddSkill(dir)
-		if err != nil && verbose {
-			fmt.Printf("%s: %s\n", dir, err)
-		}
-	}
-
-	ctx := context.Background()
-	for _, svrCfg := range cfg.MCPServers {
-		err := ag.AddServer(ctx, svrCfg, verbose)
-		if verbose {
-			if err != nil {
-				fmt.Printf("mcp server %v failed: %s", svrCfg, err)
-			} else {
-				fmt.Printf("mcp server: %s\n", svrCfg.Name)
+	/*
+		for _, dir := range cfg.Skills {
+			err := ag.AddSkill(dir)
+			if err != nil && verbose {
+				fmt.Printf("%s: %s\n", dir, err)
 			}
 		}
-	}
+
+		ctx := context.Background()
+		for _, svrCfg := range cfg.MCPServers {
+			err := ag.AddServer(ctx, svrCfg, verbose)
+			if verbose {
+				if err != nil {
+					fmt.Printf("mcp server %v failed: %s", svrCfg, err)
+				} else {
+					fmt.Printf("mcp server: %s\n", svrCfg.Name)
+				}
+			}
+		}
+	*/
 
 	err = interact(&ag, mdlCfg, opts)
 	if err != nil {
