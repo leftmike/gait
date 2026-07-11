@@ -13,6 +13,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
+	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
 
@@ -32,7 +33,7 @@ type openAIModel struct {
 	inputCost       float64
 	outputCost      float64
 	toolParams      []responses.ToolUnionParam
-	tools           map[string]Tool
+	tools           map[string]tool.Tool
 }
 
 type openAIStep struct {
@@ -284,7 +285,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) 
 				fmt.Printf("Trace: calling %s(%s)\n", item.Name, item.Arguments)
 			}
 
-			out, err := callTool(ctx, mdl.tools, item.Name, []byte(item.Arguments))
+			out, err := tool.CallTool(ctx, mdl.tools, item.Name, []byte(item.Arguments))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", item.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)
@@ -305,7 +306,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) 
 	return nil
 }
 
-func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
+func toOpenAITools(tools map[string]tool.Tool) []responses.ToolUnionParam {
 	var toolParams []responses.ToolUnionParam
 	for _, tl := range tools {
 		toolParams = append(toolParams, responses.ToolUnionParam{
@@ -320,7 +321,7 @@ func toOpenAITools(tools map[string]Tool) []responses.ToolUnionParam {
 	return toolParams
 }
 
-func (mdl *openAIModel) SetTools(tools map[string]Tool) error {
+func (mdl *openAIModel) SetTools(tools map[string]tool.Tool) error {
 	mdl.tools = tools
 	mdl.toolParams = toOpenAITools(tools)
 	return nil

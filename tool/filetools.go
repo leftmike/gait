@@ -1,4 +1,4 @@
-package agent
+package tool
 
 import (
 	"bytes"
@@ -9,8 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/leftmike/gait/model"
 )
 
 // isBinary reports whether data looks like a binary (non-text) file. It uses
@@ -46,12 +44,13 @@ func writeFile(ctx context.Context, buf []byte) (string, error) {
 	return fmt.Sprintf("wrote %d bytes to %s", len(args.Content), args.Path), nil
 }
 
-func (ag *Agent) AddWriteFileTool() {
-	if _, ok := ag.Tools["write_file"]; !ok {
-		ag.AddTool("write_file",
-			"Writes a text file to the local filesystem, overwriting it if it already "+
-				"exists. Creates parent directories as needed.",
-			writeFile, model.MustToolSchema[writeFileArgs]())
+func WriteFile() Tool {
+	return Tool{
+		Name: "write_file",
+		Description: "Writes a text file to the local filesystem, overwriting it if it already " +
+			"exists. Creates parent directories as needed.",
+		Func:   writeFile,
+		Schema: MustToolSchema[writeFileArgs](),
 	}
 }
 
@@ -116,12 +115,13 @@ func editFile(ctx context.Context, buf []byte) (string, error) {
 	return fmt.Sprintf("made %d replacements in %s", count, args.Path), nil
 }
 
-func (ag *Agent) AddEditFileTool() {
-	if _, ok := ag.Tools["edit_file"]; !ok {
-		ag.AddTool("edit_file",
-			"Performs exact string replacement in a text file. Unless replace_all is "+
-				"set, old_string must match exactly once, so include enough surrounding "+
-				"context to make it unique.",
-			editFile, model.MustToolSchema[editFileArgs]())
+func EditFile() Tool {
+	return Tool{
+		Name: "edit_file",
+		Description: "Performs exact string replacement in a text file. Unless replace_all is " +
+			"set, old_string must match exactly once, so include enough surrounding " +
+			"context to make it unique.",
+		Func:   editFile,
+		Schema: MustToolSchema[editFileArgs](),
 	}
 }

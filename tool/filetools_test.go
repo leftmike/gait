@@ -1,4 +1,4 @@
-package agent
+package tool
 
 import (
 	"context"
@@ -76,17 +76,15 @@ func TestEditBinaryFileRefused(t *testing.T) {
 	callJSONErr(t, editFile, editFileArgs{Path: path, OldString: "a", NewString: "x"})
 }
 
-// TestAddToolsNoPanic ensures every file tool's schema builds (MustToolSchema
+// TestToolsNoPanic ensures every file tool's schema builds (MustToolSchema
 // panics on a bad gait tag, e.g. a comma in a description).
-func TestAddToolsNoPanic(t *testing.T) {
-	var ag Agent
-	ag.AddReadFileTool()
-	ag.AddWriteFileTool()
-	ag.AddEditFileTool()
-	ag.AddGlobTool()
-	ag.AddGrepTool()
+func TestToolsNoPanic(t *testing.T) {
+	tools := map[string]Tool{}
+	for _, tl := range []Tool{ReadFile(), WriteFile(), EditFile(), Glob(), Grep()} {
+		tools[tl.Name] = tl
+	}
 	for _, name := range []string{"read_file", "write_file", "edit_file", "glob", "grep"} {
-		if _, ok := ag.Tools[name]; !ok {
+		if _, ok := tools[name]; !ok {
 			t.Errorf("tool %q not registered", name)
 		}
 	}

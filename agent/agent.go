@@ -7,27 +7,23 @@ import (
 	"github.com/leftmike/gait/mcpclient"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
+	"github.com/leftmike/gait/tool"
 )
 
 type Agent struct {
 	Client model.Client
 	Model  model.Model
-	Tools  map[string]model.Tool
+	Tools  map[string]tool.Tool
 	Skills []*skill.Skill
 	clnts  []*mcpclient.Client // XXX: rename field
 }
 
-func (ag *Agent) AddTool(name, desc string, fn model.ToolFunc, scm model.ToolSchema) {
+func (ag *Agent) Add(tl tool.Tool) {
 	if ag.Tools == nil {
-		ag.Tools = map[string]model.Tool{}
+		ag.Tools = map[string]tool.Tool{}
 	}
 
-	ag.Tools[name] = model.Tool{
-		Name:        name,
-		Description: desc,
-		Func:        fn,
-		Schema:      scm,
-	}
+	ag.Tools[tl.Name] = tl
 }
 
 func (ag *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose bool) error {
@@ -46,8 +42,8 @@ func (ag *Agent) AddSkill(dir string) error {
 		return err
 	}
 
-	ag.AddReadFileTool()
-	// XXX: ag.AddListFilesTool() -- maybe GlobFilesTool instead?
+	ag.Add(tool.ReadFile())
+	// XXX: ag.Add(tool.ListFiles()) -- maybe GlobFiles instead?
 
 	for _, sk := range skills {
 		// XXX: ag.fs.AddTree(sk.Dir, false)

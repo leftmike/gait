@@ -12,6 +12,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
+	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
 
@@ -31,7 +32,7 @@ type anthropicModel struct {
 	contextLimit    int
 	inputCost       float64
 	outputCost      float64
-	tools           map[string]Tool
+	tools           map[string]tool.Tool
 	toolParams      []anthropic.ToolUnionParam
 }
 
@@ -326,7 +327,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, opts *Option
 				fmt.Println()
 			}
 
-			out, err := callTool(ctx, mdl.tools, blk.Name, []byte(blk.Input))
+			out, err := tool.CallTool(ctx, mdl.tools, blk.Name, []byte(blk.Input))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", blk.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)
@@ -362,7 +363,7 @@ func toAnthropicInputSchema(scm map[string]any) anthropic.ToolInputSchemaParam {
 	}
 }
 
-func toAnthropicTools(tools map[string]Tool) []anthropic.ToolUnionParam {
+func toAnthropicTools(tools map[string]tool.Tool) []anthropic.ToolUnionParam {
 	var toolParams []anthropic.ToolUnionParam
 	for _, tl := range tools {
 		toolParams = append(toolParams, anthropic.ToolUnionParam{
@@ -377,7 +378,7 @@ func toAnthropicTools(tools map[string]Tool) []anthropic.ToolUnionParam {
 	return toolParams
 }
 
-func (mdl *anthropicModel) SetTools(tools map[string]Tool) error {
+func (mdl *anthropicModel) SetTools(tools map[string]tool.Tool) error {
 	mdl.tools = tools
 	mdl.toolParams = toAnthropicTools(tools)
 	return nil

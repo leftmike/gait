@@ -9,6 +9,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
+	"github.com/leftmike/gait/tool"
 )
 
 type Client interface {
@@ -31,7 +32,7 @@ type ModelMetadata struct {
 
 type Model interface {
 	Generate(ctx context.Context, st State, opts *Options) error
-	SetTools(tools map[string]Tool) error
+	SetTools(tools map[string]tool.Tool) error
 	ContextLimit() int
 }
 

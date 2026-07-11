@@ -1,4 +1,4 @@
-package agent
+package tool
 
 import (
 	"context"
@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/leftmike/gait/model"
 )
 
 type globArgs struct {
@@ -113,12 +111,13 @@ func glob(ctx context.Context, buf []byte) (string, error) {
 	return strings.TrimRight(sb.String(), "\n"), nil
 }
 
-func (ag *Agent) AddGlobTool() {
-	if _, ok := ag.Tools["glob"]; !ok {
-		ag.AddTool("glob",
-			"Fast file pattern matching tool that works with any codebase size. "+
-				"Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". "+
-				"Returns matching file paths sorted by modification time.",
-			glob, model.MustToolSchema[globArgs]())
+func Glob() Tool {
+	return Tool{
+		Name: "glob",
+		Description: "Fast file pattern matching tool that works with any codebase size. " +
+			"Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". " +
+			"Returns matching file paths sorted by modification time.",
+		Func:   glob,
+		Schema: MustToolSchema[globArgs](),
 	}
 }

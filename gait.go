@@ -4,8 +4,11 @@ To Do:
 -- /export: export the current conversation to a file or clipboard
 -- /mcp: manage mcp servers / list configured mcp tools
 -- /model: set the AI model to use / choose what model and reasoning effort to use
+-- /effort: set the level of effort
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
+
+- add support for open router
 
 - web_fetch: get user confirmation / config of domains / urls to fetch
 - claude code builtin tools: Bash, Edit, Write, Read, Glob, Grep, Agent, WebFetch, WebSearch,
@@ -49,6 +52,7 @@ import (
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
+	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
 
@@ -189,15 +193,15 @@ func main() {
 		}
 	}
 
-	ag.AddReadFileTool()
-	ag.AddWriteFileTool()
-	ag.AddEditFileTool()
-	ag.AddGlobTool()
-	ag.AddGrepTool()
-	ag.AddApplyPatchTool()
-	ag.AddWebFetchTool()
+	ag.Add(tool.ReadFile())
+	ag.Add(tool.WriteFile())
+	ag.Add(tool.EditFile())
+	ag.Add(tool.Glob())
+	ag.Add(tool.Grep())
+	ag.Add(tool.ApplyPatch())
+	ag.Add(tool.WebFetch())
 	if cfg.BraveAPIKey != "" {
-		ag.AddWebSearchTool(cfg.BraveAPIKey)
+		ag.Add(tool.WebSearch(cfg.BraveAPIKey))
 	}
 
 	err = interact(&ag, mdlCfg, opts)

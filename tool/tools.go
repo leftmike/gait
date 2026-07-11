@@ -1,4 +1,4 @@
-package model
+package tool
 
 import (
 	"context"
@@ -178,7 +178,7 @@ func MustToolSchema[T any]() ToolSchema {
 	return ts
 }
 
-func callTool(ctx context.Context, tools map[string]Tool, name string, args []byte) (string,
+func CallTool(ctx context.Context, tools map[string]Tool, name string, args []byte) (string,
 	error) {
 
 	tl, ok := tools[name]

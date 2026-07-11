@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
 
@@ -22,7 +23,7 @@ type chatAPIClient struct {
 type chatAPIModel struct {
 	clnt       *chatAPIClient
 	model      string
-	tools      map[string]Tool
+	tools      map[string]tool.Tool
 	toolParams []openai.ChatCompletionToolUnionParam
 }
 
@@ -162,7 +163,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State, opts *Options)
 				fmt.Printf("Trace: calling %s(%s)\n", tc.Function.Name, tc.Function.Arguments)
 			}
 
-			out, err := callTool(ctx, mdl.tools, tc.Function.Name, []byte(tc.Function.Arguments))
+			out, err := tool.CallTool(ctx, mdl.tools, tc.Function.Name, []byte(tc.Function.Arguments))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", tc.Function.Name,
 					util.Lines(out, 1, 160))
@@ -184,7 +185,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State, opts *Options)
 	return nil
 }
 
-func toOpenAICompatTools(tools map[string]Tool) []openai.ChatCompletionToolUnionParam {
+func toOpenAICompatTools(tools map[string]tool.Tool) []openai.ChatCompletionToolUnionParam {
 	var toolParams []openai.ChatCompletionToolUnionParam
 	for _, tl := range tools {
 		toolParams = append(toolParams,
@@ -198,7 +199,7 @@ func toOpenAICompatTools(tools map[string]Tool) []openai.ChatCompletionToolUnion
 	return toolParams
 }
 
-func (mdl *chatAPIModel) SetTools(tools map[string]Tool) error {
+func (mdl *chatAPIModel) SetTools(tools map[string]tool.Tool) error {
 	mdl.tools = tools
 	mdl.toolParams = toOpenAICompatTools(tools)
 	return nil

@@ -11,6 +11,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
+	"github.com/leftmike/gait/tool"
 )
 
 var (
@@ -155,12 +156,12 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 
 	fmt.Println(provider, name)
 
-	tools := map[string]model.Tool{
-		"current_temperature": model.Tool{
+	tools := map[string]tool.Tool{
+		"current_temperature": tool.Tool{
 			Name:        "current_temperature",
 			Description: "Gets the current temperature for the given location",
 			Func:        currentTemperature,
-			Schema:      model.MustToolSchema[currentTemperatureArgs](),
+			Schema:      tool.MustToolSchema[currentTemperatureArgs](),
 		},
 	}
 
@@ -221,18 +222,18 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 
 	fmt.Println(provider, name)
 
-	tools := map[string]model.Tool{
-		"current_temperature": model.Tool{
+	tools := map[string]tool.Tool{
+		"current_temperature": tool.Tool{
 			Name:        "current_temperature",
 			Description: "Gets the current temperature for the given location",
 			Func:        currentTemperature,
-			Schema:      model.MustToolSchema[currentTemperatureArgs](),
+			Schema:      tool.MustToolSchema[currentTemperatureArgs](),
 		},
-		"current_weather": model.Tool{
+		"current_weather": tool.Tool{
 			Name:        "current_weather",
 			Description: "Gets the current weather for the given location",
 			Func:        currentWeather,
-			Schema:      model.MustToolSchema[currentWeatherArgs](),
+			Schema:      tool.MustToolSchema[currentWeatherArgs](),
 		},
 	}
 

@@ -12,7 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leftmike/gait/config"
-	"github.com/leftmike/gait/model"
+	"github.com/leftmike/gait/tool"
 )
 
 type Client struct {
@@ -149,7 +149,7 @@ func (clnt *Client) Name() string {
 	return clnt.svrCfg.Name
 }
 
-func (clnt *Client) AddTools(tools map[string]model.Tool) {
+func (clnt *Client) AddTools(tools map[string]tool.Tool) {
 	for _, tl := range clnt.tools {
 		schema, ok := tl.InputSchema.(map[string]any)
 		if !ok {
@@ -157,7 +157,7 @@ func (clnt *Client) AddTools(tools map[string]model.Tool) {
 		}
 
 		name := tl.Name
-		tools[name] = model.Tool{
+		tools[name] = tool.Tool{
 			Name:        name,
 			Description: tl.Description,
 			Schema:      schema,

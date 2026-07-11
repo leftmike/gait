@@ -1,4 +1,4 @@
-package agent
+package tool
 
 import (
 	"context"
@@ -10,8 +10,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/leftmike/gait/model"
 )
 
 const maxGrepFileSize = 1024 * 1024 * 8
@@ -244,13 +242,14 @@ func grepContentLines(path, content string, matched []int, before, after int,
 	return out
 }
 
-func (ag *Agent) AddGrepTool() {
-	if _, ok := ag.Tools["grep"]; !ok {
-		ag.AddTool("grep",
-			"Fast content search over text files using regular expressions. Supports "+
-				"filtering files by glob, three output modes (content, "+
-				"files_with_matches, count), case-insensitive and multiline matching, "+
-				"and context lines. Binary files are skipped.",
-			grep, model.MustToolSchema[grepArgs]())
+func Grep() Tool {
+	return Tool{
+		Name: "grep",
+		Description: "Fast content search over text files using regular expressions. Supports " +
+			"filtering files by glob, three output modes (content, " +
+			"files_with_matches, count), case-insensitive and multiline matching, " +
+			"and context lines. Binary files are skipped.",
+		Func:   grep,
+		Schema: MustToolSchema[grepArgs](),
 	}
 }

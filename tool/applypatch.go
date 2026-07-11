@@ -1,7 +1,7 @@
 // The apply_patch tool, identical to the apply_patch tool in OpenAI Codex.
 // Ported from https://github.com/openai/codex codex-rs/apply-patch (and the
 // tool description from codex-rs/core/src/tool_apply_patch.rs).
-package agent
+package tool
 
 import (
 	"context"
@@ -13,8 +13,6 @@ import (
 	"sort"
 	"strings"
 	"unicode"
-
-	"github.com/leftmike/gait/model"
 )
 
 const applyPatchDescription = "Use the `apply_patch` tool to edit files.\n" +
@@ -120,9 +118,13 @@ func applyPatch(ctx context.Context, buf []byte) (string, error) {
 	return sb.String(), nil
 }
 
-func (ag *Agent) AddApplyPatchTool() {
-	ag.AddTool("apply_patch", applyPatchDescription, applyPatch,
-		model.MustToolSchema[applyPatchArgs]())
+func ApplyPatch() Tool {
+	return Tool{
+		Name:        "apply_patch",
+		Description: applyPatchDescription,
+		Func:        applyPatch,
+		Schema:      MustToolSchema[applyPatchArgs](),
+	}
 }
 
 // The patch format is:

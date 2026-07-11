@@ -9,6 +9,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
+	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
 
@@ -27,7 +28,7 @@ type googleModel struct {
 	contextLimit    int
 	inputCost       float64
 	outputCost      float64
-	tools           map[string]Tool
+	tools           map[string]tool.Tool
 	funcDecls       []*genai.FunctionDeclaration
 }
 
@@ -388,7 +389,7 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 					}
 					fmt.Println()
 				}
-				out, err = callTool(ctx, mdl.tools, tc.prt.FunctionCall.Name, tc.buf)
+				out, err = tool.CallTool(ctx, mdl.tools, tc.prt.FunctionCall.Name, tc.buf)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%s, ", tc.prt.FunctionCall.Name,
 						util.Lines(out, 1, 160))
@@ -413,7 +414,7 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 	return nil
 }
 
-func toGoogleFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
+func toGoogleFuncDecls(tools map[string]tool.Tool) []*genai.FunctionDeclaration {
 	var decls []*genai.FunctionDeclaration
 	for _, tl := range tools {
 		decls = append(decls, &genai.FunctionDeclaration{
@@ -426,7 +427,7 @@ func toGoogleFuncDecls(tools map[string]Tool) []*genai.FunctionDeclaration {
 	return decls
 }
 
-func (mdl *googleModel) SetTools(tools map[string]Tool) error {
+func (mdl *googleModel) SetTools(tools map[string]tool.Tool) error {
 	mdl.tools = tools
 	mdl.funcDecls = toGoogleFuncDecls(tools)
 	return nil

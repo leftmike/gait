@@ -11,6 +11,7 @@ import (
 	ollama "github.com/ollama/ollama/api"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
 
@@ -25,7 +26,7 @@ type ollamaModel struct {
 	think        *ollama.ThinkValue
 	numPredict   int
 	contextLimit int
-	tools        map[string]Tool
+	tools        map[string]tool.Tool
 	toolDefs     ollama.Tools
 }
 
@@ -270,7 +271,7 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State, opts *Options) 
 				fmt.Printf("Trace: calling %s(%s)\n", tc.Function.Name, args)
 			}
 
-			out, err := callTool(ctx, mdl.tools, tc.Function.Name, args)
+			out, err := tool.CallTool(ctx, mdl.tools, tc.Function.Name, args)
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", tc.Function.Name,
 					util.Lines(out, 1, 160))
@@ -291,7 +292,7 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State, opts *Options) 
 	return nil
 }
 
-func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
+func toOllamaTools(tools map[string]tool.Tool) (ollama.Tools, error) {
 	var toolDefs ollama.Tools
 	for _, tl := range tools {
 		schemaJSON, err := json.Marshal(tl.Schema)
@@ -314,7 +315,7 @@ func toOllamaTools(tools map[string]Tool) (ollama.Tools, error) {
 	return toolDefs, nil
 }
 
-func (mdl *ollamaModel) SetTools(tools map[string]Tool) error {
+func (mdl *ollamaModel) SetTools(tools map[string]tool.Tool) error {
 	toolDefs, err := toOllamaTools(tools)
 	if err != nil {
 		return err

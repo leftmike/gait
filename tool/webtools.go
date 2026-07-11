@@ -1,4 +1,4 @@
-package agent
+package tool
 
 import (
 	"context"
@@ -10,8 +10,6 @@ import (
 	"strings"
 
 	htmlmarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
-
-	"github.com/leftmike/gait/model"
 )
 
 const (
@@ -63,9 +61,13 @@ func webFetch(ctx context.Context, buf []byte) (string, error) {
 	return string(body), nil
 }
 
-func (ag *Agent) AddWebFetchTool() {
-	ag.AddTool("web_fetch", "fetches the content of a URL and returns it as text",
-		webFetch, model.MustToolSchema[webFetchArgs]())
+func WebFetch() Tool {
+	return Tool{
+		Name:        "web_fetch",
+		Description: "fetches the content of a URL and returns it as text",
+		Func:        webFetch,
+		Schema:      MustToolSchema[webFetchArgs](),
+	}
 }
 
 type webSearchArgs struct {
@@ -84,7 +86,7 @@ type braveResponse struct {
 	} `json:"web"`
 }
 
-func makeWebSearch(apiKey string) model.ToolFunc {
+func makeWebSearch(apiKey string) ToolFunc {
 	return func(ctx context.Context, buf []byte) (string, error) {
 		var args webSearchArgs
 		if err := json.Unmarshal(buf, &args); err != nil {
@@ -130,7 +132,11 @@ func makeWebSearch(apiKey string) model.ToolFunc {
 	}
 }
 
-func (ag *Agent) AddWebSearchTool(apiKey string) {
-	ag.AddTool("web_search", "searches the web using Brave Search and returns relevant results",
-		makeWebSearch(apiKey), model.MustToolSchema[webSearchArgs]())
+func WebSearch(apiKey string) Tool {
+	return Tool{
+		Name:        "web_search",
+		Description: "searches the web using Brave Search and returns relevant results",
+		Func:        makeWebSearch(apiKey),
+		Schema:      MustToolSchema[webSearchArgs](),
+	}
 }
