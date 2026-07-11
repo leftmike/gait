@@ -38,10 +38,10 @@ func callJSONErr(t *testing.T, fn func(context.Context, []byte) (string, error),
 // panics on a bad gait tag, e.g. a comma in a description).
 func TestToolsNoPanic(t *testing.T) {
 	tools := map[string]Tool{}
-	for _, tl := range []Tool{ReadFile, WriteFile, EditFile, Glob, Grep} {
+	for _, tl := range []Tool{ReadFile, WriteFile, EditFile, Glob, Grep, Bash} {
 		tools[tl.Name] = tl
 	}
-	for _, name := range []string{"read_file", "write_file", "edit_file", "glob", "grep"} {
+	for _, name := range []string{"read_file", "write_file", "edit_file", "glob", "grep", "bash"} {
 		if _, ok := tools[name]; !ok {
 			t.Errorf("tool %q not registered", name)
 		}

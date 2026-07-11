@@ -204,6 +204,7 @@ func All(apiKey string) map[string]Tool {
 	return addWebSearch(apiKey,
 		map[string]Tool{
 			ApplyPatch.Name: ApplyPatch,
+			Bash.Name:       Bash,
 			EditFile.Name:   EditFile,
 			Glob.Name:       Glob,
 			Grep.Name:       Grep,
@@ -216,6 +217,7 @@ func All(apiKey string) map[string]Tool {
 func Anthropic(apiKey string) map[string]Tool {
 	return addWebSearch(apiKey,
 		map[string]Tool{
+			Bash.Name:      Bash,
 			EditFile.Name:  EditFile,
 			Glob.Name:      Glob,
 			Grep.Name:      Grep,
