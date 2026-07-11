@@ -209,6 +209,7 @@ func All(apiKey string) map[string]Tool {
 			Glob.Name:       Glob,
 			Grep.Name:       Grep,
 			ReadFile.Name:   ReadFile,
+			Shell.Name:      Shell,
 			WebFetch.Name:   WebFetch,
 			WriteFile.Name:  WriteFile,
 		})
@@ -230,5 +231,6 @@ func Anthropic(apiKey string) map[string]Tool {
 func OpenAI() map[string]Tool {
 	return map[string]Tool{
 		ApplyPatch.Name: ApplyPatch,
+		Shell.Name:      Shell,
 	}
 }
