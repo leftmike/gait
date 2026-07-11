@@ -18,14 +18,6 @@ type Agent struct {
 	clnts  []*mcpclient.Client // XXX: rename field
 }
 
-func (ag *Agent) Add(tl tool.Tool) {
-	if ag.Tools == nil {
-		ag.Tools = map[string]tool.Tool{}
-	}
-
-	ag.Tools[tl.Name] = tl
-}
-
 func (ag *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose bool) error {
 	clnt, err := mcpclient.NewClient(ctx, svrCfg, verbose)
 	if err != nil {
@@ -41,9 +33,6 @@ func (ag *Agent) AddSkill(dir string) error {
 	if err != nil {
 		return err
 	}
-
-	ag.Add(tool.ReadFile)
-	// XXX: ag.Add(tool.ListFiles()) -- maybe GlobFiles instead?
 
 	for _, sk := range skills {
 		// XXX: ag.fs.AddTree(sk.Dir, false)

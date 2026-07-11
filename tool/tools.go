@@ -190,3 +190,43 @@ func CallTool(ctx context.Context, tools map[string]Tool, name string, args []by
 
 	return tl.Func(ctx, args)
 }
+
+func addWebSearch(apiKey string, tools map[string]Tool) map[string]Tool {
+	if apiKey != "" {
+		tl := WebSearch(apiKey)
+		tools[tl.Name] = tl
+	}
+
+	return tools
+}
+
+func All(apiKey string) map[string]Tool {
+	return addWebSearch(apiKey,
+		map[string]Tool{
+			ApplyPatch.Name: ApplyPatch,
+			EditFile.Name:   EditFile,
+			Glob.Name:       Glob,
+			Grep.Name:       Grep,
+			ReadFile.Name:   ReadFile,
+			WebFetch.Name:   WebFetch,
+			WriteFile.Name:  WriteFile,
+		})
+}
+
+func Anthropic(apiKey string) map[string]Tool {
+	return addWebSearch(apiKey,
+		map[string]Tool{
+			EditFile.Name:  EditFile,
+			Glob.Name:      Glob,
+			Grep.Name:      Grep,
+			ReadFile.Name:  ReadFile,
+			WebFetch.Name:  WebFetch,
+			WriteFile.Name: WriteFile,
+		})
+}
+
+func OpenAI() map[string]Tool {
+	return map[string]Tool{
+		ApplyPatch.Name: ApplyPatch,
+	}
+}

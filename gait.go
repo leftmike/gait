@@ -169,9 +169,20 @@ func main() {
 		fmt.Println(clntCfg.Provider, mdlCfg.Model)
 	}
 
+	var tools map[string]tool.Tool
+	switch clntCfg.Provider {
+	case "anthropic":
+		tools = tool.Anthropic(cfg.BraveAPIKey)
+	case "openai":
+		tools = tool.OpenAI()
+	default:
+		tools = tool.All(cfg.BraveAPIKey)
+	}
+
 	ag := agent.Agent{
 		Client: clnt,
 		Model:  mdl,
+		Tools:  tools,
 	}
 
 	for _, dir := range cfg.Skills {
@@ -191,17 +202,6 @@ func main() {
 				fmt.Printf("mcp server: %s\n", svrCfg.Name)
 			}
 		}
-	}
-
-	ag.Add(tool.ReadFile)
-	ag.Add(tool.WriteFile)
-	ag.Add(tool.EditFile)
-	ag.Add(tool.Glob)
-	ag.Add(tool.Grep)
-	ag.Add(tool.ApplyPatch)
-	ag.Add(tool.WebFetch)
-	if cfg.BraveAPIKey != "" {
-		ag.Add(tool.WebSearch(cfg.BraveAPIKey))
 	}
 
 	err = interact(&ag, mdlCfg, opts)
