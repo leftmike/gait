@@ -153,7 +153,7 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 		}
 	}
 
-	var cfg *Config
+	cfg := &Config{}
 	if !noConfig {
 		var filenames []string
 		if configFilename != "" {
@@ -191,12 +191,12 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 		if maxTokens == 0 && ok {
 			maxTokens = clntCfg.MaxTokens
 		}
+	}
 
-		if braveAPIKey != "" {
-			cfg.BraveAPIKey = braveAPIKey
-		} else if cfg.BraveAPIKey == "" {
-			cfg.BraveAPIKey = os.Getenv("BRAVE_API_KEY")
-		}
+	if braveAPIKey != "" {
+		cfg.BraveAPIKey = braveAPIKey
+	} else if cfg.BraveAPIKey == "" {
+		cfg.BraveAPIKey = os.Getenv("BRAVE_API_KEY")
 	}
 
 	return ModelConfig{
