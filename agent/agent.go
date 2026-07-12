@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 
+	"github.com/leftmike/sandbox"
+
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/mcpclient"
 	"github.com/leftmike/gait/model"
@@ -15,8 +17,10 @@ type Agent struct {
 	Model       model.Model
 	ModelConfig config.ModelConfig
 	Tools       map[string]tool.Tool
-	Skills      []*skill.Skill
-	clnts       []*mcpclient.Client // XXX: rename field
+	Sandbox     *sandbox.Sandbox
+
+	Skills []*skill.Skill
+	clnts  []*mcpclient.Client // XXX: rename field
 }
 
 func (ag *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose bool) error {
