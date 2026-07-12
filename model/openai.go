@@ -32,8 +32,8 @@ type openAIModel struct {
 	contextLimit    int
 	inputCost       float64
 	outputCost      float64
+	tools           tool.Tools
 	toolParams      []responses.ToolUnionParam
-	tools           map[string]tool.Tool
 }
 
 type openAIStep struct {
@@ -155,7 +155,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) 
 		if opts.Trace {
 			fmt.Print("Trace: OpenAI Responses.New(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.toolParams), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
@@ -285,7 +285,7 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) 
 				fmt.Printf("Trace: calling %s(%s)\n", item.Name, item.Arguments)
 			}
 
-			out, err := tool.CallTool(ctx, mdl.tools, item.Name, []byte(item.Arguments))
+			out, err := mdl.tools.Call(ctx, item.Name, []byte(item.Arguments))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", item.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)
@@ -321,9 +321,9 @@ func toOpenAITools(tools map[string]tool.Tool) []responses.ToolUnionParam {
 	return toolParams
 }
 
-func (mdl *openAIModel) SetTools(tools map[string]tool.Tool) error {
+func (mdl *openAIModel) SetTools(tools tool.Tools) error {
 	mdl.tools = tools
-	mdl.toolParams = toOpenAITools(tools)
+	mdl.toolParams = toOpenAITools(tools.Tools)
 	return nil
 }
 

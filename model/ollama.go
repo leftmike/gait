@@ -26,7 +26,7 @@ type ollamaModel struct {
 	think        *ollama.ThinkValue
 	numPredict   int
 	contextLimit int
-	tools        map[string]tool.Tool
+	tools        tool.Tools
 	toolDefs     ollama.Tools
 }
 
@@ -209,7 +209,7 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State, opts *Options) 
 		if opts.Trace {
 			fmt.Print("Trace: ollama Chat(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.toolDefs), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
@@ -271,7 +271,7 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State, opts *Options) 
 				fmt.Printf("Trace: calling %s(%s)\n", tc.Function.Name, args)
 			}
 
-			out, err := tool.CallTool(ctx, mdl.tools, tc.Function.Name, args)
+			out, err := mdl.tools.Call(ctx, tc.Function.Name, args)
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", tc.Function.Name,
 					util.Lines(out, 1, 160))
@@ -315,8 +315,8 @@ func toOllamaTools(tools map[string]tool.Tool) (ollama.Tools, error) {
 	return toolDefs, nil
 }
 
-func (mdl *ollamaModel) SetTools(tools map[string]tool.Tool) error {
-	toolDefs, err := toOllamaTools(tools)
+func (mdl *ollamaModel) SetTools(tools tool.Tools) error {
+	toolDefs, err := toOllamaTools(tools.Tools)
 	if err != nil {
 		return err
 	}

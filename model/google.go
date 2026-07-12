@@ -28,7 +28,7 @@ type googleModel struct {
 	contextLimit    int
 	inputCost       float64
 	outputCost      float64
-	tools           map[string]tool.Tool
+	tools           tool.Tools
 	funcDecls       []*genai.FunctionDeclaration
 }
 
@@ -259,7 +259,7 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 			ThinkingLevel:   mdl.thinkingLevel,
 		}
 	}
-	if len(mdl.tools) > 0 {
+	if len(mdl.funcDecls) > 0 {
 		gccfg.Tools = []*genai.Tool{
 			{
 				FunctionDeclarations: mdl.funcDecls,
@@ -274,7 +274,7 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 		if opts.Trace {
 			fmt.Print("Trace: Google GenerateContent(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.funcDecls), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
@@ -389,7 +389,7 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 					}
 					fmt.Println()
 				}
-				out, err = tool.CallTool(ctx, mdl.tools, tc.prt.FunctionCall.Name, tc.buf)
+				out, err = mdl.tools.Call(ctx, tc.prt.FunctionCall.Name, tc.buf)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%s, ", tc.prt.FunctionCall.Name,
 						util.Lines(out, 1, 160))
@@ -427,9 +427,9 @@ func toGoogleFuncDecls(tools map[string]tool.Tool) []*genai.FunctionDeclaration 
 	return decls
 }
 
-func (mdl *googleModel) SetTools(tools map[string]tool.Tool) error {
+func (mdl *googleModel) SetTools(tools tool.Tools) error {
 	mdl.tools = tools
-	mdl.funcDecls = toGoogleFuncDecls(tools)
+	mdl.funcDecls = toGoogleFuncDecls(tools.Tools)
 	return nil
 
 }

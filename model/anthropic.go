@@ -32,7 +32,7 @@ type anthropicModel struct {
 	contextLimit    int
 	inputCost       float64
 	outputCost      float64
-	tools           map[string]tool.Tool
+	tools           tool.Tools
 	toolParams      []anthropic.ToolUnionParam
 }
 
@@ -217,7 +217,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, opts *Option
 		if opts.Trace {
 			fmt.Print("Trace: Anthropic Messages.NewStreaming(")
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.toolParams), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
@@ -327,7 +327,7 @@ func (mdl *anthropicModel) Generate(ctx context.Context, ast State, opts *Option
 				fmt.Println()
 			}
 
-			out, err := tool.CallTool(ctx, mdl.tools, blk.Name, []byte(blk.Input))
+			out, err := mdl.tools.Call(ctx, blk.Name, []byte(blk.Input))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", blk.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)
@@ -378,9 +378,9 @@ func toAnthropicTools(tools map[string]tool.Tool) []anthropic.ToolUnionParam {
 	return toolParams
 }
 
-func (mdl *anthropicModel) SetTools(tools map[string]tool.Tool) error {
+func (mdl *anthropicModel) SetTools(tools tool.Tools) error {
 	mdl.tools = tools
-	mdl.toolParams = toAnthropicTools(tools)
+	mdl.toolParams = toAnthropicTools(tools.Tools)
 	return nil
 }
 

@@ -23,7 +23,7 @@ type chatAPIClient struct {
 type chatAPIModel struct {
 	clnt       *chatAPIClient
 	model      string
-	tools      map[string]tool.Tool
+	tools      tool.Tools
 	toolParams []openai.ChatCompletionToolUnionParam
 }
 
@@ -98,7 +98,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State, opts *Options)
 		if opts.Trace {
 			fmt.Printf("Trace: %s Chat.Completions.New(", mdl.clnt.provider)
 			if opts.Verbose {
-				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.tools), txtLen)
+				fmt.Printf("%s, %d tools, %d bytes", mdl.model, len(mdl.toolParams), txtLen)
 			}
 			fmt.Print(") -> ")
 		}
@@ -163,7 +163,7 @@ func (mdl *chatAPIModel) Generate(ctx context.Context, ast State, opts *Options)
 				fmt.Printf("Trace: calling %s(%s)\n", tc.Function.Name, tc.Function.Arguments)
 			}
 
-			out, err := tool.CallTool(ctx, mdl.tools, tc.Function.Name, []byte(tc.Function.Arguments))
+			out, err := mdl.tools.Call(ctx, tc.Function.Name, []byte(tc.Function.Arguments))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", tc.Function.Name,
 					util.Lines(out, 1, 160))
@@ -199,9 +199,9 @@ func toOpenAICompatTools(tools map[string]tool.Tool) []openai.ChatCompletionTool
 	return toolParams
 }
 
-func (mdl *chatAPIModel) SetTools(tools map[string]tool.Tool) error {
+func (mdl *chatAPIModel) SetTools(tools tool.Tools) error {
 	mdl.tools = tools
-	mdl.toolParams = toOpenAICompatTools(tools)
+	mdl.toolParams = toOpenAICompatTools(tools.Tools)
 	return nil
 }
 

@@ -169,7 +169,7 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
-	err = mdl.SetTools(tools)
+	err = mdl.SetTools(tool.Tools{Tools: tools})
 	if err != nil {
 		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}
@@ -241,7 +241,7 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
-	err = mdl.SetTools(tools)
+	err = mdl.SetTools(tool.Tools{Tools: tools})
 	if err != nil {
 		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}

@@ -61,7 +61,10 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 	line := liner.NewLiner()
 	defer line.Close()
 
-	err := ag.Model.SetTools(ag.Tools)
+	err := ag.Model.SetTools(tool.Tools{
+		Tools:   ag.Tools,
+		Sandbox: nil,
+	})
 	if err != nil {
 		return err
 	}

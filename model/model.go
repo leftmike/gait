@@ -32,7 +32,7 @@ type ModelMetadata struct {
 
 type Model interface {
 	Generate(ctx context.Context, st State, opts *Options) error
-	SetTools(tools map[string]tool.Tool) error
+	SetTools(tools tool.Tools) error
 	ContextLimit() int
 }
 

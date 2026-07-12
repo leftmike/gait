@@ -6,9 +6,14 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/leftmike/sandbox"
 )
 
-type ToolFunc func(ctx context.Context, buf []byte) (string, error)
+type Tools struct {
+	Tools   map[string]Tool
+	Sandbox *sandbox.Sandbox
+}
 
 type Tool struct {
 	Name        string
@@ -16,6 +21,8 @@ type Tool struct {
 	Func        ToolFunc
 	Schema      ToolSchema
 }
+
+type ToolFunc func(ctx context.Context, buf []byte) (string, error)
 
 type ToolSchema map[string]any
 
@@ -190,10 +197,8 @@ func Sorted(tools map[string]Tool) []Tool {
 	return sorted
 }
 
-func CallTool(ctx context.Context, tools map[string]Tool, name string, args []byte) (string,
-	error) {
-
-	tl, ok := tools[name]
+func (tls Tools) Call(ctx context.Context, name string, args []byte) (string, error) {
+	tl, ok := tls.Tools[name]
 	if !ok {
 		return "", fmt.Errorf("function not found: %s", name)
 	} else if tl.Name != name {

@@ -9,6 +9,7 @@ import (
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
+	"github.com/leftmike/gait/tool"
 )
 
 var (
@@ -167,7 +168,10 @@ func slashModel(ag *agent.Agent, st model.State, args []string) error {
 	if err != nil {
 		return err
 	}
-	err = mdl.SetTools(ag.Tools)
+	err = mdl.SetTools(tool.Tools{
+		Tools:   ag.Tools,
+		Sandbox: nil,
+	})
 	if err != nil {
 		return err
 	}
@@ -197,7 +201,10 @@ func slashEffort(ag *agent.Agent, st model.State, args []string) error {
 	if err != nil {
 		return err
 	}
-	err = mdl.SetTools(ag.Tools)
+	err = mdl.SetTools(tool.Tools{
+		Tools:   ag.Tools,
+		Sandbox: nil,
+	})
 	if err != nil {
 		return err
 	}
