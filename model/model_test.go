@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/leftmike/sandbox"
+
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/tool"
@@ -123,7 +125,7 @@ type currentTemperatureArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current temperature for"`
 }
 
-func currentTemperature(ctx context.Context, buf []byte) (string, error) {
+func currentTemperature(ctx context.Context, _ *sandbox.Sandbox, buf []byte) (string, error) {
 	var args currentTemperatureArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -139,7 +141,7 @@ type currentWeatherArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current weather for"`
 }
 
-func currentWeather(ctx context.Context, buf []byte) (string, error) {
+func currentWeather(ctx context.Context, _ *sandbox.Sandbox, buf []byte) (string, error) {
 	var args currentWeatherArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {

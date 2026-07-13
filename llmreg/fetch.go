@@ -53,12 +53,14 @@ func readFreshCache(path string, ttl time.Duration) ([]byte, bool) {
 }
 
 func writeCache(path string, buf []byte) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	err := os.MkdirAll(filepath.Dir(path), 0o755)
+	if err != nil {
 		return
 	}
 	// Write atomically so a partial write never corrupts the cache.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, buf, 0o644); err != nil {
+	err = os.WriteFile(tmp, buf, 0o644)
+	if err != nil {
 		return
 	}
 	_ = os.Rename(tmp, path)

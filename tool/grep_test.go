@@ -15,7 +15,7 @@ func runGrep(t *testing.T, args grepArgs) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := grep(context.Background(), buf)
+	out, err := grep(context.Background(), nil, buf)
 	if err != nil {
 		t.Fatalf("grep error: %s", err)
 	}
@@ -26,10 +26,12 @@ func TestGrep(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite := func(name, content string) {
 		p := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		err := os.MkdirAll(filepath.Dir(p), 0755)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		err = os.WriteFile(p, []byte(content), 0644)
+		if err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -81,7 +83,8 @@ func TestGrep(t *testing.T) {
 
 func TestGrepMultiline(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "m.txt"), []byte("start\nmiddle\nend\n"), 0644); err != nil {
+	err := os.WriteFile(filepath.Join(dir, "m.txt"), []byte("start\nmiddle\nend\n"), 0644)
+	if err != nil {
 		t.Fatal(err)
 	}
 	out := runGrep(t, grepArgs{

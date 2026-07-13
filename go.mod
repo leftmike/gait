@@ -7,7 +7,9 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.52.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/invopop/jsonschema v0.14.0
+	github.com/leftmike/sandbox v0.0.0-20260620220239-f74557f90d7a
 	github.com/modelcontextprotocol/go-sdk v1.3.1
+	github.com/ollama/ollama v0.30.11
 	github.com/openai/openai-go/v3 v3.22.0
 	github.com/peterh/liner v1.2.2
 	google.golang.org/genai v1.46.0
@@ -35,11 +37,9 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.12 // indirect
 	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/leftmike/sandbox v0.0.0-20260620220239-f74557f90d7a // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
-	github.com/ollama/ollama v0.30.11 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect

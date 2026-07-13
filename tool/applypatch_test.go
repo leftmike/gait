@@ -22,7 +22,7 @@ func runApplyPatch(t *testing.T, patch string) (string, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return applyPatch(context.Background(), buf)
+	return applyPatch(context.Background(), nil, buf)
 }
 
 func testParsePatch(t *testing.T, patch string, hunks []patchHunk, errMsg string) {

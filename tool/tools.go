@@ -22,7 +22,9 @@ type Tool struct {
 	Schema      ToolSchema
 }
 
-type ToolFunc func(ctx context.Context, buf []byte) (string, error)
+// A ToolFunc optionally runs inside a sandbox; sb may be nil, in which case
+// the tool runs unrestricted.
+type ToolFunc func(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error)
 
 type ToolSchema map[string]any
 
@@ -205,7 +207,7 @@ func (tls Tools) Call(ctx context.Context, name string, args []byte) (string, er
 		panic(fmt.Sprintf("tool names not the same: %s %s", tl.Name, name))
 	}
 
-	return tl.Func(ctx, args)
+	return tl.Func(ctx, tls.Sandbox, args)
 }
 
 func addWebSearch(apiKey string, tools map[string]Tool) map[string]Tool {

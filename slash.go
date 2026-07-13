@@ -170,7 +170,7 @@ func slashModel(ag *agent.Agent, st model.State, args []string) error {
 	}
 	err = mdl.SetTools(tool.Tools{
 		Tools:   ag.Tools,
-		Sandbox: nil,
+		Sandbox: ag.Sandbox,
 	})
 	if err != nil {
 		return err
@@ -203,7 +203,7 @@ func slashEffort(ag *agent.Agent, st model.State, args []string) error {
 	}
 	err = mdl.SetTools(tool.Tools{
 		Tools:   ag.Tools,
-		Sandbox: nil,
+		Sandbox: ag.Sandbox,
 	})
 	if err != nil {
 		return err

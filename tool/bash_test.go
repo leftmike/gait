@@ -33,5 +33,5 @@ func bashRun(t *testing.T, args bashArgs) (string, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return bash(t.Context(), buf)
+	return bash(t.Context(), nil, buf)
 }

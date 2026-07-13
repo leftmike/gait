@@ -10,26 +10,26 @@ import (
 	"github.com/invopop/jsonschema"
 )
 
-func callJSON(t *testing.T, fn func(context.Context, []byte) (string, error), v any) string {
+func callJSON(t *testing.T, fn ToolFunc, v any) string {
 	t.Helper()
 	buf, err := json.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := fn(context.Background(), buf)
+	out, err := fn(context.Background(), nil, buf)
 	if err != nil {
 		t.Fatalf("tool returned error: %s", err)
 	}
 	return out
 }
 
-func callJSONErr(t *testing.T, fn func(context.Context, []byte) (string, error), v any) {
+func callJSONErr(t *testing.T, fn ToolFunc, v any) {
 	t.Helper()
 	buf, err := json.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fn(context.Background(), buf); err == nil {
+	if _, err := fn(context.Background(), nil, buf); err == nil {
 		t.Fatalf("expected error, got none")
 	}
 }

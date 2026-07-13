@@ -36,7 +36,8 @@ func TestEditFile(t *testing.T) {
 
 func TestEditBinaryFileRefused(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bin")
-	if err := os.WriteFile(path, []byte{'a', 0, 'b'}, 0644); err != nil {
+	err := os.WriteFile(path, []byte{'a', 0, 'b'}, 0644)
+	if err != nil {
 		t.Fatal(err)
 	}
 	callJSONErr(t, editFile, editFileArgs{Path: path, OldString: "a", NewString: "x"})

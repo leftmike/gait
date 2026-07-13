@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/leftmike/sandbox"
 )
 
 type writeFileArgs struct {
@@ -13,19 +15,26 @@ type writeFileArgs struct {
 	Content string `json:"content" gait:"the content to write to the file"`
 }
 
-func writeFile(ctx context.Context, buf []byte) (string, error) {
+func writeFile(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
 	var args writeFileArgs
-	if err := json.Unmarshal(buf, &args); err != nil {
+	err := json.Unmarshal(buf, &args)
+	if err != nil {
 		return "", err
 	}
 
+	err = checkWrite(sb, args.Path)
+	if err != nil {
+		return "", err
+	}
 	if dir := filepath.Dir(args.Path); dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		err = os.MkdirAll(dir, 0755)
+		if err != nil {
 			return "", err
 		}
 	}
 
-	if err := os.WriteFile(args.Path, []byte(args.Content), 0644); err != nil {
+	err = os.WriteFile(args.Path, []byte(args.Content), 0644)
+	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("wrote %d bytes to %s", len(args.Content), args.Path), nil

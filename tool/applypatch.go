@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/leftmike/sandbox"
 )
 
 const applyPatchDescription = "Use the `apply_patch` tool to edit files.\n" +
@@ -87,7 +89,7 @@ type applyPatchArgs struct {
 	Input string `json:"input" gait:"The entire contents of the apply_patch command"`
 }
 
-func applyPatch(ctx context.Context, buf []byte) (string, error) {
+func applyPatch(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
 	var args applyPatchArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -99,23 +101,23 @@ func applyPatch(ctx context.Context, buf []byte) (string, error) {
 		return "", err
 	}
 
-	affected, err := applyHunks(hunks)
+	affected, err := applyHunks(sb, hunks)
 	if err != nil {
 		return "", err
 	}
 
-	var sb strings.Builder
-	sb.WriteString("Success. Updated the following files:\n")
+	var out strings.Builder
+	out.WriteString("Success. Updated the following files:\n")
 	for _, path := range affected.added {
-		fmt.Fprintf(&sb, "A %s\n", path)
+		fmt.Fprintf(&out, "A %s\n", path)
 	}
 	for _, path := range affected.modified {
-		fmt.Fprintf(&sb, "M %s\n", path)
+		fmt.Fprintf(&out, "M %s\n", path)
 	}
 	for _, path := range affected.deleted {
-		fmt.Fprintf(&sb, "D %s\n", path)
+		fmt.Fprintf(&out, "D %s\n", path)
 	}
-	return sb.String(), nil
+	return out.String(), nil
 }
 
 var ApplyPatch = Tool{
@@ -413,9 +415,24 @@ type affectedPaths struct {
 
 // Apply the hunks to the filesystem, returning which files were added, modified, or
 // deleted.
-func applyHunks(hunks []patchHunk) (affectedPaths, error) {
+func applyHunks(sb *sandbox.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 	if len(hunks) == 0 {
 		return affectedPaths{}, fmt.Errorf("No files were modified.")
+	}
+
+	// Check every path against the sandbox's filesystem policy before applying
+	// anything so a denied patch is not applied partially.
+	for _, hunk := range hunks {
+		err := checkWrite(sb, hunk.path)
+		if err != nil {
+			return affectedPaths{}, err
+		}
+		if hunk.movePath != "" {
+			err = checkWrite(sb, hunk.movePath)
+			if err != nil {
+				return affectedPaths{}, err
+			}
+		}
 	}
 
 	var affected affectedPaths

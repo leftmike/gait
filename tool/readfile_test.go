@@ -9,7 +9,8 @@ import (
 
 func TestReadFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "file.txt")
-	if err := os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644); err != nil {
+	err := os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -32,7 +33,8 @@ func TestReadFile(t *testing.T) {
 
 func TestReadFileNoTrailingNewline(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "file.txt")
-	if err := os.WriteFile(path, []byte("one\ntwo"), 0644); err != nil {
+	err := os.WriteFile(path, []byte("one\ntwo"), 0644)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,7 +46,8 @@ func TestReadFileNoTrailingNewline(t *testing.T) {
 
 func TestReadFileEmpty(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "empty.txt")
-	if err := os.WriteFile(path, nil, 0644); err != nil {
+	err := os.WriteFile(path, nil, 0644)
+	if err != nil {
 		t.Fatal(err)
 	}
 

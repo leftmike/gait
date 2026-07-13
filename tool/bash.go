@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/leftmike/sandbox"
 )
 
 const (
@@ -28,9 +29,10 @@ type bashArgs struct {
 	Timeout int    `json:"timeout,omitempty" gait:"timeout in milliseconds; defaults to 120000 and is capped at 600000"`
 }
 
-func bash(ctx context.Context, buf []byte) (string, error) {
+func bash(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
 	var args bashArgs
-	if err := json.Unmarshal(buf, &args); err != nil {
+	err := json.Unmarshal(buf, &args)
+	if err != nil {
 		return "", err
 	}
 	if strings.TrimSpace(args.Command) == "" {
@@ -48,8 +50,7 @@ func bash(ctx context.Context, buf []byte) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "bash", "-c", args.Command)
-	out, err := cmd.CombinedOutput()
+	out, err := combinedOutput(ctx, sb, "", "bash", "-c", args.Command)
 
 	// Report a timeout explicitly rather than as an opaque signal error.
 	if ctx.Err() == context.DeadlineExceeded {

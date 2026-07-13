@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/leftmike/sandbox"
 )
 
 type globArgs struct {
@@ -51,9 +53,10 @@ type globMatchInfo struct {
 	modTime int64
 }
 
-func glob(ctx context.Context, buf []byte) (string, error) {
+func glob(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
 	var args globArgs
-	if err := json.Unmarshal(buf, &args); err != nil {
+	err := json.Unmarshal(buf, &args)
+	if err != nil {
 		return "", err
 	}
 
@@ -65,7 +68,7 @@ func glob(ctx context.Context, buf []byte) (string, error) {
 	pattern := filepath.ToSlash(args.Pattern)
 
 	var matches []globMatchInfo
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -80,6 +83,10 @@ func glob(ctx context.Context, buf []byte) (string, error) {
 		rel = filepath.ToSlash(rel)
 
 		if !globMatch(pattern, rel) {
+			return nil
+		}
+		// Don't reveal files the sandbox's filesystem policy denies reading.
+		if checkRead(sb, path) != nil {
 			return nil
 		}
 
@@ -103,12 +110,12 @@ func glob(ctx context.Context, buf []byte) (string, error) {
 		return "No files found.", nil
 	}
 
-	var sb strings.Builder
+	var out strings.Builder
 	for _, m := range matches {
-		sb.WriteString(m.path)
-		sb.WriteByte('\n')
+		out.WriteString(m.path)
+		out.WriteByte('\n')
 	}
-	return strings.TrimRight(sb.String(), "\n"), nil
+	return strings.TrimRight(out.String(), "\n"), nil
 }
 
 var Glob = Tool{

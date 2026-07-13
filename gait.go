@@ -63,7 +63,7 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 
 	err := ag.Model.SetTools(tool.Tools{
 		Tools:   ag.Tools,
-		Sandbox: nil,
+		Sandbox: ag.Sandbox,
 	})
 	if err != nil {
 		return err

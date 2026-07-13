@@ -300,7 +300,8 @@ func toOllamaTools(tools map[string]tool.Tool) (ollama.Tools, error) {
 			return nil, err
 		}
 		var params ollama.ToolFunctionParameters
-		if err := json.Unmarshal(schemaJSON, &params); err != nil {
+		err = json.Unmarshal(schemaJSON, &params)
+		if err != nil {
 			return nil, err
 		}
 		toolDefs = append(toolDefs, ollama.Tool{

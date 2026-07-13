@@ -5,13 +5,14 @@
 package tool
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
 	"time"
+
+	"github.com/leftmike/sandbox"
 )
 
 type shellCommandArgs struct {
@@ -20,9 +21,10 @@ type shellCommandArgs struct {
 	TimeoutMS int      `json:"timeout_ms,omitempty" gait:"the timeout for the command in milliseconds"`
 }
 
-func shellCommand(ctx context.Context, buf []byte) (string, error) {
+func shellCommand(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
 	var args shellCommandArgs
-	if err := json.Unmarshal(buf, &args); err != nil {
+	err := json.Unmarshal(buf, &args)
+	if err != nil {
 		return "", err
 	}
 	if len(args.Command) == 0 {
@@ -35,26 +37,19 @@ func shellCommand(ctx context.Context, buf []byte) (string, error) {
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, args.Command[0], args.Command[1:]...)
-	cmd.Dir = args.Workdir
-
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	err := cmd.Run()
+	out, err := combinedOutput(ctx, sb, args.Workdir, args.Command[0], args.Command[1:]...)
 
 	// A non-zero exit is a normal outcome the model should see, so report the
 	// output along with the exit code rather than failing the tool call. A
 	// failure to start the command (e.g. a missing binary) is a real error.
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
-		return fmt.Sprintf("%sexited with code %d", out.String(), exitErr.ExitCode()), nil
+		return fmt.Sprintf("%sexited with code %d", out, exitErr.ExitCode()), nil
 	}
 	if err != nil {
 		return "", err
 	}
-	return out.String(), nil
+	return string(out), nil
 }
 
 var ShellCommand = Tool{
