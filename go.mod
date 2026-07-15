@@ -7,7 +7,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.52.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/invopop/jsonschema v0.14.0
-	github.com/leftmike/sandbox v0.0.0-20260620220239-f74557f90d7a
+	github.com/leftmike/sandbox v0.0.0-20260715034104-13c0097e2486
 	github.com/modelcontextprotocol/go-sdk v1.3.1
 	github.com/ollama/ollama v0.30.11
 	github.com/openai/openai-go/v3 v3.22.0

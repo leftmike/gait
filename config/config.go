@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,14 @@ type ClientConfig struct {
 	Thoughts  bool   `hcl:"thoughts,optional"`
 	Effort    string `hcl:"effort,optional"`
 	MaxTokens int    `hcl:"max_tokens,optional"`
+}
+
+type SandboxConfig struct {
+	NoLandlock bool   `hcl:"no_landlock,optional"`
+	Log        bool   `hcl:"log,optional"`
+	Syscalls   string `hcl:"syscalls,optional"`
+	FileAccess string `hcl:"file_access,optional"`
+	Execute    string `hcl:"execute,optional"`
 }
 
 /*
@@ -54,6 +63,7 @@ type MCPServer struct {
 type Config struct {
 	Provider      string         `hcl:"provider,optional"`
 	ClientConfigs []ClientConfig `hcl:"provider,block"`
+	SandboxConfig *SandboxConfig `hcl:"sandbox,block"`
 	MCPServers    []MCPServer    `hcl:"mcpserver,block"`
 	Skills        []string       `hcl:"skills,optional"`
 	BraveAPIKey   string         `hcl:"brave_api_key,optional"`
@@ -90,6 +100,32 @@ func ReadConfig(filenames []string) (*Config, error) {
 	return nil, fmt.Errorf("config file not found: %v", filenames)
 }
 
+func stringsJoin(vals []string, conj string) string {
+	switch len(vals) {
+	case 1:
+		return vals[0]
+	case 2:
+		return fmt.Sprintf("%s %s %s", vals[0], conj, vals[1])
+	default:
+		return fmt.Sprintf("%s, %s %s", strings.Join(vals[:len(vals)-1], ", "), conj,
+			vals[len(vals)-1])
+	}
+}
+
+func configString(flg, cfg, msg string, vals []string) (string, error) {
+	if flg != "" {
+		cfg = flg
+	} else if cfg == "" {
+		return "", nil
+	}
+
+	if !slices.Contains(vals, cfg) {
+		return "", fmt.Errorf("%s: must be one of %s: %s", msg, stringsJoin(vals, "or"), cfg)
+	}
+
+	return cfg, nil
+}
+
 func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	var configFilename string
 	var noConfig bool
@@ -104,6 +140,11 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	var thoughts, hasThoughts bool
 	var effort string
 	var maxTokens int
+	var noLandlock, hasNoLandlock bool
+	var log, hasLog bool
+	var syscalls string
+	var fileAccess string
+	var execute string
 	var braveAPIKey string
 
 	fs.StringVar(&configFilename, "config", "", "config filename")
@@ -127,6 +168,28 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	})
 	fs.StringVar(&effort, "effort", "", "reasoning `effort`; depends on provider and model")
 	fs.IntVar(&maxTokens, "max-tokens", 0, "maximum output `tokens`")
+	fs.BoolFunc("no-landlock", "sandbox: disable landlock", func(s string) error {
+		var err error
+		noLandlock, err = strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+		hasNoLandlock = true
+		return nil
+	})
+	fs.BoolFunc("log", "sandbox: enable logging of syscalls", func(s string) error {
+		var err error
+		log, err = strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+		hasLog = true
+		return nil
+	})
+	fs.StringVar(&syscalls, "syscalls", "", "sandbox: syscall `mode`: all, yes, ask, or always")
+	fs.StringVar(&fileAccess, "file-access", "",
+		"sandbox: file access `mode`: yes, no, ask, or always")
+	fs.StringVar(&execute, "execute", "", "sandbox: execute `mode`: yes, no, ask, or always")
 	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api key` for Brave Search")
 	fs.Parse(os.Args[1:])
 
@@ -190,6 +253,38 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 		}
 		if maxTokens == 0 && ok {
 			maxTokens = clntCfg.MaxTokens
+		}
+	}
+
+	if hasNoLandlock || hasLog || syscalls != "" || fileAccess != "" || execute != "" {
+		if cfg.SandboxConfig == nil {
+			cfg.SandboxConfig = &SandboxConfig{}
+		}
+
+		if hasNoLandlock {
+			cfg.SandboxConfig.NoLandlock = noLandlock
+		}
+		if hasLog {
+			cfg.SandboxConfig.Log = log
+		}
+
+		var err error
+		cfg.SandboxConfig.Syscalls, err = configString(syscalls, cfg.SandboxConfig.Syscalls,
+			"syscall mode", []string{"all", "yes", "ask", "always"})
+		if err != nil {
+			return ModelConfig{}, ClientConfig{}, nil, err
+		}
+
+		cfg.SandboxConfig.FileAccess, err = configString(fileAccess, cfg.SandboxConfig.FileAccess,
+			"file access mode", []string{"yes", "no", "ask", "always"})
+		if err != nil {
+			return ModelConfig{}, ClientConfig{}, nil, err
+		}
+
+		cfg.SandboxConfig.Execute, err = configString(execute, cfg.SandboxConfig.Execute,
+			"execute mode", []string{"yes", "no", "ask", "always"})
+		if err != nil {
+			return ModelConfig{}, ClientConfig{}, nil, err
 		}
 	}
 

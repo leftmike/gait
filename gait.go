@@ -18,6 +18,14 @@ To Do:
 - channels: https://code.claude.com/docs/en/channels-reference
 
 - restricted sandbox for running cli programs
+-- no_landlock: true / false
+-- log: true / false
+-- syscalls: all, yes, ask, always
+-- file_access: yes, no, ask, always
+-- execute: yes, no, ask, always
+-- (network: yes, no, ask, always)
+
+- allow programatic tool calling
 
 - codex skills prompt: https://github.com/openai/codex/blob/99f47d6e9a3546c14c43af99c7a58fa6bd130548/codex-rs/core/src/skills/render.rs#L19
 
@@ -178,10 +186,12 @@ func main() {
 	}
 
 	ag := agent.Agent{
-		Client:      clnt,
-		Model:       mdl,
-		ModelConfig: mdlCfg,
-		Tools:       tools,
+		Client:        clnt,
+		Model:         mdl,
+		ModelConfig:   mdlCfg,
+		Tools:         tools,
+		Sandbox:       tool.NewSandbox(cfg.SandboxConfig),
+		SandboxConfig: cfg.SandboxConfig,
 	}
 
 	/*

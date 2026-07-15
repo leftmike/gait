@@ -13,11 +13,12 @@ import (
 )
 
 type Agent struct {
-	Client      model.Client
-	Model       model.Model
-	ModelConfig config.ModelConfig
-	Tools       map[string]tool.Tool
-	Sandbox     *sandbox.Sandbox
+	Client        model.Client
+	Model         model.Model
+	ModelConfig   config.ModelConfig
+	Tools         map[string]tool.Tool
+	Sandbox       *sandbox.Sandbox
+	SandboxConfig *config.SandboxConfig
 
 	Skills []*skill.Skill
 	clnts  []*mcpclient.Client // XXX: rename field
