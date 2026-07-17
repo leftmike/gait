@@ -81,6 +81,44 @@ func combinedOutput(ctx context.Context, sb *sandbox.Sandbox, dir, name string,
 	return cmd.CombinedOutput()
 }
 
+type sandboxHandler struct {
+	log    bool
+	ask    bool
+	always bool
+}
+
+func (sh sandboxHandler) clone(pid uint32, sysnum int, flags uint64) bool {
+	// XXX
+	return true
+}
+
+func (sh sandboxHandler) exec(pid uint32, sysnum int, pathname string, argv []string,
+	env []string) bool {
+
+	// XXX
+	return true
+}
+
+func (sh sandboxHandler) open(pid uint32, sysnum int, pathname string, flags int32, mode uint32,
+	resolve uint64) bool {
+
+	// XXX
+	return true
+}
+
+func (sh sandboxHandler) openFailed(pid uint32, sysnum int, pathname string, err error) {
+	// XXX
+}
+
+func (sh sandboxHandler) syscall(pid uint32, sysnum int) bool {
+	// XXX
+	return true
+}
+
+func (sh sandboxHandler) failed(pid uint32, sysnum int, err error) {
+	// XXX
+}
+
 func NewSandbox(sbCfg *config.SandboxConfig) *sandbox.Sandbox {
 	if sbCfg == nil {
 		return nil
@@ -114,19 +152,36 @@ func NewSandbox(sbCfg *config.SandboxConfig) *sandbox.Sandbox {
 
 	if sbCfg.Syscalls == "ask" || sbCfg.Syscalls == "always" || sbCfg.Log {
 		sb.Filter["default"] = sandbox.FilterConfig{Action: unix.SECCOMP_RET_USER_NOTIF}
-		// XXX: sb.Syscall = ...
-		// XXX: sb.Failed = ...
+		sh := sandboxHandler{
+			log:    sbCfg.Log,
+			ask:    sbCfg.Syscalls == "ask",
+			always: sbCfg.Syscalls == "always",
+		}
+		sb.Syscall = sh.syscall
+		sb.Failed = sh.failed
 	} else {
 		sb.Filter["default"] = sandbox.FilterConfig{Action: unix.SECCOMP_RET_ALLOW}
 	}
 
-	// XXX: if sbCfg.FileAccess != "yes" || sbCfg.Log {
-	// XXX:     sb.Open = ...
-	// XXX:     sb.OpenFailed = ...
+	if sbCfg.FileAccess != "yes" || sbCfg.Log {
+		sh := sandboxHandler{
+			log:    sbCfg.Log,
+			ask:    sbCfg.FileAccess == "ask",
+			always: sbCfg.FileAccess == "always",
+		}
+		sb.Open = sh.open
+		sb.OpenFailed = sh.openFailed
+	}
 
-	// XXX: if sbCfg.Execute != "yes" || sbCfg.Log {
-	// XXX:     sb.Exec = ...
-	// XXX:     sb.Clone = ...
+	if sbCfg.Execute != "yes" || sbCfg.Log {
+		sh := sandboxHandler{
+			log:    sbCfg.Log,
+			ask:    sbCfg.Execute == "ask",
+			always: sbCfg.Execute == "always",
+		}
+		sb.Exec = sh.exec
+		sb.Clone = sh.clone
+	}
 
 	// XXX: policy from config
 	sb.FSP = sandbox.DefaultFSPolicy()

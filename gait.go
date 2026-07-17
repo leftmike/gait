@@ -21,9 +21,11 @@ To Do:
 -- no_landlock: true / false
 -- log: true / false
 -- syscalls: all, yes, ask, always
--- file_access: yes, no, ask, always
--- execute: yes, no, ask, always
--- (network: yes, no, ask, always)
+-- file_access: yes, ask, always
+-- execute: yes, ask, always
+-- (network: yes, ask, always)
+-- github.com/superradcompany/microsandbox
+-- nono.sh
 
 - allow programatic tool calling
 
@@ -48,6 +50,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -140,6 +143,27 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 	return nil
 }
 
+func setupLogging(log bool, logfile string) {
+	var l *slog.Logger
+	if log {
+		if logfile != "" {
+			file, err := os.OpenFile(logfile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s %s: %s", os.Args[0], os.Args[1], err)
+				os.Exit(1)
+			}
+
+			l = slog.New(slog.NewTextHandler(file, nil))
+		} else {
+			l = slog.New(slog.NewTextHandler(os.Stderr, nil))
+		}
+	} else {
+		l = slog.New(slog.DiscardHandler)
+	}
+
+	slog.SetDefault(l)
+}
+
 func main() {
 	fs := flag.NewFlagSet("gait", flag.ExitOnError)
 
@@ -185,6 +209,10 @@ func main() {
 		tools = tool.All(cfg.BraveAPIKey)
 	}
 
+	setupLogging(cfg.SandboxConfig.Log, "gait.log")
+	slog.Info("starting", "cmd", os.Args[0], "args", strings.Join(os.Args[1:], " "),
+		"pid", os.Getpid())
+
 	ag := agent.Agent{
 		Client:        clnt,
 		Model:         mdl,
@@ -219,4 +247,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 	}
+
+	slog.Info("exiting", "cmd", os.Args[0], "args", strings.Join(os.Args[1:], " "),
+		"pid", os.Getpid())
 }

@@ -276,13 +276,13 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 		}
 
 		cfg.SandboxConfig.FileAccess, err = configString(fileAccess, cfg.SandboxConfig.FileAccess,
-			"file access mode", []string{"yes", "no", "ask", "always"})
+			"file access mode", []string{"yes", "ask", "always"})
 		if err != nil {
 			return ModelConfig{}, ClientConfig{}, nil, err
 		}
 
 		cfg.SandboxConfig.Execute, err = configString(execute, cfg.SandboxConfig.Execute,
-			"execute mode", []string{"yes", "no", "ask", "always"})
+			"execute mode", []string{"yes", "ask", "always"})
 		if err != nil {
 			return ModelConfig{}, ClientConfig{}, nil, err
 		}
