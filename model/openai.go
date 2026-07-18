@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/openai/openai-go/v3"
@@ -59,6 +60,10 @@ func newOpenAIClient(apiKey string) (Client, error) {
 	pvdr, err := llmreg.FindProvider("openai")
 	if err != nil {
 		return nil, err
+	}
+
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
 
 	return &openAIClient{

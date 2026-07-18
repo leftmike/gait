@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"google.golang.org/genai"
 
@@ -63,6 +64,13 @@ func newGoogleClient(apiKey string) (Client, error) {
 	pvdr, err := llmreg.FindProvider("google")
 	if err != nil {
 		return nil, err
+	}
+
+	if apiKey == "" {
+		apiKey = os.Getenv("GEMINI_API_KEY")
+	}
+	if apiKey == "" {
+		apiKey = os.Getenv("GOOGLE_API_KEY")
 	}
 
 	ctx := context.Background()

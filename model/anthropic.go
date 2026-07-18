@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -60,6 +61,10 @@ func newAnthropicClient(apiKey string) (Client, error) {
 	pvdr, err := llmreg.FindProvider("anthropic")
 	if err != nil {
 		return nil, err
+	}
+
+	if apiKey == "" {
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
 	}
 
 	return &anthropicClient{
