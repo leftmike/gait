@@ -122,6 +122,9 @@ func listModels(pvdr llmreg.Provider) map[string]ModelMetadata {
 		}
 
 		releaseDate, err := time.Parse("2006-01-02", mdl.ReleaseDate)
+		if err != nil {
+			releaseDate, err = time.Parse("2006-01", mdl.ReleaseDate)
+		}
 		if err != nil || releaseDate.Before(cutoff) {
 			continue
 		}
