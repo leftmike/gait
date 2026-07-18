@@ -103,6 +103,8 @@ func NewClient(clntCfg config.ClientConfig) (Client, error) {
 		return newOllamaClient(clntCfg)
 	case "openai":
 		return newOpenAIClient(clntCfg.APIKey)
+	case "openrouter":
+		return newOpenRouterClient(clntCfg.APIKey)
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", clntCfg.Provider)
 	}

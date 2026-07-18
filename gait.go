@@ -6,7 +6,7 @@ To Do:
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
 
-- add support for open router
+- add support for hugging face
 
 - web_fetch: get user confirmation / config of domains / urls to fetch
 - claude code builtin tools: Bash, Edit, Write, Read, Glob, Grep, Agent, WebFetch, WebSearch,

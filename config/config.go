@@ -130,6 +130,7 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	var configFilename string
 	var noConfig bool
 	var useOpenAI bool
+	var useOpenRouter bool
 	var useAnthropic bool
 	var useGoogle bool
 	var useOllama bool
@@ -150,6 +151,7 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	fs.StringVar(&configFilename, "config", "", "config filename")
 	fs.BoolVar(&noConfig, "no-config", false, "do not load config")
 	fs.BoolVar(&useOpenAI, "openai", false, "use openai")
+	fs.BoolVar(&useOpenRouter, "openrouter", false, "use openrouter")
 	fs.BoolVar(&useAnthropic, "anthropic", false, "use anthropic")
 	fs.BoolVar(&useGoogle, "google", false, "use google")
 	fs.BoolVar(&useOllama, "ollama", false, "use ollama")
@@ -198,11 +200,12 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	}
 
 	providers := map[string]bool{
-		"openai":    useOpenAI,
-		"anthropic": useAnthropic,
-		"google":    useGoogle,
-		"ollama":    useOllama,
-		"llamacpp":  useLlamaCpp,
+		"openai":     useOpenAI,
+		"openrouter": useOpenRouter,
+		"anthropic":  useAnthropic,
+		"google":     useGoogle,
+		"ollama":     useOllama,
+		"llamacpp":   useLlamaCpp,
 	}
 
 	var provider string
