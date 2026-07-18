@@ -97,6 +97,8 @@ func NewClient(clntCfg config.ClientConfig) (Client, error) {
 		return newAnthropicClient(clntCfg.APIKey)
 	case "google":
 		return newGoogleClient(clntCfg.APIKey)
+	case "huggingface":
+		return newHuggingFaceClient(clntCfg.APIKey)
 	case "llamacpp":
 		return newLlamaCppClient(clntCfg)
 	case "ollama":

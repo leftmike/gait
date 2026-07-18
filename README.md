@@ -5,13 +5,19 @@ A simple tool for interacting with LLMs.
 
 gait supports the following model providers:
 
-| Provider    | Flag          | Type   |
-|-------------|---------------|--------|
-| OpenAI      | `-openai`     | cloud  |
-| Anthropic   | `-anthropic`  | cloud  |
-| Google      | `-google`     | cloud  |
-| Ollama      | `-ollama`     | local  |
-| llama.cpp   | `-llamacpp`   | local  |
+| Provider     | Flag           | Type   |
+|--------------|----------------|--------|
+| Anthropic    | `-anthropic`   | cloud  |
+| Google       | `-google`      | cloud  |
+| Hugging Face | `-huggingface` | cloud  |
+| llama.cpp    | `-llamacpp`    | local  |
+| Ollama       | `-ollama`      | local  |
+| OpenAI       | `-openai`      | cloud  |
+| OpenRouter   | `-openrouter`  | cloud  |
+
+Cloud providers read their API key from config (`api_key`) or from an
+environment variable (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `HF_TOKEN`,
+`OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
 
 ## Configuration
 

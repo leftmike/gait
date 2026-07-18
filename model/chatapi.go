@@ -41,6 +41,8 @@ type chatAPIState struct {
 	inputTokens   int64
 	outputTokens  int64
 	contextTokens int64
+	inputCost     float64 // cents
+	outputCost    float64 // cents
 }
 
 func newLlamaCppClient(clntCfg config.ClientConfig) (Client, error) {
@@ -243,7 +245,7 @@ func (st *chatAPIState) Usage() (int64, int64, int64) {
 }
 
 func (st *chatAPIState) Cost() (float64, float64) {
-	return 0, 0
+	return st.inputCost / 100, st.outputCost / 100
 }
 
 func (step chatAPIStep) toolCall() openai.ChatCompletionMessageToolCallUnionParam {

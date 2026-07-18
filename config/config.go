@@ -129,12 +129,13 @@ func configString(flg, cfg, msg string, vals []string) (string, error) {
 func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	var configFilename string
 	var noConfig bool
-	var useOpenAI bool
-	var useOpenRouter bool
 	var useAnthropic bool
 	var useGoogle bool
-	var useOllama bool
+	var useHuggingFace bool
 	var useLlamaCpp bool
+	var useOllama bool
+	var useOpenAI bool
+	var useOpenRouter bool
 	var model string
 	var apiKey string
 	var baseURL string
@@ -150,12 +151,13 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 
 	fs.StringVar(&configFilename, "config", "", "config filename")
 	fs.BoolVar(&noConfig, "no-config", false, "do not load config")
-	fs.BoolVar(&useOpenAI, "openai", false, "use openai")
-	fs.BoolVar(&useOpenRouter, "openrouter", false, "use openrouter")
 	fs.BoolVar(&useAnthropic, "anthropic", false, "use anthropic")
 	fs.BoolVar(&useGoogle, "google", false, "use google")
-	fs.BoolVar(&useOllama, "ollama", false, "use ollama")
+	fs.BoolVar(&useHuggingFace, "huggingface", false, "use huggingface")
 	fs.BoolVar(&useLlamaCpp, "llamacpp", false, "use llama.cpp")
+	fs.BoolVar(&useOllama, "ollama", false, "use ollama")
+	fs.BoolVar(&useOpenAI, "openai", false, "use openai")
+	fs.BoolVar(&useOpenRouter, "openrouter", false, "use openrouter")
 	fs.StringVar(&model, "model", "", "generate using this model `model`")
 	fs.StringVar(&apiKey, "apikey", "", "`api key` to use")
 	fs.StringVar(&baseURL, "baseurl", "", "`base url` of the model server")
@@ -200,12 +202,13 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	}
 
 	providers := map[string]bool{
-		"openai":     useOpenAI,
-		"openrouter": useOpenRouter,
-		"anthropic":  useAnthropic,
-		"google":     useGoogle,
-		"ollama":     useOllama,
-		"llamacpp":   useLlamaCpp,
+		"anthropic":   useAnthropic,
+		"google":      useGoogle,
+		"huggingface": useHuggingFace,
+		"llamacpp":    useLlamaCpp,
+		"ollama":      useOllama,
+		"openai":      useOpenAI,
+		"openrouter":  useOpenRouter,
 	}
 
 	var provider string
