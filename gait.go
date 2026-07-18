@@ -209,7 +209,11 @@ func main() {
 		tools = tool.All(cfg.BraveAPIKey)
 	}
 
-	setupLogging(cfg.SandboxConfig.Log, "gait.log")
+	var logging bool
+	if cfg.SandboxConfig != nil {
+		logging = cfg.SandboxConfig.Log
+	}
+	setupLogging(logging, "gait.log")
 	slog.Info("starting", "cmd", os.Args[0], "args", strings.Join(os.Args[1:], " "),
 		"pid", os.Getpid())
 
