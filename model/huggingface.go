@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -64,7 +65,7 @@ func (clnt *huggingFaceClient) ListModels() map[string]ModelMetadata {
 }
 
 func (clnt *huggingFaceClient) NewModel(mdlCfg config.ModelConfig) (Model, error) {
-	mmd, ok := clnt.models[mdlCfg.Model]
+	mmd, ok := clnt.models[strings.SplitN(mdlCfg.Model, ":", 2)[0]]
 	if !ok {
 		return nil, fmt.Errorf("unknown model: %s", mdlCfg.Model)
 	}
