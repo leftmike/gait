@@ -9,10 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leftmike/sandbox"
-
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 )
 
@@ -127,7 +126,7 @@ type currentTemperatureArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current temperature for"`
 }
 
-func currentTemperature(ctx context.Context, _ *sandbox.Sandbox, buf []byte) (string, error) {
+func currentTemperature(ctx context.Context, _ *system.System, buf []byte) (string, error) {
 	var args currentTemperatureArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -143,7 +142,7 @@ type currentWeatherArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current weather for"`
 }
 
-func currentWeather(ctx context.Context, _ *sandbox.Sandbox, buf []byte) (string, error) {
+func currentWeather(ctx context.Context, _ *system.System, buf []byte) (string, error) {
 	var args currentWeatherArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -174,8 +173,8 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
 	err = mdl.SetTools(tool.Tools{
-		Tools:   tools,
-		Sandbox: tool.NewSandbox(&config.SandboxConfig{}),
+		Tools:  tools,
+		System: nil, // XXX: system.NewSystem(&config.SystemConfig{}),
 	})
 	if err != nil {
 		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
@@ -249,8 +248,8 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
 	err = mdl.SetTools(tool.Tools{
-		Tools:   tools,
-		Sandbox: tool.NewSandbox(&config.SandboxConfig{}),
+		Tools:  tools,
+		System: nil, // XXX: system.NewSystem(&config.SystemConfig{}),
 	})
 	if err != nil {
 		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)

@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leftmike/sandbox"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 )
 
@@ -162,7 +162,7 @@ func (clnt *Client) AddTools(tools map[string]tool.Tool) {
 			Name:        name,
 			Description: tl.Description,
 			Schema:      schema,
-			Func: func(ctx context.Context, _ *sandbox.Sandbox, buf []byte) (string, error) {
+			Func: func(ctx context.Context, _ *system.System, buf []byte) (string, error) {
 				var s string
 				err := clnt.WithSession(ctx,
 					func(ctx context.Context, sess *mcp.ClientSession) error {

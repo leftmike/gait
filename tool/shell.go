@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 type shellArgs struct {
@@ -20,7 +20,7 @@ type shellArgs struct {
 	TimeoutMS int      `json:"timeout_ms,omitempty" gait:"the maximum time to wait in milliseconds; defaults to no timeout"`
 }
 
-func shell(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
+func shell(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args shellArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -37,7 +37,7 @@ func shell(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error)
 		defer cancel()
 	}
 
-	out, err := combinedOutput(ctx, sb, args.Workdir, args.Command[0], args.Command[1:]...)
+	out, err := sys.CombinedOutput(ctx, args.Workdir, args.Command[0], args.Command[1:]...)
 
 	// A command that runs but exits non-zero is not a tool failure: the model
 	// wants to see the output and the exit status, so report them in the result

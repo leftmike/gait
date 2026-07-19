@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 type writeFileArgs struct {
@@ -15,14 +15,14 @@ type writeFileArgs struct {
 	Content string `json:"content" gait:"the content to write to the file"`
 }
 
-func writeFile(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
+func writeFile(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args writeFileArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
 		return "", err
 	}
 
-	err = checkWrite(sb, args.Path)
+	err = sys.CheckWrite(args.Path)
 	if err != nil {
 		return "", err
 	}

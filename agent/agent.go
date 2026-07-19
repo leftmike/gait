@@ -3,22 +3,21 @@ package agent
 import (
 	"context"
 
-	"github.com/leftmike/sandbox"
-
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/mcpclient"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 )
 
 type Agent struct {
-	Client        model.Client
-	Model         model.Model
-	ModelConfig   config.ModelConfig
-	Tools         map[string]tool.Tool
-	Sandbox       *sandbox.Sandbox
-	SandboxConfig *config.SandboxConfig
+	Client       model.Client
+	Model        model.Model
+	ModelConfig  config.ModelConfig
+	Tools        map[string]tool.Tool
+	System       *system.System
+	SystemConfig *config.SystemConfig
 
 	Skills []*skill.Skill
 	clnts  []*mcpclient.Client // XXX: rename field

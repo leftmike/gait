@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	htmlmarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 const (
@@ -21,7 +21,7 @@ type webFetchArgs struct {
 	URL string `json:"url" gait:"the URL to fetch"`
 }
 
-func webFetch(ctx context.Context, _ *sandbox.Sandbox, buf []byte) (string, error) {
+func webFetch(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args webFetchArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -87,7 +87,7 @@ type braveResponse struct {
 }
 
 func makeWebSearch(apiKey string) ToolFunc {
-	return func(ctx context.Context, _ *sandbox.Sandbox, buf []byte) (string, error) {
+	return func(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 		var args webSearchArgs
 		err := json.Unmarshal(buf, &args)
 		if err != nil {

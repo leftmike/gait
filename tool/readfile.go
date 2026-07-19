@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 const (
@@ -26,14 +26,14 @@ type readFileArgs struct {
 	Limit  int    `json:"limit,omitempty" gait:"the maximum number of lines to read; defaults to 2000"`
 }
 
-func readFile(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
+func readFile(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args readFileArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
 		return "", err
 	}
 
-	err = checkRead(sb, args.Path)
+	err = sys.CheckRead(args.Path)
 	if err != nil {
 		return "", err
 	}

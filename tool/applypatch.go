@@ -14,7 +14,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 const applyPatchDescription = "Use the `apply_patch` tool to edit files.\n" +
@@ -89,7 +89,7 @@ type applyPatchArgs struct {
 	Input string `json:"input" gait:"The entire contents of the apply_patch command"`
 }
 
-func applyPatch(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
+func applyPatch(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args applyPatchArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -101,7 +101,7 @@ func applyPatch(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, e
 		return "", err
 	}
 
-	affected, err := applyHunks(sb, hunks)
+	affected, err := applyHunks(sys, hunks)
 	if err != nil {
 		return "", err
 	}
@@ -415,20 +415,20 @@ type affectedPaths struct {
 
 // Apply the hunks to the filesystem, returning which files were added, modified, or
 // deleted.
-func applyHunks(sb *sandbox.Sandbox, hunks []patchHunk) (affectedPaths, error) {
+func applyHunks(sys *system.System, hunks []patchHunk) (affectedPaths, error) {
 	if len(hunks) == 0 {
 		return affectedPaths{}, fmt.Errorf("No files were modified.")
 	}
 
-	// Check every path against the sandbox's filesystem policy before applying
+	// Check every path against the system's filesystem policy before applying
 	// anything so a denied patch is not applied partially.
 	for _, hunk := range hunks {
-		err := checkWrite(sb, hunk.path)
+		err := sys.CheckWrite(hunk.path)
 		if err != nil {
 			return affectedPaths{}, err
 		}
 		if hunk.movePath != "" {
-			err = checkWrite(sb, hunk.movePath)
+			err = sys.CheckWrite(hunk.movePath)
 			if err != nil {
 				return affectedPaths{}, err
 			}

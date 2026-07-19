@@ -16,11 +16,10 @@ To Do:
 - channels: https://code.claude.com/docs/en/channels-reference
 
 - restricted sandbox for running cli programs
--- no_landlock: true / false
--- log: true / false
--- syscalls: all, yes, ask, always
--- file_access: yes, ask, always
--- execute: yes, ask, always
+-- mode: none, kernel, (bubblewrap, kvm, etc)
+-- read: yes, always, no
+-- execute: yes, always, no
+-- write: yes, always, no
 -- (network: yes, ask, always)
 -- github.com/superradcompany/microsandbox
 -- nono.sh
@@ -34,6 +33,7 @@ To Do:
 - Read Claude code config file
 - Read OpenAI config file (if possible)
 - Read Google config file (if possible)
+- https://github.com/kenn-io/agentsview
 
 - mcp servers: at startup, load them in separate go routines and don't wait on them
 
@@ -71,8 +71,8 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 	defer line.Close()
 
 	err := ag.Model.SetTools(tool.Tools{
-		Tools:   ag.Tools,
-		Sandbox: ag.Sandbox,
+		Tools:  ag.Tools,
+		System: ag.System,
 	})
 	if err != nil {
 		return err
@@ -141,27 +141,6 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 	return nil
 }
 
-func setupLogging(log bool, logfile string) {
-	var l *slog.Logger
-	if log {
-		if logfile != "" {
-			file, err := os.OpenFile(logfile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s %s: %s", os.Args[0], os.Args[1], err)
-				os.Exit(1)
-			}
-
-			l = slog.New(slog.NewTextHandler(file, nil))
-		} else {
-			l = slog.New(slog.NewTextHandler(os.Stderr, nil))
-		}
-	} else {
-		l = slog.New(slog.DiscardHandler)
-	}
-
-	slog.SetDefault(l)
-}
-
 func main() {
 	fs := flag.NewFlagSet("gait", flag.ExitOnError)
 
@@ -207,21 +186,13 @@ func main() {
 		tools = tool.All(cfg.BraveAPIKey)
 	}
 
-	var logging bool
-	if cfg.SandboxConfig != nil {
-		logging = cfg.SandboxConfig.Log
-	}
-	setupLogging(logging, "gait.log")
-	slog.Info("starting", "cmd", os.Args[0], "args", strings.Join(os.Args[1:], " "),
-		"pid", os.Getpid())
-
 	ag := agent.Agent{
-		Client:        clnt,
-		Model:         mdl,
-		ModelConfig:   mdlCfg,
-		Tools:         tools,
-		Sandbox:       tool.NewSandbox(cfg.SandboxConfig),
-		SandboxConfig: cfg.SandboxConfig,
+		Client:       clnt,
+		Model:        mdl,
+		ModelConfig:  mdlCfg,
+		Tools:        tools,
+		System:       nil, // XXX: system.NewSystem(cfg.SystemConfig),
+		SystemConfig: nil, // XXX: cfg.SystemConfig,
 	}
 
 	/*

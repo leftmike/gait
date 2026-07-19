@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 const maxGrepFileSize = 1024 * 1024 * 8
@@ -91,7 +91,7 @@ func grepFileLines(re *regexp.Regexp, content string, multiline bool) []int {
 	return out
 }
 
-func grep(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
+func grep(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args grepArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -141,7 +141,7 @@ func grep(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) 
 				rel = path
 			}
 			// Skip files the sandbox's filesystem policy denies reading.
-			if matchGlobFilter(args.Glob, filepath.ToSlash(rel)) && checkRead(sb, path) == nil {
+			if matchGlobFilter(args.Glob, filepath.ToSlash(rel)) && sys.CheckRead(path) == nil {
 				files = append(files, path)
 			}
 			return nil
@@ -151,7 +151,7 @@ func grep(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) 
 		}
 		sort.Strings(files)
 	} else {
-		err = checkRead(sb, root)
+		err = sys.CheckRead(root)
 		if err != nil {
 			return "", err
 		}

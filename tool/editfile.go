@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 // isBinary reports whether data looks like a binary (non-text) file. It uses
@@ -29,7 +29,7 @@ type editFileArgs struct {
 	ReplaceAll bool   `json:"replace_all,omitempty" gait:"replace all occurrences of old_string (default false)"`
 }
 
-func editFile(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
+func editFile(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args editFileArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -43,7 +43,7 @@ func editFile(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, err
 		return "", fmt.Errorf("old_string and new_string are identical")
 	}
 
-	err = checkWrite(sb, args.Path)
+	err = sys.CheckWrite(args.Path)
 	if err != nil {
 		return "", err
 	}

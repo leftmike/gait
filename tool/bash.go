@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 const (
@@ -29,7 +29,7 @@ type bashArgs struct {
 	Timeout int    `json:"timeout,omitempty" gait:"timeout in milliseconds; defaults to 120000 and is capped at 600000"`
 }
 
-func bash(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
+func bash(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args bashArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -50,7 +50,7 @@ func bash(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	out, err := combinedOutput(ctx, sb, "", "bash", "-c", args.Command)
+	out, err := sys.CombinedOutput(ctx, "", "bash", "-c", args.Command)
 
 	// Report a timeout explicitly rather than as an opaque signal error.
 	if ctx.Err() == context.DeadlineExceeded {

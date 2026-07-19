@@ -7,12 +7,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 type Tools struct {
-	Tools   map[string]Tool
-	Sandbox *sandbox.Sandbox
+	Tools  map[string]Tool
+	System *system.System
 }
 
 type Tool struct {
@@ -24,7 +24,7 @@ type Tool struct {
 
 // A ToolFunc optionally runs inside a sandbox; sb may be nil, in which case
 // the tool runs unrestricted.
-type ToolFunc func(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error)
+type ToolFunc func(ctx context.Context, sys *system.System, buf []byte) (string, error)
 
 type ToolSchema map[string]any
 
@@ -207,7 +207,7 @@ func (tls Tools) Call(ctx context.Context, name string, args []byte) (string, er
 		panic(fmt.Sprintf("tool names not the same: %s %s", tl.Name, name))
 	}
 
-	return tl.Func(ctx, tls.Sandbox, args)
+	return tl.Func(ctx, tls.System, args)
 }
 
 func addWebSearch(apiKey string, tools map[string]Tool) map[string]Tool {

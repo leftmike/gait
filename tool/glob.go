@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leftmike/sandbox"
+	"github.com/leftmike/gait/system"
 )
 
 type globArgs struct {
@@ -53,7 +53,7 @@ type globMatchInfo struct {
 	modTime int64
 }
 
-func glob(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) {
+func glob(ctx context.Context, sys *system.System, buf []byte) (string, error) {
 	var args globArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -86,7 +86,7 @@ func glob(ctx context.Context, sb *sandbox.Sandbox, buf []byte) (string, error) 
 			return nil
 		}
 		// Don't reveal files the sandbox's filesystem policy denies reading.
-		if checkRead(sb, path) != nil {
+		if sys.CheckRead(path) != nil {
 			return nil
 		}
 
