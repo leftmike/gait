@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
+	"time"
 
 	openrouter "github.com/OpenRouterTeam/go-sdk"
 	"github.com/OpenRouterTeam/go-sdk/models/components"
@@ -43,7 +45,7 @@ type openRouterStep struct {
 	name      string
 	id        string
 	input     string
-	reasoning string
+	reasoning []components.ReasoningDetailUnion
 }
 
 type openRouterState struct {
@@ -67,7 +69,10 @@ func newOpenRouterClient(apiKey string) (Client, error) {
 	}
 
 	return &openRouterClient{
-		client: openrouter.New(openrouter.WithSecurity(apiKey)),
+		client: openrouter.New(
+			openrouter.WithSecurity(apiKey),
+			openrouter.WithClient(&http.Client{Timeout: 10 * time.Minute}),
+		),
 		name:   pvdr.Name,
 		models: listModels(pvdr),
 	}, nil
@@ -167,6 +172,15 @@ func (mdl *openRouterModel) Generate(ctx context.Context, ast State, opts *Optio
 		if mdl.effort != nil {
 			req.ReasoningEffort = optionalnullable.From(mdl.effort)
 		}
+		if mdl.includeThoughts {
+			summary := components.ChatReasoningSummaryVerbosityEnumConcise
+			if opts.Verbose {
+				summary = components.ChatReasoningSummaryVerbosityEnumDetailed
+			}
+			req.Reasoning = &components.ChatRequestReasoning{
+				Summary: optionalnullable.From(&summary),
+			}
+		}
 
 		res, err := mdl.clnt.client.Chat.Send(ctx, req, nil)
 		if opts.Trace {
@@ -213,10 +227,17 @@ func (mdl *openRouterModel) Generate(ctx context.Context, ast State, opts *Optio
 		}
 		msg := choice.Message
 
-		if reasoning, ok := msg.Reasoning.Get(); ok && reasoning != nil && *reasoning != "" {
+		var reasoningText string
+		if mdl.includeThoughts {
+			if reasoning, ok := msg.Reasoning.Get(); ok && reasoning != nil {
+				reasoningText = *reasoning
+			}
+		}
+		if reasoningText != "" || len(msg.ReasoningDetails) > 0 {
 			st.steps = append(st.steps, openRouterStep{
-				typ:     ThinkingStep,
-				content: *reasoning,
+				typ:       ThinkingStep,
+				content:   reasoningText,
+				reasoning: msg.ReasoningDetails,
 			})
 		}
 
@@ -358,13 +379,13 @@ func (st *openRouterState) toMessages() ([]components.ChatMessages, int) {
 		txtLen += len(st.systemPrompt)
 	}
 
-	var reasoning string
+	var reasoning []components.ReasoningDetailUnion
 	for _, step := range st.steps {
 		switch step.typ {
 		case PromptStep:
 			msgs = append(msgs, openRouterUserMessage(step.content))
 			txtLen += len(step.content)
-			reasoning = ""
+			reasoning = nil
 
 		case ModelResponseStep:
 			content := components.CreateChatAssistantMessageContentStr(step.content)
@@ -372,15 +393,15 @@ func (st *openRouterState) toMessages() ([]components.ChatMessages, int) {
 				Role:    components.ChatAssistantMessageRoleAssistant,
 				Content: optionalnullable.From(&content),
 			}
-			if reasoning != "" {
-				asst.Reasoning = optionalnullable.From(&reasoning)
+			if len(reasoning) > 0 {
+				asst.ReasoningDetails = reasoning
 			}
 			msgs = append(msgs, components.CreateChatMessagesAssistant(asst))
-			txtLen += len(reasoning) + len(step.content)
-			reasoning = ""
+			txtLen += len(step.content)
+			reasoning = nil
 
 		case ThinkingStep:
-			reasoning = step.content
+			reasoning = step.reasoning
 
 		case ToolCallStep:
 			tc := components.ChatToolCall{
@@ -393,9 +414,7 @@ func (st *openRouterState) toMessages() ([]components.ChatMessages, int) {
 			}
 			txtLen += len(step.input)
 
-			if len(msgs) > 0 && msgs[len(msgs)-1].ChatAssistantMessage != nil &&
-				!msgs[len(msgs)-1].ChatAssistantMessage.Content.IsSet() {
-
+			if len(msgs) > 0 && msgs[len(msgs)-1].ChatAssistantMessage != nil {
 				asst := msgs[len(msgs)-1].ChatAssistantMessage
 				asst.ToolCalls = append(asst.ToolCalls, tc)
 			} else {
@@ -403,13 +422,12 @@ func (st *openRouterState) toMessages() ([]components.ChatMessages, int) {
 					Role:      components.ChatAssistantMessageRoleAssistant,
 					ToolCalls: []components.ChatToolCall{tc},
 				}
-				if reasoning != "" {
-					asst.Reasoning = optionalnullable.From(&reasoning)
-					txtLen += len(reasoning)
+				if len(reasoning) > 0 {
+					asst.ReasoningDetails = reasoning
 				}
 				msgs = append(msgs, components.CreateChatMessagesAssistant(asst))
 			}
-			reasoning = ""
+			reasoning = nil
 
 		case ToolOutputStep:
 			msgs = append(msgs, components.CreateChatMessagesTool(components.ChatToolMessage{
@@ -418,7 +436,7 @@ func (st *openRouterState) toMessages() ([]components.ChatMessages, int) {
 				Content:    components.CreateChatToolMessageContentStr(step.content),
 			}))
 			txtLen += len(step.content)
-			reasoning = ""
+			reasoning = nil
 
 		default:
 			panic(fmt.Sprintf("unexpected step type: %s", step.typ))

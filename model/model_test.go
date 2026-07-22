@@ -49,7 +49,8 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 		{provider: "llamacpp", local: true},
 		{provider: "ollama", model: "llama3.2:3b", local: true},
 		{provider: "openai", model: "gpt-5.4-nano", thoughts: true},
-		{provider: "openrouter", model: "nvidia/nemotron-3-nano-30b-a3b", short: true},
+		{provider: "openrouter", model: "nvidia/nemotron-3-nano-30b-a3b", short: true,
+			thoughts: true},
 	}
 
 	for _, c := range cases {
