@@ -48,7 +48,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"strings"
 
@@ -57,6 +56,7 @@ import (
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -66,20 +66,17 @@ var (
 	trace   bool
 )
 
-func interact(ag *agent.Agent, opts *model.Options) error {
+func interact(agnt *agent.Agent, opts *model.Options) error {
 	line := liner.NewLiner()
 	defer line.Close()
 
-	err := ag.Model.SetTools(tool.Tools{
-		Tools:  ag.Tools,
-		System: ag.System,
-	})
+	err := agnt.Model.SetTools(agnt.Tools, agnt.Sandbox)
 	if err != nil {
 		return err
 	}
 
-	st := ag.Client.NewState()
-	ag.SystemPrompt(st)
+	st := agnt.Client.NewState()
+	agnt.SystemPrompt(st)
 
 	ctx := context.Background()
 	for {
@@ -93,7 +90,7 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 
 		s = strings.TrimSpace(s)
 		if strings.HasPrefix(s, "/") {
-			err := slash(ag, st, s)
+			err := slash(agnt, st, s)
 			if err == io.EOF {
 				fmt.Println()
 				break
@@ -107,7 +104,7 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 		st.Prompt(s)
 		n := st.Len()
 
-		err = ag.Model.Generate(ctx, st, opts)
+		err = agnt.Model.Generate(ctx, st, opts)
 		if err != nil {
 			return err
 		}
@@ -122,7 +119,7 @@ func interact(ag *agent.Agent, opts *model.Options) error {
 			case model.ModelResponseStep:
 				fmt.Println(step.Content)
 			case model.ThinkingStep:
-				if ag.ModelConfig.IncludeThoughts {
+				if agnt.AgentConfig.ModelConfig.IncludeThoughts {
 					fmt.Printf("Thinking: [%s]\n", step.Content)
 				}
 			case model.ToolCallStep:
@@ -149,7 +146,7 @@ func main() {
 	fs.BoolVar(&trace, "trace", false, "trace model interaction")
 	fs.BoolVar(&trace, "t", false, "trace model interaction")
 
-	mdlCfg, clntCfg, cfg, err := config.ParseFlags(fs)
+	agntCfg, cfg, err := config.ParseFlags(fs)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
@@ -160,24 +157,24 @@ func main() {
 		Trace:   trace,
 	}
 
-	clnt, err := model.NewClient(clntCfg)
+	clnt, err := model.NewClient(agntCfg.ClientConfig)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
 	}
 
-	mdl, err := clnt.NewModel(mdlCfg)
+	mdl, err := clnt.NewModel(agntCfg.ModelConfig)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
 	}
 
 	if verbose {
-		fmt.Println(clntCfg.Provider, mdlCfg.Model)
+		fmt.Println(agntCfg.ClientConfig.Provider, agntCfg.ModelConfig.Model)
 	}
 
 	var tools map[string]tool.Tool
-	switch clntCfg.Provider {
+	switch agntCfg.ClientConfig.Provider {
 	case "anthropic":
 		tools = tool.Anthropic(cfg.BraveAPIKey)
 	case "openai":
@@ -186,18 +183,17 @@ func main() {
 		tools = tool.All(cfg.BraveAPIKey)
 	}
 
-	ag := agent.Agent{
-		Client:       clnt,
-		Model:        mdl,
-		ModelConfig:  mdlCfg,
-		Tools:        tools,
-		System:       nil, // XXX: system.NewSystem(cfg.SystemConfig),
-		SystemConfig: nil, // XXX: cfg.SystemConfig,
+	agnt := agent.Agent{
+		AgentConfig: agntCfg,
+		Client:      clnt,
+		Model:       mdl,
+		Tools:       tools,
+		Sandbox:     system.NewSandbox(agntCfg.SandboxConfig),
 	}
 
 	/*
 		for _, dir := range cfg.Skills {
-			err := ag.AddSkill(dir)
+			err := agnt.AddSkill(dir)
 			if err != nil && verbose {
 				fmt.Printf("%s: %s\n", dir, err)
 			}
@@ -205,7 +201,7 @@ func main() {
 
 		ctx := context.Background()
 		for _, svrCfg := range cfg.MCPServers {
-			err := ag.AddServer(ctx, svrCfg, verbose)
+			err := agnt.AddServer(ctx, svrCfg, verbose)
 			if verbose {
 				if err != nil {
 					fmt.Printf("mcp server %v failed: %s", svrCfg, err)
@@ -216,11 +212,8 @@ func main() {
 		}
 	*/
 
-	err = interact(&ag, opts)
+	err = interact(&agnt, opts)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 	}
-
-	slog.Info("exiting", "cmd", os.Args[0], "args", strings.Join(os.Args[1:], " "),
-		"pid", os.Getpid())
 }

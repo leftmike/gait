@@ -9,14 +9,13 @@ import (
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
-	"github.com/leftmike/gait/tool"
 )
 
 var (
 	slashCommands = map[string]struct {
 		cmd  string
 		desc string
-		fn   func(ag *agent.Agent, st model.State, args []string) error
+		fn   func(agnt *agent.Agent, st model.State, args []string) error
 	}{
 		"/clear": {
 			cmd:  "/clear",
@@ -67,10 +66,10 @@ func init() {
 	slashCommands["/help"] = sc
 }
 
-func slash(ag *agent.Agent, st model.State, s string) error {
+func slash(agnt *agent.Agent, st model.State, s string) error {
 	cmd, args := parseSlash(s)
 	if sc, ok := slashCommands[cmd]; ok {
-		return sc.fn(ag, st, args)
+		return sc.fn(agnt, st, args)
 	}
 
 	fmt.Print("commands:")
@@ -97,7 +96,7 @@ func parseSlash(s string) (string, []string) {
 	return args[0], args[1:i]
 }
 
-func slashClear(ag *agent.Agent, st model.State, args []string) error {
+func slashClear(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/clear: no arguments allowed: %s", args)
 	}
@@ -106,11 +105,11 @@ func slashClear(ag *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
-func slashExit(ag *agent.Agent, st model.State, args []string) error {
+func slashExit(agnt *agent.Agent, st model.State, args []string) error {
 	return io.EOF
 }
 
-func slashHelp(ag *agent.Agent, st model.State, args []string) error {
+func slashHelp(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/help: no arguments allowed: %s", args)
 	}
@@ -125,12 +124,12 @@ func slashHelp(ag *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
-func slashModels(ag *agent.Agent, st model.State, args []string) error {
+func slashModels(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/models: no arguments allowed: %s", args)
 	}
 
-	models := ag.Client.ListModels()
+	models := agnt.Client.ListModels()
 	var ids []string
 	for id := range models {
 		ids = append(ids, id)
@@ -153,41 +152,38 @@ func slashModels(ag *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
-func slashModel(ag *agent.Agent, st model.State, args []string) error {
+func slashModel(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) == 0 {
-		fmt.Printf("model: %s\n", ag.ModelConfig.Model)
+		fmt.Printf("model: %s\n", agnt.AgentConfig.ModelConfig.Model)
 		return nil
 	}
 	if len(args) > 1 {
 		return fmt.Errorf("/model: expected a single model id: %s", args)
 	}
 
-	mdlCfg := ag.ModelConfig
+	mdlCfg := agnt.AgentConfig.ModelConfig
 	mdlCfg.Model = args[0]
-	mdl, err := ag.Client.NewModel(mdlCfg)
+	mdl, err := agnt.Client.NewModel(mdlCfg)
 	if err != nil {
 		return err
 	}
-	err = mdl.SetTools(tool.Tools{
-		Tools:  ag.Tools,
-		System: ag.System,
-	})
+	err = mdl.SetTools(agnt.Tools, agnt.Sandbox)
 	if err != nil {
 		return err
 	}
 
-	ag.Model = mdl
-	ag.ModelConfig = mdlCfg
+	agnt.Model = mdl
+	agnt.AgentConfig.ModelConfig = mdlCfg
 	fmt.Printf("model: %s\n", args[0])
 	return nil
 }
 
-func slashEffort(ag *agent.Agent, st model.State, args []string) error {
+func slashEffort(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) == 0 {
-		if ag.ModelConfig.Effort == "" {
+		if agnt.AgentConfig.ModelConfig.Effort == "" {
 			fmt.Println("effort: (default)")
 		} else {
-			fmt.Printf("effort: %s\n", ag.ModelConfig.Effort)
+			fmt.Printf("effort: %s\n", agnt.AgentConfig.ModelConfig.Effort)
 		}
 		return nil
 	}
@@ -195,29 +191,26 @@ func slashEffort(ag *agent.Agent, st model.State, args []string) error {
 		return fmt.Errorf("/effort: expected a single effort level: %s", args)
 	}
 
-	mdlCfg := ag.ModelConfig
+	mdlCfg := agnt.AgentConfig.ModelConfig
 	mdlCfg.Effort = args[0]
-	mdl, err := ag.Client.NewModel(mdlCfg)
+	mdl, err := agnt.Client.NewModel(mdlCfg)
 	if err != nil {
 		return err
 	}
-	err = mdl.SetTools(tool.Tools{
-		Tools:  ag.Tools,
-		System: ag.System,
-	})
+	err = mdl.SetTools(agnt.Tools, agnt.Sandbox)
 	if err != nil {
 		return err
 	}
 
-	ag.Model = mdl
-	ag.ModelConfig = mdlCfg
+	agnt.Model = mdl
+	agnt.AgentConfig.ModelConfig = mdlCfg
 	fmt.Printf("effort: %s\n", args[0])
 	return nil
 }
 
-func slashSkills(ag *agent.Agent, st model.State, args []string) error {
+func slashSkills(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) == 0 {
-		for _, sk := range ag.Skills {
+		for _, sk := range agnt.Skills {
 			fmt.Println(sk.Name)
 		}
 	} else {
@@ -226,7 +219,7 @@ func slashSkills(ag *agent.Agent, st model.State, args []string) error {
 				fmt.Println()
 			}
 
-			sk := skill.FindSkill(ag.Skills, arg)
+			sk := skill.FindSkill(agnt.Skills, arg)
 			if sk == nil {
 				return fmt.Errorf("skill not found: %s", arg)
 			}
@@ -255,7 +248,7 @@ func slashSkills(ag *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
-func slashCost(ag *agent.Agent, st model.State, args []string) error {
+func slashCost(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/cost: no arguments allowed: %s", args)
 	}
@@ -269,13 +262,13 @@ func slashCost(ag *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
-func slashContext(ag *agent.Agent, st model.State, args []string) error {
+func slashContext(agnt *agent.Agent, st model.State, args []string) error {
 
 	if len(args) > 0 {
 		return fmt.Errorf("/context: no arguments allowed: %s", args)
 	}
 
-	printContext(ag.Model, st)
+	printContext(agnt.Model, st)
 	return nil
 }
 
@@ -291,23 +284,23 @@ func printContext(mdl model.Model, st model.State) {
 	}
 }
 
-func slashStatus(ag *agent.Agent, st model.State, args []string) error {
+func slashStatus(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/status: no arguments allowed: %s", args)
 	}
 
-	fmt.Printf("provider: %s\n", ag.Client.Provider())
-	fmt.Printf("model:    %s\n", ag.ModelConfig.Model)
-	if ag.ModelConfig.Effort != "" {
-		fmt.Printf("effort:   %s\n", ag.ModelConfig.Effort)
+	fmt.Printf("provider: %s\n", agnt.Client.Provider())
+	fmt.Printf("model:    %s\n", agnt.AgentConfig.ModelConfig.Model)
+	if agnt.AgentConfig.ModelConfig.Effort != "" {
+		fmt.Printf("effort:   %s\n", agnt.AgentConfig.ModelConfig.Effort)
 	}
-	fmt.Printf("thoughts: %t\n", ag.ModelConfig.IncludeThoughts)
+	fmt.Printf("thoughts: %t\n", agnt.AgentConfig.ModelConfig.IncludeThoughts)
 
 	inputTokens, outputTokens, _ := st.Usage()
 	inputCost, outputCost := st.Cost()
 	fmt.Printf("input tokens:  %d ($%.4f)\n", inputTokens, inputCost)
 	fmt.Printf("output tokens: %d ($%.4f)\n", outputTokens, outputCost)
-	printContext(ag.Model, st)
+	printContext(agnt.Model, st)
 
 	return nil
 }

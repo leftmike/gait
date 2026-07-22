@@ -12,6 +12,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -30,7 +31,8 @@ type huggingFaceModel struct {
 	contextLimit int
 	inputCost    float64
 	outputCost   float64
-	tools        tool.Tools
+	tools        map[string]tool.Tool
+	sandbox      *system.Sandbox
 	toolParams   []openai.ChatCompletionToolUnionParam
 }
 
@@ -197,7 +199,8 @@ func (mdl *huggingFaceModel) Generate(ctx context.Context, ast State, opts *Opti
 				fmt.Printf("Trace: calling %s(%s)\n", tc.Function.Name, tc.Function.Arguments)
 			}
 
-			out, err := mdl.tools.Call(ctx, tc.Function.Name, []byte(tc.Function.Arguments))
+			out, err := tool.CallTool(ctx, mdl.tools, tc.Function.Name, mdl.sandbox,
+				[]byte(tc.Function.Arguments))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", tc.Function.Name,
 					util.Lines(out, 1, 160))
@@ -219,9 +222,10 @@ func (mdl *huggingFaceModel) Generate(ctx context.Context, ast State, opts *Opti
 	return nil
 }
 
-func (mdl *huggingFaceModel) SetTools(tools tool.Tools) error {
+func (mdl *huggingFaceModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
 	mdl.tools = tools
-	mdl.toolParams = toOpenAICompatTools(tools.Tools)
+	mdl.sandbox = sb
+	mdl.toolParams = toOpenAICompatTools(tools)
 	return nil
 }
 

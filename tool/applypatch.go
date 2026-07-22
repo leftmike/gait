@@ -89,7 +89,7 @@ type applyPatchArgs struct {
 	Input string `json:"input" gait:"The entire contents of the apply_patch command"`
 }
 
-func applyPatch(ctx context.Context, sys *system.System, buf []byte) (string, error) {
+func applyPatch(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	var args applyPatchArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -101,7 +101,7 @@ func applyPatch(ctx context.Context, sys *system.System, buf []byte) (string, er
 		return "", err
 	}
 
-	affected, err := applyHunks(sys, hunks)
+	affected, err := applyHunks(sb, hunks)
 	if err != nil {
 		return "", err
 	}
@@ -415,7 +415,7 @@ type affectedPaths struct {
 
 // Apply the hunks to the filesystem, returning which files were added, modified, or
 // deleted.
-func applyHunks(sys *system.System, hunks []patchHunk) (affectedPaths, error) {
+func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 	if len(hunks) == 0 {
 		return affectedPaths{}, fmt.Errorf("No files were modified.")
 	}
@@ -423,12 +423,12 @@ func applyHunks(sys *system.System, hunks []patchHunk) (affectedPaths, error) {
 	// Check every path against the system's filesystem policy before applying
 	// anything so a denied patch is not applied partially.
 	for _, hunk := range hunks {
-		err := sys.CheckWrite(hunk.path)
+		err := sb.CheckWrite(hunk.path)
 		if err != nil {
 			return affectedPaths{}, err
 		}
 		if hunk.movePath != "" {
-			err = sys.CheckWrite(hunk.movePath)
+			err = sb.CheckWrite(hunk.movePath)
 			if err != nil {
 				return affectedPaths{}, err
 			}

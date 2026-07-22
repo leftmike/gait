@@ -21,7 +21,7 @@ type webFetchArgs struct {
 	URL string `json:"url" gait:"the URL to fetch"`
 }
 
-func webFetch(ctx context.Context, sys *system.System, buf []byte) (string, error) {
+func webFetch(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	var args webFetchArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -87,7 +87,7 @@ type braveResponse struct {
 }
 
 func makeWebSearch(apiKey string) ToolFunc {
-	return func(ctx context.Context, sys *system.System, buf []byte) (string, error) {
+	return func(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 		var args webSearchArgs
 		err := json.Unmarshal(buf, &args)
 		if err != nil {
@@ -125,11 +125,11 @@ func makeWebSearch(apiKey string) ToolFunc {
 			return "No results found.", nil
 		}
 
-		var sb strings.Builder
+		var w strings.Builder
 		for _, ret := range brave.Web.Results {
-			fmt.Fprintf(&sb, "- [%s](%s)\n  %s\n", ret.Title, ret.URL, ret.Description)
+			fmt.Fprintf(&w, "- [%s](%s)\n  %s\n", ret.Title, ret.URL, ret.Description)
 		}
-		return strings.TrimSpace(sb.String()), nil
+		return strings.TrimSpace(w.String()), nil
 	}
 }
 

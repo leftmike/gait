@@ -10,11 +10,6 @@ import (
 	"github.com/leftmike/gait/system"
 )
 
-type Tools struct {
-	Tools  map[string]Tool
-	System *system.System
-}
-
 type Tool struct {
 	Name        string
 	Description string
@@ -24,7 +19,7 @@ type Tool struct {
 
 // A ToolFunc optionally runs inside a sandbox; sb may be nil, in which case
 // the tool runs unrestricted.
-type ToolFunc func(ctx context.Context, sys *system.System, buf []byte) (string, error)
+type ToolFunc func(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error)
 
 type ToolSchema map[string]any
 
@@ -199,15 +194,17 @@ func Sorted(tools map[string]Tool) []Tool {
 	return sorted
 }
 
-func (tls Tools) Call(ctx context.Context, name string, args []byte) (string, error) {
-	tl, ok := tls.Tools[name]
+func CallTool(ctx context.Context, tools map[string]Tool, name string, sb *system.Sandbox,
+	args []byte) (string, error) {
+
+	tl, ok := tools[name]
 	if !ok {
 		return "", fmt.Errorf("function not found: %s", name)
 	} else if tl.Name != name {
 		panic(fmt.Sprintf("tool names not the same: %s %s", tl.Name, name))
 	}
 
-	return tl.Func(ctx, tls.System, args)
+	return tl.Func(ctx, sb, args)
 }
 
 func addWebSearch(apiKey string, tools map[string]Tool) map[string]Tool {

@@ -11,6 +11,7 @@ import (
 	ollama "github.com/ollama/ollama/api"
 
 	"github.com/leftmike/gait/config"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -26,7 +27,8 @@ type ollamaModel struct {
 	think        *ollama.ThinkValue
 	numPredict   int
 	contextLimit int
-	tools        tool.Tools
+	tools        map[string]tool.Tool
+	sandbox      *system.Sandbox
 	toolDefs     ollama.Tools
 }
 
@@ -53,7 +55,7 @@ func listOllamaModels(client *ollama.Client) map[string]ModelMetadata {
 	return mmdm
 }
 
-func newOllamaClient(clntCfg config.ClientConfig) (Client, error) {
+func newOllamaClient(clntCfg *config.ClientConfig) (Client, error) {
 	baseURL := clntCfg.BaseURL
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
@@ -271,7 +273,7 @@ func (mdl *ollamaModel) Generate(ctx context.Context, ast State, opts *Options) 
 				fmt.Printf("Trace: calling %s(%s)\n", tc.Function.Name, args)
 			}
 
-			out, err := mdl.tools.Call(ctx, tc.Function.Name, args)
+			out, err := tool.CallTool(ctx, mdl.tools, tc.Function.Name, mdl.sandbox, args)
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", tc.Function.Name,
 					util.Lines(out, 1, 160))
@@ -316,13 +318,14 @@ func toOllamaTools(tools map[string]tool.Tool) (ollama.Tools, error) {
 	return toolDefs, nil
 }
 
-func (mdl *ollamaModel) SetTools(tools tool.Tools) error {
-	toolDefs, err := toOllamaTools(tools.Tools)
+func (mdl *ollamaModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
+	toolDefs, err := toOllamaTools(tools)
 	if err != nil {
 		return err
 	}
 
 	mdl.tools = tools
+	mdl.sandbox = sb
 	mdl.toolDefs = toolDefs
 
 	return nil

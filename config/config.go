@@ -29,7 +29,18 @@ type ClientConfig struct {
 	MaxTokens int    `hcl:"max_tokens,optional"`
 }
 
-type SystemConfig struct{}
+type PathActions struct {
+	Allow []string `hcl:"allow,optional"`
+	Ask   []string `hcl:"ask,optional"`
+	Deny  []string `hcl:"deny,optional"`
+}
+
+type SandboxConfig struct {
+	Name    string       `hcl:"name,label"`
+	Read    *PathActions `hcl:"read,block"`
+	Execute *PathActions `hcl:"execute,block"`
+	Write   *PathActions `hcl:"write,block"`
+}
 
 /*
 "mcpServers": {
@@ -64,11 +75,19 @@ system name {
 */
 
 type Config struct {
-	Provider      string         `hcl:"provider,optional"`
-	ClientConfigs []ClientConfig `hcl:"provider,block"`
-	MCPServers    []MCPServer    `hcl:"mcpserver,block"`
-	Skills        []string       `hcl:"skills,optional"`
-	BraveAPIKey   string         `hcl:"brave_api_key,optional"`
+	Provider       string          `hcl:"provider,optional"`
+	ClientConfigs  []ClientConfig  `hcl:"provider,block"`
+	Sandbox        string          `hcl:"sandbox,optional"`
+	SandboxConfigs []SandboxConfig `hcl:"sandbox,block"`
+	MCPServers     []MCPServer     `hcl:"mcpserver,block"`
+	Skills         []string        `hcl:"skills,optional"`
+	BraveAPIKey    string          `hcl:"brave_api_key,optional"`
+}
+
+type AgentConfig struct {
+	ModelConfig   ModelConfig
+	ClientConfig  *ClientConfig
+	SandboxConfig *SandboxConfig
 }
 
 func (cfg *Config) FindClientConfig(provider string) (ClientConfig, bool) {
@@ -79,6 +98,16 @@ func (cfg *Config) FindClientConfig(provider string) (ClientConfig, bool) {
 	}
 
 	return ClientConfig{}, false
+}
+
+func (cfg *Config) FindSandboxConfig(sandbox string) *SandboxConfig {
+	for _, sbCfg := range cfg.SandboxConfigs {
+		if strings.EqualFold(sandbox, sbCfg.Name) {
+			return &sbCfg
+		}
+	}
+
+	return nil
 }
 
 func configFilenames() []string {
@@ -114,7 +143,7 @@ func stringsJoin(vals []string, conj string) string {
 	}
 }
 
-func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
+func ParseFlags(fs *flag.FlagSet) (AgentConfig, *Config, error) {
 	var configFilename string
 	var noConfig bool
 	var useAnthropic bool
@@ -130,6 +159,8 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	var thoughts, hasThoughts bool
 	var effort string
 	var maxTokens int
+	var sandbox string
+	var noSandbox bool
 	var braveAPIKey string
 
 	fs.StringVar(&configFilename, "config", "", "config filename")
@@ -142,7 +173,7 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	fs.BoolVar(&useOpenAI, "openai", false, "use openai")
 	fs.BoolVar(&useOpenRouter, "openrouter", false, "use openrouter")
 	fs.StringVar(&model, "model", "", "generate using this model `model`")
-	fs.StringVar(&apiKey, "apikey", "", "`api key` to use")
+	fs.StringVar(&apiKey, "apikey", "", "`api_key` to use")
 	fs.StringVar(&baseURL, "baseurl", "", "`base url` of the model server")
 	fs.BoolFunc("thoughts", "include `thoughts`", func(s string) error {
 		var err error
@@ -155,11 +186,13 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	})
 	fs.StringVar(&effort, "effort", "", "reasoning `effort`; depends on provider and model")
 	fs.IntVar(&maxTokens, "max-tokens", 0, "maximum output `tokens`")
-	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api key` for Brave Search")
+	fs.StringVar(&sandbox, "sandbox", "", "tool `sandbox`")
+	fs.BoolVar(&noSandbox, "no-sandbox", false, "tools don't use a sandbox")
+	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api_key` for Brave Search")
 	fs.Parse(os.Args[1:])
 
 	if maxTokens < 0 {
-		return ModelConfig{}, ClientConfig{}, nil, fmt.Errorf("max-tokens must be positive")
+		return AgentConfig{}, nil, fmt.Errorf("max-tokens must be positive")
 	}
 
 	providers := map[string]bool{
@@ -176,14 +209,14 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 	for name, use := range providers {
 		if use {
 			if provider != "" {
-				return ModelConfig{}, ClientConfig{}, nil,
-					errors.New("multiple providers specified")
+				return AgentConfig{}, nil, errors.New("multiple providers specified")
 			}
 			provider = name
 		}
 	}
 
 	cfg := &Config{}
+	var sbCfg *SandboxConfig
 	if !noConfig {
 		var filenames []string
 		if configFilename != "" {
@@ -195,7 +228,7 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 		var err error
 		cfg, err = ReadConfig(filenames)
 		if err != nil {
-			return ModelConfig{}, ClientConfig{}, nil, err
+			return AgentConfig{}, nil, err
 		}
 
 		if provider == "" {
@@ -221,6 +254,22 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 		if maxTokens == 0 && ok {
 			maxTokens = clntCfg.MaxTokens
 		}
+
+		if noSandbox {
+			if sandbox != "" {
+				return AgentConfig{}, nil, errors.New("no sandbox and sandbox flags not allowed")
+			}
+		} else if sandbox != "" {
+			sbCfg = cfg.FindSandboxConfig(sandbox)
+			if sbCfg == nil {
+				return AgentConfig{}, nil, fmt.Errorf("unknown sandbox: %s", sandbox)
+			}
+		} else if cfg.Sandbox != "" {
+			sbCfg = cfg.FindSandboxConfig(cfg.Sandbox)
+			if sbCfg == nil {
+				return AgentConfig{}, nil, fmt.Errorf("unknown sandbox: %s", cfg.Sandbox)
+			}
+		}
 	}
 
 	if braveAPIKey != "" {
@@ -229,14 +278,18 @@ func ParseFlags(fs *flag.FlagSet) (ModelConfig, ClientConfig, *Config, error) {
 		cfg.BraveAPIKey = os.Getenv("BRAVE_API_KEY")
 	}
 
-	return ModelConfig{
+	return AgentConfig{
+		ModelConfig: ModelConfig{
 			Model:           model,
 			IncludeThoughts: thoughts,
 			Effort:          effort,
 			MaxTokens:       maxTokens,
-		}, ClientConfig{
+		},
+		ClientConfig: &ClientConfig{
 			Provider: provider,
 			APIKey:   apiKey,
 			BaseURL:  baseURL,
-		}, cfg, nil
+		},
+		SandboxConfig: nil, // XXX: *SandboxConfig
+	}, cfg, nil
 }

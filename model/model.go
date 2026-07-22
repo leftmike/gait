@@ -9,6 +9,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 )
 
@@ -32,7 +33,7 @@ type ModelMetadata struct {
 
 type Model interface {
 	Generate(ctx context.Context, st State, opts *Options) error
-	SetTools(tools tool.Tools) error
+	SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error
 	ContextLimit() int
 }
 
@@ -91,7 +92,7 @@ type State interface {
 	Cost() (float64, float64)     // input cost, output cost
 }
 
-func NewClient(clntCfg config.ClientConfig) (Client, error) {
+func NewClient(clntCfg *config.ClientConfig) (Client, error) {
 	switch clntCfg.Provider {
 	case "anthropic":
 		return newAnthropicClient(clntCfg.APIKey)

@@ -162,7 +162,7 @@ func (clnt *Client) AddTools(tools map[string]tool.Tool) {
 			Name:        name,
 			Description: tl.Description,
 			Schema:      schema,
-			Func: func(ctx context.Context, _ *system.System, buf []byte) (string, error) {
+			Func: func(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 				var s string
 				err := clnt.WithSession(ctx,
 					func(ctx context.Context, sess *mcp.ClientSession) error {

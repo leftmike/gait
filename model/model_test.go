@@ -72,7 +72,7 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 			clntCfg.Provider = c.provider
 		}
 
-		clnt, err := model.NewClient(clntCfg)
+		clnt, err := model.NewClient(&clntCfg)
 		if err != nil {
 			t.Fatalf("NewClient(%s) failed with %s", c.provider, err)
 		}
@@ -126,7 +126,7 @@ type currentTemperatureArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current temperature for"`
 }
 
-func currentTemperature(ctx context.Context, _ *system.System, buf []byte) (string, error) {
+func currentTemperature(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	var args currentTemperatureArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -142,7 +142,7 @@ type currentWeatherArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current weather for"`
 }
 
-func currentWeather(ctx context.Context, _ *system.System, buf []byte) (string, error) {
+func currentWeather(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	var args currentWeatherArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -172,10 +172,7 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
-	err = mdl.SetTools(tool.Tools{
-		Tools:  tools,
-		System: nil, // XXX: system.NewSystem(&config.SystemConfig{}),
-	})
+	err = mdl.SetTools(tools, system.NewSandbox(nil))
 	if err != nil {
 		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}
@@ -247,10 +244,7 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
-	err = mdl.SetTools(tool.Tools{
-		Tools:  tools,
-		System: nil, // XXX: system.NewSystem(&config.SystemConfig{}),
-	})
+	err = mdl.SetTools(tools, system.NewSandbox(nil))
 	if err != nil {
 		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}

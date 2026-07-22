@@ -14,6 +14,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -33,7 +34,8 @@ type openAIModel struct {
 	contextLimit    int
 	inputCost       float64
 	outputCost      float64
-	tools           tool.Tools
+	tools           map[string]tool.Tool
+	sandbox         *system.Sandbox
 	toolParams      []responses.ToolUnionParam
 }
 
@@ -290,7 +292,8 @@ func (mdl *openAIModel) Generate(ctx context.Context, ast State, opts *Options) 
 				fmt.Printf("Trace: calling %s(%s)\n", item.Name, item.Arguments)
 			}
 
-			out, err := mdl.tools.Call(ctx, item.Name, []byte(item.Arguments))
+			out, err := tool.CallTool(ctx, mdl.tools, item.Name, mdl.sandbox,
+				[]byte(item.Arguments))
 			if opts.Trace {
 				fmt.Printf("Trace: results from %s() -> (%s, ", item.Name, util.Lines(out, 1, 160))
 				fmt.Print(err)
@@ -326,9 +329,10 @@ func toOpenAITools(tools map[string]tool.Tool) []responses.ToolUnionParam {
 	return toolParams
 }
 
-func (mdl *openAIModel) SetTools(tools tool.Tools) error {
+func (mdl *openAIModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
 	mdl.tools = tools
-	mdl.toolParams = toOpenAITools(tools.Tools)
+	mdl.sandbox = sb
+	mdl.toolParams = toOpenAITools(tools)
 	return nil
 }
 

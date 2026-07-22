@@ -10,6 +10,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
+	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -29,7 +30,8 @@ type googleModel struct {
 	contextLimit    int
 	inputCost       float64
 	outputCost      float64
-	tools           tool.Tools
+	tools           map[string]tool.Tool
+	sandbox         *system.Sandbox
 	funcDecls       []*genai.FunctionDeclaration
 }
 
@@ -397,7 +399,8 @@ func (mdl *googleModel) Generate(ctx context.Context, ast State, opts *Options) 
 					}
 					fmt.Println()
 				}
-				out, err = mdl.tools.Call(ctx, tc.prt.FunctionCall.Name, tc.buf)
+				out, err = tool.CallTool(ctx, mdl.tools, tc.prt.FunctionCall.Name, mdl.sandbox,
+					tc.buf)
 				if opts.Trace {
 					fmt.Printf("Trace: results from %s() -> (%s, ", tc.prt.FunctionCall.Name,
 						util.Lines(out, 1, 160))
@@ -435,9 +438,10 @@ func toGoogleFuncDecls(tools map[string]tool.Tool) []*genai.FunctionDeclaration 
 	return decls
 }
 
-func (mdl *googleModel) SetTools(tools tool.Tools) error {
+func (mdl *googleModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
 	mdl.tools = tools
-	mdl.funcDecls = toGoogleFuncDecls(tools.Tools)
+	mdl.sandbox = sb
+	mdl.funcDecls = toGoogleFuncDecls(tools)
 	return nil
 
 }

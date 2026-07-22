@@ -3,6 +3,8 @@ package system
 import (
 	"context"
 	"os/exec"
+
+	"github.com/leftmike/gait/config"
 )
 
 /*
@@ -26,19 +28,23 @@ type PathRule struct {
 }
 */
 
-type System struct{}
+type Sandbox struct{}
 
-func (sys *System) CheckRead(path string) error {
+func NewSandbox(sbCfg *config.SandboxConfig) *Sandbox {
+	return &Sandbox{}
+}
+
+func (sb *Sandbox) CheckRead(path string) error {
 	// XXX
 	return nil
 }
 
-func (sys *System) CheckWrite(path string) error {
+func (sb *Sandbox) CheckWrite(path string) error {
 	// XXX
 	return nil
 }
 
-func (sys *System) CombinedOutput(ctx context.Context, dir, name string, arg ...string) ([]byte,
+func (sb *Sandbox) CombinedOutput(ctx context.Context, dir, name string, arg ...string) ([]byte,
 	error) {
 
 	cmd := exec.CommandContext(ctx, name, arg...)

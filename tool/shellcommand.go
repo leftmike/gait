@@ -21,7 +21,7 @@ type shellCommandArgs struct {
 	TimeoutMS int      `json:"timeout_ms,omitempty" gait:"the timeout for the command in milliseconds"`
 }
 
-func shellCommand(ctx context.Context, sys *system.System, buf []byte) (string, error) {
+func shellCommand(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	var args shellCommandArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -37,7 +37,7 @@ func shellCommand(ctx context.Context, sys *system.System, buf []byte) (string, 
 		defer cancel()
 	}
 
-	out, err := sys.CombinedOutput(ctx, args.Workdir, args.Command[0], args.Command[1:]...)
+	out, err := sb.CombinedOutput(ctx, args.Workdir, args.Command[0], args.Command[1:]...)
 
 	// A non-zero exit is a normal outcome the model should see, so report the
 	// output along with the exit code rather than failing the tool call. A
