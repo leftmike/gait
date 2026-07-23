@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"os"
 	"strings"
 
 	"github.com/leftmike/gait/system"
@@ -43,11 +42,7 @@ func editFile(ctx context.Context, sb *system.Sandbox, buf []byte) (string, erro
 		return "", fmt.Errorf("old_string and new_string are identical")
 	}
 
-	err = sb.CheckWrite(args.Path)
-	if err != nil {
-		return "", err
-	}
-	data, err := os.ReadFile(args.Path)
+	data, err := sb.ReadFile(args.Path)
 	if err != nil {
 		return "", err
 	}
@@ -75,11 +70,11 @@ func editFile(ctx context.Context, sb *system.Sandbox, buf []byte) (string, erro
 	}
 
 	mode := fs.FileMode(0644)
-	info, err := os.Stat(args.Path)
+	info, err := sb.Stat(args.Path)
 	if err == nil {
 		mode = info.Mode()
 	}
-	err = os.WriteFile(args.Path, []byte(updated), mode)
+	err = sb.WriteFile(args.Path, []byte(updated), mode)
 	if err != nil {
 		return "", err
 	}

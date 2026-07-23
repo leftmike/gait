@@ -17,8 +17,8 @@ type Tool struct {
 	Schema      ToolSchema
 }
 
-// A ToolFunc optionally runs inside a sandbox; sb may be nil, in which case
-// the tool runs unrestricted.
+// A ToolFunc runs inside a sandbox, which mediates its access to the
+// filesystem and to external commands.
 type ToolFunc func(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error)
 
 type ToolSchema map[string]any

@@ -68,7 +68,7 @@ func glob(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	pattern := filepath.ToSlash(args.Pattern)
 
 	var matches []globMatchInfo
-	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err = sb.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -83,10 +83,6 @@ func glob(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 		rel = filepath.ToSlash(rel)
 
 		if !globMatch(pattern, rel) {
-			return nil
-		}
-		// Don't reveal files the sandbox's filesystem policy denies reading.
-		if sb.CheckRead(path) != nil {
 			return nil
 		}
 

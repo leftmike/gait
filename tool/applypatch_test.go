@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/leftmike/gait/system"
 )
 
 func wrapPatch(body string) string {
@@ -22,7 +24,7 @@ func runApplyPatch(t *testing.T, patch string) (string, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return applyPatch(context.Background(), nil, buf)
+	return applyPatch(context.Background(), system.NewSandbox(nil), buf)
 }
 
 func testParsePatch(t *testing.T, patch string, hunks []patchHunk, errMsg string) {

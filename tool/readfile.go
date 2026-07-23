@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/leftmike/gait/system"
@@ -33,11 +32,7 @@ func readFile(ctx context.Context, sb *system.Sandbox, buf []byte) (string, erro
 		return "", err
 	}
 
-	err = sb.CheckRead(args.Path)
-	if err != nil {
-		return "", err
-	}
-	data, err := os.ReadFile(args.Path)
+	data, err := sb.ReadFile(args.Path)
 	if err != nil {
 		return "", err
 	}

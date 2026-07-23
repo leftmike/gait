@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -420,30 +419,15 @@ func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 		return affectedPaths{}, fmt.Errorf("No files were modified.")
 	}
 
-	// Check every path against the system's filesystem policy before applying
-	// anything so a denied patch is not applied partially.
-	for _, hunk := range hunks {
-		err := sb.CheckWrite(hunk.path)
-		if err != nil {
-			return affectedPaths{}, err
-		}
-		if hunk.movePath != "" {
-			err = sb.CheckWrite(hunk.movePath)
-			if err != nil {
-				return affectedPaths{}, err
-			}
-		}
-	}
-
 	var affected affectedPaths
 	for _, hunk := range hunks {
 		switch hunk.op {
 		case addFileOp:
-			err := makeParentDirs(hunk.path)
+			err := makeParentDirs(sb, hunk.path)
 			if err != nil {
 				return affectedPaths{}, err
 			}
-			err = os.WriteFile(hunk.path, []byte(hunk.contents), 0o644)
+			err = sb.WriteFile(hunk.path, []byte(hunk.contents), 0o644)
 			if err != nil {
 				return affectedPaths{},
 					fmt.Errorf("Failed to write file %s: %s", hunk.path, err)
@@ -451,7 +435,7 @@ func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 			affected.added = append(affected.added, hunk.path)
 
 		case deleteFileOp:
-			err := os.Remove(hunk.path)
+			err := sb.Remove(hunk.path)
 			if err != nil {
 				return affectedPaths{},
 					fmt.Errorf("Failed to delete file %s: %s", hunk.path, err)
@@ -459,28 +443,28 @@ func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 			affected.deleted = append(affected.deleted, hunk.path)
 
 		case updateFileOp:
-			newContents, err := deriveNewContentsFromChunks(hunk.path, hunk.chunks)
+			newContents, err := deriveNewContentsFromChunks(sb, hunk.path, hunk.chunks)
 			if err != nil {
 				return affectedPaths{}, err
 			}
 			if hunk.movePath != "" {
-				err = makeParentDirs(hunk.movePath)
+				err = makeParentDirs(sb, hunk.movePath)
 				if err != nil {
 					return affectedPaths{}, err
 				}
-				err = os.WriteFile(hunk.movePath, []byte(newContents), 0o644)
+				err = sb.WriteFile(hunk.movePath, []byte(newContents), 0o644)
 				if err != nil {
 					return affectedPaths{},
 						fmt.Errorf("Failed to write file %s: %s", hunk.movePath, err)
 				}
-				err = os.Remove(hunk.path)
+				err = sb.Remove(hunk.path)
 				if err != nil {
 					return affectedPaths{},
 						fmt.Errorf("Failed to remove original %s: %s", hunk.path, err)
 				}
 				affected.modified = append(affected.modified, hunk.movePath)
 			} else {
-				err = os.WriteFile(hunk.path, []byte(newContents), 0o644)
+				err = sb.WriteFile(hunk.path, []byte(newContents), 0o644)
 				if err != nil {
 					return affectedPaths{},
 						fmt.Errorf("Failed to write file %s: %s", hunk.path, err)
@@ -492,10 +476,10 @@ func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 	return affected, nil
 }
 
-func makeParentDirs(path string) error {
+func makeParentDirs(sb *system.Sandbox, path string) error {
 	dir := filepath.Dir(path)
 	if dir != "" && dir != "." {
-		err := os.MkdirAll(dir, 0o755)
+		err := sb.MkdirAll(dir, 0o755)
 		if err != nil {
 			return fmt.Errorf("Failed to create parent directories for %s: %s", path, err)
 		}
@@ -504,8 +488,10 @@ func makeParentDirs(path string) error {
 }
 
 // Return the new contents of the file at path after applying the chunks to it.
-func deriveNewContentsFromChunks(path string, chunks []updateChunk) (string, error) {
-	buf, err := os.ReadFile(path)
+func deriveNewContentsFromChunks(sb *system.Sandbox, path string,
+	chunks []updateChunk) (string, error) {
+
+	buf, err := sb.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("Failed to read file to update %s: %s", path, err)
 	}

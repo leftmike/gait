@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -121,12 +120,12 @@ func grep(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 
 	// Collect the files to search.
 	var files []string
-	info, err := os.Stat(root)
+	info, err := sb.Stat(root)
 	if err != nil {
 		return "", err
 	}
 	if info.IsDir() {
-		err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		err = sb.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
@@ -140,8 +139,7 @@ func grep(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 			if rerr != nil {
 				rel = path
 			}
-			// Skip files the sandbox's filesystem policy denies reading.
-			if matchGlobFilter(args.Glob, filepath.ToSlash(rel)) && sb.CheckRead(path) == nil {
+			if matchGlobFilter(args.Glob, filepath.ToSlash(rel)) {
 				files = append(files, path)
 			}
 			return nil
@@ -151,10 +149,6 @@ func grep(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 		}
 		sort.Strings(files)
 	} else {
-		err = sb.CheckRead(root)
-		if err != nil {
-			return "", err
-		}
 		files = []string{root}
 	}
 
@@ -171,7 +165,7 @@ func grep(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	var lines []string // output lines, before applying head_limit
 
 	for _, path := range files {
-		data, err := os.ReadFile(path)
+		data, err := sb.ReadFile(path)
 		if err != nil || len(data) > maxGrepFileSize || isBinary(data) {
 			continue
 		}

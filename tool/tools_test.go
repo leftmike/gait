@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/invopop/jsonschema"
+	"github.com/leftmike/gait/system"
 )
 
 func callJSON(t *testing.T, fn ToolFunc, v any) string {
@@ -16,7 +17,7 @@ func callJSON(t *testing.T, fn ToolFunc, v any) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := fn(context.Background(), nil, buf)
+	out, err := fn(context.Background(), system.NewSandbox(nil), buf)
 	if err != nil {
 		t.Fatalf("tool returned error: %s", err)
 	}
@@ -29,7 +30,7 @@ func callJSONErr(t *testing.T, fn ToolFunc, v any) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fn(context.Background(), nil, buf); err == nil {
+	if _, err := fn(context.Background(), system.NewSandbox(nil), buf); err == nil {
 		t.Fatalf("expected error, got none")
 	}
 }

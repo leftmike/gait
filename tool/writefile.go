@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/leftmike/gait/system"
@@ -22,18 +21,14 @@ func writeFile(ctx context.Context, sb *system.Sandbox, buf []byte) (string, err
 		return "", err
 	}
 
-	err = sb.CheckWrite(args.Path)
-	if err != nil {
-		return "", err
-	}
 	if dir := filepath.Dir(args.Path); dir != "" {
-		err = os.MkdirAll(dir, 0755)
+		err = sb.MkdirAll(dir, 0755)
 		if err != nil {
 			return "", err
 		}
 	}
 
-	err = os.WriteFile(args.Path, []byte(args.Content), 0644)
+	err = sb.WriteFile(args.Path, []byte(args.Content), 0644)
 	if err != nil {
 		return "", err
 	}
