@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/leftmike/gait/system"
 )
 
 func TestBash(t *testing.T) {
@@ -35,5 +33,5 @@ func bashRun(t *testing.T, args bashArgs) (string, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return bash(t.Context(), system.NewSandbox(nil), buf)
+	return bash(t.Context(), testSandbox(), buf)
 }

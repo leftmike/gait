@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/leftmike/gait/system"
 )
 
 func runGrep(t *testing.T, args grepArgs) string {
@@ -17,7 +15,7 @@ func runGrep(t *testing.T, args grepArgs) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := grep(context.Background(), system.NewSandbox(nil), buf)
+	out, err := grep(context.Background(), testSandbox(), buf)
 	if err != nil {
 		t.Fatalf("grep error: %s", err)
 	}

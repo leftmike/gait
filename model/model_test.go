@@ -19,6 +19,14 @@ var (
 	provider = flag.String("provider", "", "limit tests to this provider")
 )
 
+func testSandbox() *system.Sandbox {
+	sb, err := system.NewSandbox(nil, nil)
+	if err != nil {
+		panic(fmt.Sprintf("new sandbox failed: %s", err))
+	}
+	return sb
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
@@ -173,7 +181,7 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
-	err = mdl.SetTools(tools, system.NewSandbox(nil))
+	err = mdl.SetTools(tools, testSandbox())
 	if err != nil {
 		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}
@@ -245,7 +253,7 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 	if err != nil {
 		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
-	err = mdl.SetTools(tools, system.NewSandbox(nil))
+	err = mdl.SetTools(tools, testSandbox())
 	if err != nil {
 		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}

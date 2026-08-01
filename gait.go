@@ -16,15 +16,18 @@ To Do:
 - channels: https://code.claude.com/docs/en/channels-reference
 
 - restricted sandbox for running cli programs
--- mode: none, kernel, (bubblewrap, kvm, etc)
+-- mode: none, harness, kernel?, (bubblewrap, kvm, etc)
 -- read: yes, always, no
 -- execute: yes, always, no
 -- write: yes, always, no
 -- (network: yes, ask, always)
 -- github.com/superradcompany/microsandbox
 -- nono.sh
+-- matching rules: most specific (longest) wins; error if same path is specified more than once
 
 - allow programatic tool calling
+
+- open telemetry
 
 - codex skills prompt: https://github.com/openai/codex/blob/99f47d6e9a3546c14c43af99c7a58fa6bd130548/codex-rs/core/src/skills/render.rs#L19
 
@@ -65,6 +68,14 @@ var (
 	verbose bool
 	trace   bool
 )
+
+func askUser(op, path string) bool {
+	fmt.Fprintf(os.Stderr, "%s %s? [y/N] ", op, path)
+	var resp string
+	fmt.Fscanln(os.Stdin, &resp)
+	resp = strings.ToLower(strings.TrimSpace(resp))
+	return resp == "y" || resp == "yes"
+}
 
 func interact(agnt *agent.Agent, opts *model.Options) error {
 	line := liner.NewLiner()
@@ -183,12 +194,18 @@ func main() {
 		tools = tool.All(cfg.BraveAPIKey)
 	}
 
+	sb, err := system.NewSandbox(agntCfg.SandboxConfig, askUser)
+	if err != nil {
+		fmt.Printf("%s: %s\n", os.Args[0], err)
+		os.Exit(1)
+	}
+
 	agnt := agent.Agent{
 		AgentConfig: agntCfg,
 		Client:      clnt,
 		Model:       mdl,
 		Tools:       tools,
-		Sandbox:     system.NewSandbox(agntCfg.SandboxConfig),
+		Sandbox:     sb,
 	}
 
 	/*

@@ -29,17 +29,23 @@ type ClientConfig struct {
 	MaxTokens int    `hcl:"max_tokens,optional"`
 }
 
-type PathActions struct {
+type RWActions struct {
 	Allow []string `hcl:"allow,optional"`
 	Ask   []string `hcl:"ask,optional"`
 	Deny  []string `hcl:"deny,optional"`
 }
 
+type ExecuteActions struct {
+	Allow [][]string `hcl:"allow,optional"`
+	Ask   [][]string `hcl:"ask,optional"`
+	Deny  [][]string `hcl:"deny,optional"`
+}
+
 type SandboxConfig struct {
-	Name    string       `hcl:"name,label"`
-	Read    *PathActions `hcl:"read,block"`
-	Execute *PathActions `hcl:"execute,block"`
-	Write   *PathActions `hcl:"write,block"`
+	Name    string          `hcl:"name,label"`
+	Read    *RWActions      `hcl:"read,block"`
+	Execute *ExecuteActions `hcl:"execute,block"`
+	Write   *RWActions      `hcl:"write,block"`
 }
 
 /*
@@ -112,10 +118,10 @@ func (cfg *Config) FindSandboxConfig(sandbox string) *SandboxConfig {
 
 func configFilenames() []string {
 	if runtime.GOOS == "windows" {
-		return []string{"~/gait/gait.hcl", "~/gait.hcl", "./gait.hcl"}
+		return []string{"./gait.hcl", "~/gait/gait.hcl", "~/gait.hcl"}
 	}
 
-	return []string{"~/.gait/gait.hcl", "~/.gait.hcl", "./gait.hcl"}
+	return []string{"./gait.hcl", "~/.gait/gait.hcl", "~/.gait.hcl"}
 }
 
 func ReadConfig(filenames []string) (*Config, error) {
@@ -256,18 +262,18 @@ func ParseFlags(fs *flag.FlagSet) (AgentConfig, *Config, error) {
 		}
 
 		if noSandbox {
-			if sandbox != "" {
+			if sandbox != "" && sandbox != "none" {
 				return AgentConfig{}, nil, errors.New("no sandbox and sandbox flags not allowed")
 			}
-		} else if sandbox != "" {
-			sbCfg = cfg.FindSandboxConfig(sandbox)
-			if sbCfg == nil {
-				return AgentConfig{}, nil, fmt.Errorf("unknown sandbox: %s", sandbox)
+		} else {
+			if sandbox == "" {
+				sandbox = cfg.Sandbox
 			}
-		} else if cfg.Sandbox != "" {
-			sbCfg = cfg.FindSandboxConfig(cfg.Sandbox)
-			if sbCfg == nil {
-				return AgentConfig{}, nil, fmt.Errorf("unknown sandbox: %s", cfg.Sandbox)
+			if sandbox != "" && sandbox != "none" {
+				sbCfg = cfg.FindSandboxConfig(sandbox)
+				if sbCfg == nil {
+					return AgentConfig{}, nil, fmt.Errorf("unknown sandbox: %s", sandbox)
+				}
 			}
 		}
 	}
@@ -290,6 +296,6 @@ func ParseFlags(fs *flag.FlagSet) (AgentConfig, *Config, error) {
 			APIKey:   apiKey,
 			BaseURL:  baseURL,
 		},
-		SandboxConfig: nil, // XXX: *SandboxConfig
+		SandboxConfig: sbCfg,
 	}, cfg, nil
 }

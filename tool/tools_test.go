@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -11,13 +12,21 @@ import (
 	"github.com/leftmike/gait/system"
 )
 
+func testSandbox() *system.Sandbox {
+	sb, err := system.NewSandbox(nil, nil)
+	if err != nil {
+		panic(fmt.Sprintf("new sandbox failed: %s", err))
+	}
+	return sb
+}
+
 func callJSON(t *testing.T, fn ToolFunc, v any) string {
 	t.Helper()
 	buf, err := json.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := fn(context.Background(), system.NewSandbox(nil), buf)
+	out, err := fn(context.Background(), testSandbox(), buf)
 	if err != nil {
 		t.Fatalf("tool returned error: %s", err)
 	}
@@ -30,7 +39,7 @@ func callJSONErr(t *testing.T, fn ToolFunc, v any) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fn(context.Background(), system.NewSandbox(nil), buf); err == nil {
+	if _, err := fn(context.Background(), testSandbox(), buf); err == nil {
 		t.Fatalf("expected error, got none")
 	}
 }
