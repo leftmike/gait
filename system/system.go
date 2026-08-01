@@ -101,8 +101,11 @@ func (rwa *rwActions) pathAction(path string, dflt action) action {
 		return act
 	}
 
+	pathSlash := path + "/"
 	for _, da := range rwa.dirs {
-		if strings.HasPrefix(path, da.dir) {
+		// A directory covers everything within it as well as the directory
+		// itself, so that the directory can be created and removed.
+		if strings.HasPrefix(path, da.dir) || pathSlash == da.dir {
 			return da.act
 		}
 	}
@@ -139,14 +142,11 @@ func NewSandbox(sbCfg *config.SandboxConfig, ask AskFunc) (*Sandbox, error) {
 	}, nil
 }
 
-// check resolves a path against one set of actions, prompting the user when
-// the action is ask.
-func (sb *Sandbox) check(rwa *rwActions, op, path string) error {
+func (sb *Sandbox) checkRW(rwa *rwActions, op, path string) error {
 	switch rwa.pathAction(path, sb.dflt) {
 	case allow:
 		return nil
 	case ask:
-		// XXX
 		if sb.ask != nil && sb.ask(op, path) {
 			return nil
 		}
@@ -155,42 +155,61 @@ func (sb *Sandbox) check(rwa *rwActions, op, path string) error {
 	return &fs.PathError{Op: op, Path: path, Err: fs.ErrPermission}
 }
 
-func (sb *Sandbox) CheckRead(op, path string) error {
-	return sb.check(sb.readActions, op, path)
-}
-
-func (sb *Sandbox) CheckWrite(op, path string) error {
-	return sb.check(sb.writeActions, op, path)
-}
-
 func (sb *Sandbox) ReadFile(path string) ([]byte, error) {
-	if err := sb.CheckRead("read", path); err != nil {
+	if err := sb.checkRW(sb.readActions, "read", path); err != nil {
 		return nil, err
 	}
 	return os.ReadFile(path)
 }
 
 func (sb *Sandbox) WriteFile(path string, data []byte, perm fs.FileMode) error {
-	if err := sb.CheckWrite("write", path); err != nil {
+	if err := sb.checkRW(sb.writeActions, "write", path); err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, perm)
 }
 
 func (sb *Sandbox) MkdirAll(path string, perm fs.FileMode) error {
+	if err := sb.checkRW(sb.writeActions, "mkdir", path); err != nil {
+		return err
+	}
 	return os.MkdirAll(path, perm)
 }
 
 func (sb *Sandbox) Stat(path string) (fs.FileInfo, error) {
+	if err := sb.checkRW(sb.readActions, "stat", path); err != nil {
+		return nil, err
+	}
 	return os.Stat(path)
 }
 
 func (sb *Sandbox) Remove(path string) error {
+	if err := sb.checkRW(sb.writeActions, "remove", path); err != nil {
+		return err
+	}
 	return os.Remove(path)
 }
 
 func (sb *Sandbox) WalkDir(root string, fn fs.WalkDirFunc) error {
-	return filepath.WalkDir(root, fn)
+	if err := sb.checkRW(sb.readActions, "walkdir", root); err != nil {
+		return err
+	}
+
+	return filepath.WalkDir(root,
+		func(path string, d fs.DirEntry, err error) error {
+			// Denied paths are skipped rather than failing the whole walk, so
+			// that a denied file or subdirectory is simply not visible.
+			// Anything below root which needs asking is walked without asking;
+			// reading it is still checked.
+			if sb.readActions.pathAction(path, sb.dflt) == deny {
+				if d != nil && d.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
+			}
+
+			return fn(path, d, err)
+		})
 }
 
 // CombinedOutput runs a command in dir and returns its combined stdout and

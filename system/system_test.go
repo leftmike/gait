@@ -4,6 +4,8 @@ import (
 	"errors"
 	"io/fs"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -47,13 +49,13 @@ func TestNoAskFunc(t *testing.T) {
 		Read:  &config.RWActions{Ask: []string{"/data/"}},
 		Write: &config.RWActions{Ask: []string{"/data/"}},
 	}, nil)
-	wantPathError(t, sb.CheckRead("read", "/data/x.txt"), "read", "/data/x.txt")
-	wantPathError(t, sb.CheckWrite("write", "/data/x.txt"), "write", "/data/x.txt")
+	wantPathError(t, sb.checkRW(sb.readActions, "read", "/data/x.txt"), "read", "/data/x.txt")
+	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
 
 	// A nil ask func with nothing to ask about is still unrestricted.
 	sb = checkSandbox(t, nil, nil)
-	if err := sb.CheckRead("read", "/data/x.txt"); err != nil {
-		t.Errorf("CheckRead on an unrestricted sandbox failed: %s", err)
+	if err := sb.checkRW(sb.readActions, "read", "/data/x.txt"); err != nil {
+		t.Errorf("checkRW read on an unrestricted sandbox failed: %s", err)
 	}
 }
 
@@ -65,10 +67,11 @@ func TestSandboxAskFuncIndependent(t *testing.T) {
 	allowSB := checkSandbox(t, cfg, allowAsk.ask)
 	denySB := checkSandbox(t, cfg, denyAsk.ask)
 
-	if err := allowSB.CheckRead("read", "/data/x.txt"); err != nil {
-		t.Errorf("CheckRead on the allowing sandbox failed: %s", err)
+	if err := allowSB.checkRW(allowSB.readActions, "read", "/data/x.txt"); err != nil {
+		t.Errorf("checkRW read on the allowing sandbox failed: %s", err)
 	}
-	wantPathError(t, denySB.CheckRead("read", "/data/x.txt"), "read", "/data/x.txt")
+	wantPathError(t, denySB.checkRW(denySB.readActions, "read", "/data/x.txt"), "read",
+		"/data/x.txt")
 
 	if allowAsk.calls != 1 || denyAsk.calls != 1 {
 		t.Errorf("ask calls = %d and %d, want 1 each", allowAsk.calls, denyAsk.calls)
@@ -200,7 +203,8 @@ func TestPathAction(t *testing.T) {
 		{"/home/mike/.ssh/config", allow},   // a file rule does not cover children
 		{"/etc/hostsX", deny},               // no prefix matching on a file rule
 		{"/var/log/messages", deny},         // nothing matches -> default
-		{"/home/mike", deny},                // the dir rule needs the trailing "/"
+		{"/home/mike", allow},               // the directory itself, so it can be made & removed
+		{"/home/mikex", deny},               // but not a sibling sharing the prefix
 		{"/home/mike/secrets/keys", ask},    // more specific ask beats the allow
 		{"/home/mike/secrets/a/b.txt", ask}, // deeper beneath the ask directory
 	}
@@ -399,7 +403,7 @@ func checkSandbox(t *testing.T, cfg *config.SandboxConfig, ask AskFunc) *Sandbox
 	return sb
 }
 
-func TestCheckReadWrite(t *testing.T) {
+func TestCheckRW(t *testing.T) {
 	sb := checkSandbox(t,
 		&config.SandboxConfig{
 			Read:  &config.RWActions{Allow: []string{"/data/", "/etc/hosts"}},
@@ -407,24 +411,24 @@ func TestCheckReadWrite(t *testing.T) {
 		}, nil)
 
 	// Reads are governed by the read actions.
-	if err := sb.CheckRead("read", "/data/in.txt"); err != nil {
-		t.Errorf("CheckRead(/data/in.txt) failed: %s", err)
+	if err := sb.checkRW(sb.readActions, "read", "/data/in.txt"); err != nil {
+		t.Errorf("checkRW(read, /data/in.txt) failed: %s", err)
 	}
-	if err := sb.CheckRead("read", "/etc/hosts"); err != nil {
-		t.Errorf("CheckRead(/etc/hosts) failed: %s", err)
+	if err := sb.checkRW(sb.readActions, "read", "/etc/hosts"); err != nil {
+		t.Errorf("checkRW(read, /etc/hosts) failed: %s", err)
 	}
-	wantPathError(t, sb.CheckRead("read", "/etc/shadow"), "read", "/etc/shadow")
+	wantPathError(t, sb.checkRW(sb.readActions, "read", "/etc/shadow"), "read", "/etc/shadow")
 
 	// Writes are governed by the write actions, which are separate: /data/ is
 	// readable but only /data/out/ is writable.
-	if err := sb.CheckWrite("write", "/data/out/x.txt"); err != nil {
-		t.Errorf("CheckWrite(/data/out/x.txt) failed: %s", err)
+	if err := sb.checkRW(sb.writeActions, "write", "/data/out/x.txt"); err != nil {
+		t.Errorf("checkRW(write, /data/out/x.txt) failed: %s", err)
 	}
-	wantPathError(t, sb.CheckWrite("write", "/data/in.txt"), "write", "/data/in.txt")
-	wantPathError(t, sb.CheckWrite("write", "/etc/hosts"), "write", "/etc/hosts")
+	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/data/in.txt"), "write", "/data/in.txt")
+	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/etc/hosts"), "write", "/etc/hosts")
 }
 
-func TestCheckReadWriteAsk(t *testing.T) {
+func TestCheckRWAsk(t *testing.T) {
 	cfg := &config.SandboxConfig{
 		Read:  &config.RWActions{Ask: []string{"/data/"}},
 		Write: &config.RWActions{Ask: []string{"/data/"}},
@@ -433,8 +437,8 @@ func TestCheckReadWriteAsk(t *testing.T) {
 	// Granted: no error, and the op and path are passed through to the ask func.
 	ar := &askRecorder{resp: true}
 	sb := checkSandbox(t, cfg, ar.ask)
-	if err := sb.CheckRead("read", "/data/x.txt"); err != nil {
-		t.Errorf("CheckRead with granted ask failed: %s", err)
+	if err := sb.checkRW(sb.readActions, "read", "/data/x.txt"); err != nil {
+		t.Errorf("checkRW read with granted ask failed: %s", err)
 	}
 	if ar.calls != 1 {
 		t.Errorf("ask func called %d times, want 1", ar.calls)
@@ -444,8 +448,8 @@ func TestCheckReadWriteAsk(t *testing.T) {
 			"/data/x.txt")
 	}
 
-	if err := sb.CheckWrite("write", "/data/x.txt"); err != nil {
-		t.Errorf("CheckWrite with granted ask failed: %s", err)
+	if err := sb.checkRW(sb.writeActions, "write", "/data/x.txt"); err != nil {
+		t.Errorf("checkRW write with granted ask failed: %s", err)
 	}
 	if ar.lastOp != "write" {
 		t.Errorf("ask func op = %q, want %q", ar.lastOp, "write")
@@ -453,11 +457,11 @@ func TestCheckReadWriteAsk(t *testing.T) {
 
 	// Declined: a permission error.
 	sb = checkSandbox(t, cfg, (&askRecorder{resp: false}).ask)
-	wantPathError(t, sb.CheckRead("read", "/data/x.txt"), "read", "/data/x.txt")
-	wantPathError(t, sb.CheckWrite("write", "/data/x.txt"), "write", "/data/x.txt")
+	wantPathError(t, sb.checkRW(sb.readActions, "read", "/data/x.txt"), "read", "/data/x.txt")
+	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
 }
 
-func TestCheckReadWriteNoAsk(t *testing.T) {
+func TestCheckRWNoAsk(t *testing.T) {
 	// The ask func must only be consulted for an ask action, never for allow or
 	// for a denied path.
 	ar := &askRecorder{resp: true}
@@ -467,18 +471,19 @@ func TestCheckReadWriteNoAsk(t *testing.T) {
 			Write: &config.RWActions{Allow: []string{"/data/"}, Deny: []string{"/data/no/"}},
 		}, ar.ask)
 
-	if err := sb.CheckRead("read", "/data/x.txt"); err != nil {
-		t.Errorf("CheckRead(/data/x.txt) failed: %s", err)
+	if err := sb.checkRW(sb.readActions, "read", "/data/x.txt"); err != nil {
+		t.Errorf("checkRW(read, /data/x.txt) failed: %s", err)
 	}
-	wantPathError(t, sb.CheckRead("read", "/data/no/x.txt"), "read", "/data/no/x.txt")
-	wantPathError(t, sb.CheckWrite("write", "/elsewhere"), "write", "/elsewhere")
+	wantPathError(t, sb.checkRW(sb.readActions, "read", "/data/no/x.txt"), "read",
+		"/data/no/x.txt")
+	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/elsewhere"), "write", "/elsewhere")
 
 	if ar.calls != 0 {
 		t.Errorf("ask func called %d times, want 0", ar.calls)
 	}
 }
 
-func TestCheckReadWriteUncleanPath(t *testing.T) {
+func TestCheckRWUncleanPath(t *testing.T) {
 	sb := checkSandbox(t,
 		&config.SandboxConfig{
 			Read:  &config.RWActions{Allow: []string{"/data/"}, Deny: []string{"/data/no/"}},
@@ -487,16 +492,16 @@ func TestCheckReadWriteUncleanPath(t *testing.T) {
 
 	// The path is cleaned before matching, so ".." cannot escape a deny.
 	const unclean = "/data/yes/../no/x.txt"
-	wantPathError(t, sb.CheckRead("read", unclean), "read", unclean)
-	wantPathError(t, sb.CheckWrite("write", unclean), "write", unclean)
+	wantPathError(t, sb.checkRW(sb.readActions, "read", unclean), "read", unclean)
+	wantPathError(t, sb.checkRW(sb.writeActions, "write", unclean), "write", unclean)
 
 	// An unclean path that lands somewhere allowed is still allowed.
-	if err := sb.CheckRead("read", "/data/./a/../x.txt"); err != nil {
-		t.Errorf("CheckRead(/data/./a/../x.txt) failed: %s", err)
+	if err := sb.checkRW(sb.readActions, "read", "/data/./a/../x.txt"); err != nil {
+		t.Errorf("checkRW(read, /data/./a/../x.txt) failed: %s", err)
 	}
 }
 
-func TestCheckReadWriteMissingConfig(t *testing.T) {
+func TestCheckRWMissingConfig(t *testing.T) {
 	// Within a configured sandbox, a config block that is absent leaves its
 	// actions nil and denies everything.
 	sb := checkSandbox(t, &config.SandboxConfig{
@@ -505,35 +510,194 @@ func TestCheckReadWriteMissingConfig(t *testing.T) {
 	if sb.writeActions != nil {
 		t.Fatalf("writeActions = %v, want nil", sb.writeActions)
 	}
-	if err := sb.CheckRead("read", "/data/x.txt"); err != nil {
-		t.Errorf("CheckRead(/data/x.txt) failed: %s", err)
+	if err := sb.checkRW(sb.readActions, "read", "/data/x.txt"); err != nil {
+		t.Errorf("checkRW(read, /data/x.txt) failed: %s", err)
 	}
-	wantPathError(t, sb.CheckWrite("write", "/data/x.txt"), "write", "/data/x.txt")
+	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
 
 	// A config block with no paths in it denies everything too.
 	sb = checkSandbox(t, &config.SandboxConfig{
 		Read:  &config.RWActions{},
 		Write: &config.RWActions{},
 	}, nil)
-	wantPathError(t, sb.CheckRead("read", "/anything"), "read", "/anything")
-	wantPathError(t, sb.CheckWrite("write", "/anything"), "write", "/anything")
+	wantPathError(t, sb.checkRW(sb.readActions, "read", "/anything"), "read", "/anything")
+	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/anything"), "write", "/anything")
 }
 
-func TestCheckReadWriteNoSandbox(t *testing.T) {
+func TestCheckRWNoSandbox(t *testing.T) {
 	// No sandbox configured at all: unrestricted access, and the user is never
 	// prompted.
 	ar := &askRecorder{resp: false}
 	sb := checkSandbox(t, nil, ar.ask)
 
 	for _, p := range []string{"/anything", "/etc/shadow", "relative/path"} {
-		if err := sb.CheckRead("read", p); err != nil {
-			t.Errorf("CheckRead(%q) failed: %s", p, err)
+		if err := sb.checkRW(sb.readActions, "read", p); err != nil {
+			t.Errorf("checkRW(read, %q) failed: %s", p, err)
 		}
-		if err := sb.CheckWrite("write", p); err != nil {
-			t.Errorf("CheckWrite(%q) failed: %s", p, err)
+		if err := sb.checkRW(sb.writeActions, "write", p); err != nil {
+			t.Errorf("checkRW(write, %q) failed: %s", p, err)
 		}
 	}
 	if ar.calls != 0 {
 		t.Errorf("ask func called %d times, want 0", ar.calls)
+	}
+}
+
+func TestMkdirAllRemove(t *testing.T) {
+	dir := t.TempDir()
+	sb := checkSandbox(t,
+		&config.SandboxConfig{
+			Write: &config.RWActions{Allow: []string{dir + "/"}},
+		}, nil)
+
+	// Making and removing a directory within the writable directory.
+	sub := filepath.Join(dir, "sub")
+	if err := sb.MkdirAll(sub, 0o755); err != nil {
+		t.Errorf("MkdirAll(%q) failed: %s", sub, err)
+	}
+	if err := sb.Remove(sub); err != nil {
+		t.Errorf("Remove(%q) failed: %s", sub, err)
+	}
+
+	// Neither is allowed outside of it.
+	outside := filepath.Join(filepath.Dir(dir), "outside")
+	wantPathError(t, sb.MkdirAll(outside, 0o755), "mkdir", outside)
+	wantPathError(t, sb.Remove(outside), "remove", outside)
+
+	// Writable does not imply readable.
+	if _, err := sb.Stat(sub); !errors.Is(err, fs.ErrPermission) {
+		t.Errorf("Stat(%q) = %v, want permission error", sub, err)
+	}
+}
+
+func TestStat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x.txt")
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) failed: %s", path, err)
+	}
+
+	sb := checkSandbox(t,
+		&config.SandboxConfig{
+			Read: &config.RWActions{
+				Allow: []string{dir + "/"},
+				Deny:  []string{filepath.Join(dir, "no") + "/"},
+			},
+		}, nil)
+
+	fi, err := sb.Stat(path)
+	if err != nil {
+		t.Errorf("Stat(%q) failed: %s", path, err)
+	} else if fi.Name() != "x.txt" {
+		t.Errorf("Stat(%q) name = %q, want %q", path, fi.Name(), "x.txt")
+	}
+
+	denied := filepath.Join(dir, "no", "x.txt")
+	_, err = sb.Stat(denied)
+	wantPathError(t, err, "stat", denied)
+}
+
+// walkTree creates root/a.txt, root/no/b.txt and root/sub/c.txt.
+func walkTree(t *testing.T, root string) {
+	t.Helper()
+
+	for _, p := range []string{"a.txt", "no/b.txt", "sub/c.txt"} {
+		path := filepath.Join(root, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll(%q) failed: %s", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatalf("WriteFile(%q) failed: %s", path, err)
+		}
+	}
+}
+
+func walkPaths(t *testing.T, sb *Sandbox, root string) []string {
+	t.Helper()
+
+	var paths []string
+	err := sb.WalkDir(root,
+		func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, rerr := filepath.Rel(root, path)
+			if rerr != nil {
+				return rerr
+			}
+			paths = append(paths, filepath.ToSlash(rel))
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("WalkDir(%q) failed: %s", root, err)
+	}
+
+	slices.Sort(paths)
+	return paths
+}
+
+func TestWalkDirDenied(t *testing.T) {
+	root := t.TempDir()
+	walkTree(t, root)
+
+	// A denied directory is skipped entirely: neither it nor anything within it
+	// is walked, and the rest of the walk continues.
+	ar := &askRecorder{resp: true}
+	sb := checkSandbox(t,
+		&config.SandboxConfig{
+			Read: &config.RWActions{
+				Allow: []string{root + "/"},
+				Deny:  []string{filepath.Join(root, "no") + "/"},
+			},
+		}, ar.ask)
+
+	got := walkPaths(t, sb, root)
+	want := []string{".", "a.txt", "sub", "sub/c.txt"}
+	if !slices.Equal(got, want) {
+		t.Errorf("WalkDir(%q) = %v, want %v", root, got, want)
+	}
+	if ar.calls != 0 {
+		t.Errorf("ask func called %d times, want 0", ar.calls)
+	}
+}
+
+func TestWalkDirDeniedRoot(t *testing.T) {
+	root := t.TempDir()
+	walkTree(t, root)
+
+	// The root is checked up front; a denied root fails the walk.
+	sb := checkSandbox(t, &config.SandboxConfig{Read: &config.RWActions{}}, nil)
+	var walked bool
+	err := sb.WalkDir(root,
+		func(path string, d fs.DirEntry, err error) error {
+			walked = true
+			return nil
+		})
+	wantPathError(t, err, "walkdir", root)
+	if walked {
+		t.Errorf("WalkDir(%q) called the walk func for a denied root", root)
+	}
+}
+
+func TestWalkDirAsk(t *testing.T) {
+	root := t.TempDir()
+	walkTree(t, root)
+
+	// The root is asked about once; the entries below it are then walked
+	// without asking about each one.
+	ar := &askRecorder{resp: true}
+	sb := checkSandbox(t,
+		&config.SandboxConfig{Read: &config.RWActions{Ask: []string{root + "/"}}}, ar.ask)
+
+	got := walkPaths(t, sb, root)
+	want := []string{".", "a.txt", "no", "no/b.txt", "sub", "sub/c.txt"}
+	if !slices.Equal(got, want) {
+		t.Errorf("WalkDir(%q) = %v, want %v", root, got, want)
+	}
+	if ar.calls != 1 {
+		t.Errorf("ask func called %d times, want 1", ar.calls)
+	}
+	if ar.lastOp != "walkdir" || ar.lastPath != root {
+		t.Errorf("ask func(%q, %q), want (%q, %q)", ar.lastOp, ar.lastPath, "walkdir", root)
 	}
 }
