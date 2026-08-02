@@ -373,8 +373,8 @@ func TestAddPathsEmpty(t *testing.T) {
 	if rwa.files != nil {
 		t.Errorf("addPaths files = %v, want nil", rwa.files)
 	}
-	if got := rwa.pathAction("/data/x.txt", deny); got != allow {
-		t.Errorf("pathAction(/data/x.txt) = %s, want allow", got)
+	if got := rwa.resolveAction("/data/x.txt", deny); got != allow {
+		t.Errorf("resolveAction(/data/x.txt) = %s, want allow", got)
 	}
 
 	// No paths at all is not an error.
@@ -409,8 +409,8 @@ func TestNewRWActionsNil(t *testing.T) {
 	}
 	// A nil *rwActions always yields the default.
 	for _, dflt := range []action{deny, ask, allow} {
-		if got := rwa.pathAction("/anything", dflt); got != dflt {
-			t.Errorf("nil pathAction(/anything, %s) = %s, want %s", dflt, got, dflt)
+		if got := rwa.resolveAction("/anything", dflt); got != dflt {
+			t.Errorf("nil resolveAction(/anything, %s) = %s, want %s", dflt, got, dflt)
 		}
 	}
 }
@@ -423,8 +423,8 @@ func TestNewRWActionsEmpty(t *testing.T) {
 	if rwa == nil {
 		t.Fatal("newRWActions(&config.RWActions{}) = nil, want non-nil")
 	}
-	if got := rwa.pathAction("/anything", ask); got != ask {
-		t.Errorf("pathAction with no paths = %s, want ask", got)
+	if got := rwa.resolveAction("/anything", ask); got != ask {
+		t.Errorf("resolveAction with no paths = %s, want ask", got)
 	}
 }
 
@@ -473,8 +473,8 @@ func TestPathAction(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := rwa.pathAction(c.path, deny); got != c.want {
-			t.Errorf("pathAction(%q) = %s, want %s", c.path, got, c.want)
+		if got := rwa.resolveAction(c.path, deny); got != c.want {
+			t.Errorf("resolveAction(%q) = %s, want %s", c.path, got, c.want)
 		}
 	}
 }
@@ -521,8 +521,8 @@ func TestPathActionExistingDir(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := rwa.pathAction(c.path, deny); got != c.want {
-			t.Errorf("pathAction(%q) = %s, want %s", c.path, got, c.want)
+		if got := rwa.resolveAction(c.path, deny); got != c.want {
+			t.Errorf("resolveAction(%q) = %s, want %s", c.path, got, c.want)
 		}
 	}
 }
@@ -530,7 +530,7 @@ func TestPathActionExistingDir(t *testing.T) {
 func TestPathActionClean(t *testing.T) {
 	// The configured paths are cleaned as they are expanded, so "." and ".."
 	// elements in the configuration match the same rules as the cleaned paths
-	// do. pathAction itself is given already expanded paths; that unclean paths
+	// do. resolveAction itself is given already expanded paths; that unclean paths
 	// can not slip past a rule is checked in TestCheckRWUncleanPath.
 	path := testPath(t)
 	rwa, err := newRWActions(&config.RWActions{
@@ -559,8 +559,8 @@ func TestPathActionClean(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := rwa.pathAction(c.path, deny); got != c.want {
-			t.Errorf("pathAction(%q) = %s, want %s", c.path, got, c.want)
+		if got := rwa.resolveAction(c.path, deny); got != c.want {
+			t.Errorf("resolveAction(%q) = %s, want %s", c.path, got, c.want)
 		}
 	}
 }
@@ -575,8 +575,8 @@ func TestPathActionRootDir(t *testing.T) {
 		t.Fatalf("dirs = %v, want %v", rwa.dirs, wantDirs)
 	}
 	for _, p := range []string{"/anything", "/a/b/c"} {
-		if got := rwa.pathAction(p, deny); got != allow {
-			t.Errorf("pathAction(%q) = %s, want allow", p, got)
+		if got := rwa.resolveAction(p, deny); got != allow {
+			t.Errorf("resolveAction(%q) = %s, want allow", p, got)
 		}
 	}
 }
@@ -592,11 +592,11 @@ func TestPathActionFileBeatsDir(t *testing.T) {
 		t.Fatalf("newRWActions failed: %s", err)
 	}
 
-	if got := rwa.pathAction("/data/secret.txt", allow); got != deny {
-		t.Errorf("pathAction(/data/secret.txt) = %s, want deny", got)
+	if got := rwa.resolveAction("/data/secret.txt", allow); got != deny {
+		t.Errorf("resolveAction(/data/secret.txt) = %s, want deny", got)
 	}
-	if got := rwa.pathAction("/data/other.txt", deny); got != allow {
-		t.Errorf("pathAction(/data/other.txt) = %s, want allow", got)
+	if got := rwa.resolveAction("/data/other.txt", deny); got != allow {
+		t.Errorf("resolveAction(/data/other.txt) = %s, want allow", got)
 	}
 }
 
@@ -607,8 +607,8 @@ func TestPathActionDefault(t *testing.T) {
 	}
 	// An unmatched path takes the default, whatever it is.
 	for _, dflt := range []action{deny, ask, allow} {
-		if got := rwa.pathAction("/elsewhere/x", dflt); got != dflt {
-			t.Errorf("pathAction(/elsewhere/x, %s) = %s, want %s", dflt, got, dflt)
+		if got := rwa.resolveAction("/elsewhere/x", dflt); got != dflt {
+			t.Errorf("resolveAction(/elsewhere/x, %s) = %s, want %s", dflt, got, dflt)
 		}
 	}
 }
@@ -665,8 +665,8 @@ func TestPathActionMostSpecificDir(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := rwa.pathAction(c.path, deny); got != c.want {
-			t.Errorf("pathAction(%q) = %s, want %s", c.path, got, c.want)
+		if got := rwa.resolveAction(c.path, deny); got != c.want {
+			t.Errorf("resolveAction(%q) = %s, want %s", c.path, got, c.want)
 		}
 	}
 }
@@ -1211,12 +1211,12 @@ func makeExec(t *testing.T, dir, name string) string {
 // "action:pattern,pattern" strings, in the order they will be matched.
 func execRules(ea *execActions, cmd string) []string {
 	var rules []string
-	for _, ap := range ea.cmds[cmd] {
-		var patterns []string
-		for _, re := range ap.patterns {
-			patterns = append(patterns, re.String())
+	for _, ca := range ea.cmds[cmd] {
+		var args []string
+		for _, pat := range ca.pats {
+			args = append(args, pat.String())
 		}
-		rules = append(rules, ap.act.String()+":"+strings.Join(patterns, ","))
+		rules = append(rules, ca.act.String()+":"+strings.Join(args, ","))
 	}
 	return rules
 }
@@ -1254,8 +1254,8 @@ func TestNewExecActionsNil(t *testing.T) {
 	}
 	// A nil *execActions always yields the default.
 	for _, dflt := range []action{deny, ask, allow} {
-		if got := ea.cmdAction("/bin/git", []string{"status"}, dflt); got != dflt {
-			t.Errorf("nil cmdAction(/bin/git, %s) = %s, want %s", dflt, got, dflt)
+		if got := ea.resolveAction("/bin/git", []string{"status"}, dflt); got != dflt {
+			t.Errorf("nil resolveAction(/bin/git, %s) = %s, want %s", dflt, got, dflt)
 		}
 	}
 }
@@ -1268,8 +1268,8 @@ func TestNewExecActionsEmpty(t *testing.T) {
 	if ea == nil {
 		t.Fatal("newExecActions(&config.ExecuteActions{}) = nil, want non-nil")
 	}
-	if got := ea.cmdAction("/bin/git", nil, ask); got != ask {
-		t.Errorf("cmdAction with no commands = %s, want ask", got)
+	if got := ea.resolveAction("/bin/git", nil, ask); got != ask {
+		t.Errorf("resolveAction with no commands = %s, want ask", got)
 	}
 }
 
@@ -1344,8 +1344,8 @@ func TestCmdActionPatterns(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := ea.cmdAction("/bin/git", c.args, allow); got != c.want {
-			t.Errorf("cmdAction(/bin/git, %v) = %s, want %s", c.args, got, c.want)
+		if got := ea.resolveAction("/bin/git", c.args, allow); got != c.want {
+			t.Errorf("resolveAction(/bin/git, %v) = %s, want %s", c.args, got, c.want)
 		}
 	}
 }
@@ -1361,11 +1361,11 @@ func TestCmdActionEquallySpecific(t *testing.T) {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
 
-	if got := ea.cmdAction("/bin/rm", []string{"-rf"}, allow); got != deny {
-		t.Errorf("cmdAction(/bin/rm, -rf) = %s, want deny", got)
+	if got := ea.resolveAction("/bin/rm", []string{"-rf"}, allow); got != deny {
+		t.Errorf("resolveAction(/bin/rm, -rf) = %s, want deny", got)
 	}
-	if got := ea.cmdAction("/bin/rm", []string{"-i"}, deny); got != allow {
-		t.Errorf("cmdAction(/bin/rm, -i) = %s, want allow", got)
+	if got := ea.resolveAction("/bin/rm", []string{"-i"}, deny); got != allow {
+		t.Errorf("resolveAction(/bin/rm, -i) = %s, want allow", got)
 	}
 }
 
@@ -1392,8 +1392,8 @@ func TestCmdActionDir(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := ea.cmdAction(c.cmd, nil, deny); got != c.want {
-			t.Errorf("cmdAction(%q) = %s, want %s", c.cmd, got, c.want)
+		if got := ea.resolveAction(c.cmd, nil, deny); got != c.want {
+			t.Errorf("resolveAction(%q) = %s, want %s", c.cmd, got, c.want)
 		}
 	}
 }
@@ -1409,11 +1409,11 @@ func TestCmdActionUnmatchedPatterns(t *testing.T) {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
 
-	if got := ea.cmdAction("/usr/bin/git", []string{"status"}, deny); got != allow {
-		t.Errorf("cmdAction(/usr/bin/git, status) = %s, want allow", got)
+	if got := ea.resolveAction("/usr/bin/git", []string{"status"}, deny); got != allow {
+		t.Errorf("resolveAction(/usr/bin/git, status) = %s, want allow", got)
 	}
-	if got := ea.cmdAction("/usr/bin/git", []string{"push"}, allow); got != deny {
-		t.Errorf("cmdAction(/usr/bin/git, push) = %s, want deny", got)
+	if got := ea.resolveAction("/usr/bin/git", []string{"push"}, allow); got != deny {
+		t.Errorf("resolveAction(/usr/bin/git, push) = %s, want deny", got)
 	}
 }
 
@@ -1429,14 +1429,14 @@ func TestCmdActionLookPath(t *testing.T) {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
 
-	if got := ea.cmdAction(path, nil, deny); got != allow {
-		t.Errorf("cmdAction(%q) = %s, want allow", path, got)
+	if got := ea.resolveAction(path, nil, deny); got != allow {
+		t.Errorf("resolveAction(%q) = %s, want allow", path, got)
 	}
 
 	// Another executable of the same name elsewhere is not the one allowed.
 	other := makeExec(t, t.TempDir(), "prog")
-	if got := ea.cmdAction(other, nil, deny); got != deny {
-		t.Errorf("cmdAction(%q) = %s, want deny", other, got)
+	if got := ea.resolveAction(other, nil, deny); got != deny {
+		t.Errorf("resolveAction(%q) = %s, want deny", other, got)
 	}
 
 	// A command which can not be expanded can not be configured at all.

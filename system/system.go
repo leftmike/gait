@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -133,10 +134,10 @@ func newRWActions(cfg *config.RWActions, cwd, home string) (*rwActions, error) {
 	return &rwa, nil
 }
 
-// pathAction returns the action configured for path, which must already have
+// resolveAction returns the action configured for path, which must already have
 // been expanded: expandPath cleans both the configured paths and the path being
 // checked, so the two are compared in the same terms.
-func (rwa *rwActions) pathAction(path string, dflt action) action {
+func (rwa *rwActions) resolveAction(path string, dflt action) action {
 	if rwa == nil {
 		return dflt
 	}
@@ -158,52 +159,20 @@ func (rwa *rwActions) pathAction(path string, dflt action) action {
 	return dflt
 }
 
-// argPatterns is one rule for a command: the arguments must match patterns for
-// act to apply. The patterns match the leading arguments, one pattern per
-// argument, leaving any remaining arguments unconstrained; no patterns at all
-// matches the command however it is called.
-type argPatterns struct {
-	patterns []*regexp.Regexp
-	act      action
-}
-
-func (ap argPatterns) match(args []string) bool {
-	if len(ap.patterns) > len(args) {
-		return false
-	}
-
-	for i, re := range ap.patterns {
-		if !re.MatchString(args[i]) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (ap argPatterns) equal(patterns []*regexp.Regexp) bool {
-	if len(ap.patterns) != len(patterns) {
-		return false
-	}
-
-	for i, re := range ap.patterns {
-		if re.String() != patterns[i].String() {
-			return false
-		}
-	}
-
-	return true
+type cmdAction struct {
+	pats []*regexp.Regexp
+	act  action
 }
 
 type execActions struct {
-	cmds map[string][]argPatterns
+	cmds map[string][]cmdAction
 	dirs []dirAction
 }
 
 func (ea *execActions) addCmds(cmds [][]string, act action, cwd, home string) error {
 	for _, cmd := range cmds {
 		if len(cmd) == 0 {
-			return fmt.Errorf("sandbox: execute action must specify a command")
+			return errors.New("sandbox: execute action must specify a command")
 		}
 
 		// A bare command name is looked up on PATH, so that a command configured
@@ -223,31 +192,38 @@ func (ea *execActions) addCmds(cmds [][]string, act action, cwd, home string) er
 				path += "/"
 			}
 			ea.dirs = append(ea.dirs, dirAction{path, act})
-			continue
-		}
-
-		var patterns []*regexp.Regexp
-		for _, arg := range cmd[1:] {
-			re, err := regexp.Compile(arg)
-			if err != nil {
-				return fmt.Errorf("sandbox: %s: %s", cmd[0], err)
+		} else {
+			var pats []*regexp.Regexp
+			for _, arg := range cmd[1:] {
+				pat, err := regexp.Compile(arg)
+				if err != nil {
+					return fmt.Errorf("sandbox: %s: %s", cmd[0], err)
+				}
+				pats = append(pats, pat)
 			}
-			patterns = append(patterns, re)
-		}
 
-		if slices.ContainsFunc(ea.cmds[path],
-			func(ap argPatterns) bool {
-				return ap.equal(patterns)
-			}) {
+			found := slices.ContainsFunc(ea.cmds[path], func(ca cmdAction) bool {
+				if len(ca.pats) != len(pats) {
+					return false
+				}
 
-			return fmt.Errorf("sandbox: command specified more than once: %s",
-				strings.Join(cmd, " "))
-		}
+				for i, pat := range ca.pats {
+					if pat.String() != pats[i].String() {
+						return false
+					}
+				}
 
-		if ea.cmds == nil {
-			ea.cmds = map[string][]argPatterns{}
+				return true
+			})
+			if found {
+				return fmt.Errorf("sandbox: duplicate command: %s", strings.Join(cmd, " "))
+			}
+
+			if ea.cmds == nil {
+				ea.cmds = map[string][]cmdAction{}
+			}
+			ea.cmds[path] = append(ea.cmds[path], cmdAction{pats, act})
 		}
-		ea.cmds[path] = append(ea.cmds[path], argPatterns{patterns, act})
 	}
 
 	return nil
@@ -274,12 +250,12 @@ func newExecActions(cfg *config.ExecuteActions, cwd, home string) (*execActions,
 
 	// The most specific rule for a command is the one constraining the most
 	// arguments; of equally specific rules, the most restrictive applies.
-	for _, aps := range ea.cmds {
-		slices.SortStableFunc(aps, func(ap1, ap2 argPatterns) int {
-			if n := len(ap2.patterns) - len(ap1.patterns); n != 0 {
+	for _, cas := range ea.cmds {
+		slices.SortStableFunc(cas, func(ca1, ca2 cmdAction) int {
+			if n := len(ca2.pats) - len(ca1.pats); n != 0 {
 				return n
 			}
-			return int(ap1.act) - int(ap2.act)
+			return int(ca1.act) - int(ca2.act)
 		})
 	}
 
@@ -297,10 +273,10 @@ func newExecActions(cfg *config.ExecuteActions, cwd, home string) (*execActions,
 	return &ea, nil
 }
 
-// cmdAction returns the action configured for path, which must already have
+// resolveAction returns the action configured for path, which must already have
 // been expanded: expandPath resolves both the configured commands and the
 // command being run, so the two are compared in the same terms.
-func (ea *execActions) cmdAction(path string, args []string, dflt action) action {
+func (ea *execActions) resolveAction(path string, args []string, dflt action) action {
 	if ea == nil {
 		return dflt
 	}
@@ -308,9 +284,18 @@ func (ea *execActions) cmdAction(path string, args []string, dflt action) action
 	// A rule for the command itself is more specific than a rule for the
 	// directory it is in; a rule whose patterns don't match is not a rule for
 	// this command at all.
-	for _, ap := range ea.cmds[path] {
-		if ap.match(args) {
-			return ap.act
+	for _, ca := range ea.cmds[path] {
+		if len(ca.pats) <= len(args) {
+			i := 0
+			for {
+				if i == len(ca.pats) {
+					return ca.act
+				} else if !ca.pats[i].MatchString(args[i]) {
+					break
+				}
+
+				i += 1
+			}
 		}
 	}
 
@@ -388,7 +373,7 @@ func (sb *Sandbox) expandCheckRW(rwa *rwActions, op, path string) (string, error
 		return "", err
 	}
 
-	switch rwa.pathAction(path, sb.dflt) {
+	switch rwa.resolveAction(path, sb.dflt) {
 	case allow:
 		return path, nil
 	case ask:
@@ -452,7 +437,7 @@ func (sb *Sandbox) WalkDir(root string, fn fs.WalkDirFunc) error {
 			// that a denied file or subdirectory is simply not visible.
 			// Anything below root which needs asking is walked without asking;
 			// reading it is still checked.
-			if sb.readActions.pathAction(path, sb.dflt) == deny {
+			if sb.readActions.resolveAction(path, sb.dflt) == deny {
 				if d != nil && d.IsDir() {
 					return fs.SkipDir
 				}
@@ -474,7 +459,7 @@ func (sb *Sandbox) expandCheckExec(name string, args []string) (string, error) {
 
 	cmdline := strings.Join(append([]string{path}, args...), " ")
 
-	switch sb.executeActions.cmdAction(path, args, sb.dflt) {
+	switch sb.executeActions.resolveAction(path, args, sb.dflt) {
 	case allow:
 		return path, nil
 	case ask:
