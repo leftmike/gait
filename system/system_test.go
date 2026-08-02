@@ -1,12 +1,14 @@
 package system
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/leftmike/gait/config"
@@ -49,12 +51,12 @@ func TestNoAskFunc(t *testing.T) {
 		Read:  &config.RWActions{Ask: []string{"/data/"}},
 		Write: &config.RWActions{Ask: []string{"/data/"}},
 	}, nil)
-	wantPathError(t, sb.checkRW(sb.readActions, "read", "/data/x.txt"), "read", "/data/x.txt")
-	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
+	wantPathError(t, checkRW(sb, sb.readActions, "read", "/data/x.txt"), "read", "/data/x.txt")
+	wantPathError(t, checkRW(sb, sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
 
 	// A nil ask func with nothing to ask about is still unrestricted.
 	sb = checkSandbox(t, nil, nil)
-	if err := sb.checkRW(sb.readActions, "read", "/data/x.txt"); err != nil {
+	if err := checkRW(sb, sb.readActions, "read", "/data/x.txt"); err != nil {
 		t.Errorf("checkRW read on an unrestricted sandbox failed: %s", err)
 	}
 }
@@ -67,10 +69,10 @@ func TestSandboxAskFuncIndependent(t *testing.T) {
 	allowSB := checkSandbox(t, cfg, allowAsk.ask)
 	denySB := checkSandbox(t, cfg, denyAsk.ask)
 
-	if err := allowSB.checkRW(allowSB.readActions, "read", "/data/x.txt"); err != nil {
+	if err := checkRW(allowSB, allowSB.readActions, "read", "/data/x.txt"); err != nil {
 		t.Errorf("checkRW read on the allowing sandbox failed: %s", err)
 	}
-	wantPathError(t, denySB.checkRW(denySB.readActions, "read", "/data/x.txt"), "read",
+	wantPathError(t, checkRW(denySB, denySB.readActions, "read", "/data/x.txt"), "read",
 		"/data/x.txt")
 
 	if allowAsk.calls != 1 || denyAsk.calls != 1 {
@@ -89,14 +91,259 @@ func (a action) String() string {
 	}
 }
 
-func TestAddPaths(t *testing.T) {
-	var rwa rwActions
+// checkExpandPath expands path and compares the result with what is wanted.
+func checkExpandPath(t *testing.T, path, cwd, home string, look bool, wantPath string,
+	wantDir bool) {
 
-	err := rwa.addPaths([]string{"/etc/hosts", "/home/mike/", "/a/b/c.txt"}, allow)
+	t.Helper()
+
+	gotPath, gotDir, err := expandPath(path, cwd, home, look)
+	if err != nil {
+		t.Errorf("expandPath(%q) failed: %s", path, err)
+		return
+	}
+	if gotPath != wantPath || gotDir != wantDir {
+		t.Errorf("expandPath(%q) = %q, %v; want %q, %v", path, gotPath, gotDir, wantPath,
+			wantDir)
+	}
+}
+
+func TestExpandPathAbsolute(t *testing.T) {
+	// An absolute path is used as given, cleaned; cwd and home are not consulted.
+	path := testPath(t)
+	cwd, home := t.TempDir(), t.TempDir()
+
+	cases := []struct {
+		path    string
+		want    string
+		wantDir bool
+	}{
+		{path("etc/hosts"), path("etc/hosts"), false},
+		{path("etc/hosts/"), path("etc/hosts"), true}, // trailing / on a missing path
+		{path("etc/./hosts"), path("etc/hosts"), false},
+		{path("etc/x/../hosts"), path("etc/hosts"), false},
+		{path("etc//hosts"), path("etc/hosts"), false},
+		{path("etc/hosts//"), path("etc/hosts"), true},
+		{"/", "/", true}, // cleaning / must not produce //
+	}
+
+	for _, c := range cases {
+		checkExpandPath(t, c.path, cwd, home, false, c.want, c.wantDir)
+		// look only affects bare names, never absolute paths.
+		checkExpandPath(t, c.path, cwd, home, true, c.want, c.wantDir)
+	}
+}
+
+func TestExpandPathCwd(t *testing.T) {
+	// "." and "./" are relative to cwd.
+	cwd, home := t.TempDir(), t.TempDir()
+	sub := filepath.Join(cwd, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatalf("Mkdir(%q) failed: %s", sub, err)
+	}
+	file := filepath.Join(cwd, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) failed: %s", file, err)
+	}
+
+	cases := []struct {
+		path    string
+		want    string
+		wantDir bool
+	}{
+		{".", cwd, true},
+		{"./", cwd, true},
+		{"./sub", sub, true},  // a directory on disk, without a trailing /
+		{"./sub/", sub, true}, // and with one
+		{"./file.txt", file, false},
+		{"./missing", filepath.Join(cwd, "missing"), false},
+		{"./missing/", filepath.Join(cwd, "missing"), true},
+		{"./a/../b", filepath.Join(cwd, "b"), false},
+		{"./sub/./x", filepath.Join(sub, "x"), false},
+		{"./sub/../sub/x", filepath.Join(sub, "x"), false},
+		// "./.." escapes cwd; expansion does not prevent that.
+		{"./..", filepath.Dir(cwd), true},
+	}
+
+	for _, c := range cases {
+		checkExpandPath(t, c.path, cwd, home, false, c.want, c.wantDir)
+		checkExpandPath(t, c.path, cwd, home, true, c.want, c.wantDir)
+	}
+}
+
+func TestExpandPathHome(t *testing.T) {
+	// "~" and "~/" are relative to home, not to cwd.
+	cwd, home := t.TempDir(), t.TempDir()
+	sub := filepath.Join(home, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatalf("Mkdir(%q) failed: %s", sub, err)
+	}
+	file := filepath.Join(home, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) failed: %s", file, err)
+	}
+	// A decoy of the same name in cwd, so that expanding relative to the wrong
+	// base is visible in the result.
+	if err := os.WriteFile(filepath.Join(cwd, "file.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile in cwd failed: %s", err)
+	}
+
+	cases := []struct {
+		path    string
+		want    string
+		wantDir bool
+	}{
+		{"~", home, true},
+		{"~/", home, true},
+		{"~/sub", sub, true},
+		{"~/sub/", sub, true},
+		{"~/file.txt", file, false},
+		{"~/missing", filepath.Join(home, "missing"), false},
+		{"~/missing/", filepath.Join(home, "missing"), true},
+		{"~/a/../b", filepath.Join(home, "b"), false},
+	}
+
+	for _, c := range cases {
+		checkExpandPath(t, c.path, cwd, home, false, c.want, c.wantDir)
+		checkExpandPath(t, c.path, cwd, home, true, c.want, c.wantDir)
+	}
+}
+
+func TestExpandPathExisting(t *testing.T) {
+	// What exists on disk decides isDir: a directory is a directory rule however
+	// it is written, and a file with a trailing / is a mistake.
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatalf("Mkdir(%q) failed: %s", sub, err)
+	}
+	file := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) failed: %s", file, err)
+	}
+
+	dirLink := filepath.Join(root, "dirlink")
+	if err := os.Symlink(sub, dirLink); err != nil {
+		t.Fatalf("Symlink(%q) failed: %s", dirLink, err)
+	}
+	fileLink := filepath.Join(root, "filelink")
+	if err := os.Symlink(file, fileLink); err != nil {
+		t.Fatalf("Symlink(%q) failed: %s", fileLink, err)
+	}
+
+	cases := []struct {
+		path    string
+		want    string
+		wantDir bool
+	}{
+		{root, root, true},
+		{sub, sub, true},
+		{file, file, false},
+		// Symlinks are followed, so a link to a directory is a directory.
+		{dirLink, dirLink, true},
+		{dirLink + "/", dirLink, true},
+		{fileLink, fileLink, false},
+		// A file rule does not cover children, and a missing child of a file is
+		// not an error here.
+		{filepath.Join(file, "child"), filepath.Join(file, "child"), false},
+	}
+
+	for _, c := range cases {
+		checkExpandPath(t, c.path, root, root, false, c.want, c.wantDir)
+	}
+
+	// A trailing / on something which exists and is not a directory is an error.
+	for _, p := range []string{file + "/", fileLink + "/"} {
+		if _, _, err := expandPath(p, root, root, false); err == nil {
+			t.Errorf("expandPath(%q) did not fail for a file with a trailing /", p)
+		}
+	}
+}
+
+func TestExpandPathErrors(t *testing.T) {
+	cwd, home := t.TempDir(), t.TempDir()
+
+	// A relative path must start with "./"; a bare name is only looked up when
+	// look is set, and never when it contains a "/".
+	for _, path := range []string{"", "foo", "a/b", "sub/", "..", "../a", "~x", "~user/x",
+		".hidden"} {
+
+		if _, _, err := expandPath(path, cwd, home, false); err == nil {
+			t.Errorf("expandPath(%q) did not fail", path)
+		}
+	}
+
+	// Even with look set, anything containing a "/" is rejected rather than
+	// looked up.
+	for _, path := range []string{"a/b", "sub/", "../a", "~user/x"} {
+		if _, _, err := expandPath(path, cwd, home, true); err == nil {
+			t.Errorf("expandPath(%q) with look did not fail", path)
+		}
+	}
+}
+
+func TestExpandPathLook(t *testing.T) {
+	// A bare name is resolved on PATH, but only when look is set.
+	dir := t.TempDir()
+	cmd := makeExec(t, dir, "gaitcmd")
+	t.Setenv("PATH", dir)
+
+	checkExpandPath(t, "gaitcmd", t.TempDir(), t.TempDir(), true, cmd, false)
+
+	if _, _, err := expandPath("gaitcmd", dir, dir, false); err == nil {
+		t.Errorf("expandPath(%q) without look did not fail", "gaitcmd")
+	}
+	if _, _, err := expandPath("no-such-command", dir, dir, true); err == nil {
+		t.Errorf("expandPath of a command which is not on PATH did not fail")
+	}
+}
+
+func TestAddPathsExpands(t *testing.T) {
+	// The paths in the configuration go through expandPath, so "./" and "~/"
+	// work there.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	// t.Chdir may land on a path which differs from cwd by a symlink, and
+	// expandPath uses what os.Getwd reports.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd failed: %s", err)
+	}
+
+	var rwa rwActions
+	err = rwa.addPaths([]string{"./notes.txt", "~/.ssh/", "./data/"}, allow, cwd, home)
 	if err != nil {
 		t.Fatalf("addPaths failed: %s", err)
 	}
-	err = rwa.addPaths([]string{"/home/mike/.ssh/", "/etc/shadow"}, deny)
+
+	wantFiles := map[string]action{filepath.Join(cwd, "notes.txt"): allow}
+	if !maps.Equal(rwa.files, wantFiles) {
+		t.Errorf("addPaths files = %v, want %v", rwa.files, wantFiles)
+	}
+	wantDirs := []dirAction{
+		{filepath.Join(home, ".ssh") + "/", allow},
+		{filepath.Join(cwd, "data") + "/", allow},
+	}
+	if !slices.Equal(rwa.dirs, wantDirs) {
+		t.Errorf("addPaths dirs = %v, want %v", rwa.dirs, wantDirs)
+	}
+
+	// Commands are not looked up on PATH for read and write rules.
+	if err := rwa.addPaths([]string{"sh"}, allow, cwd, home); err == nil {
+		t.Errorf("addPaths of a bare name did not fail")
+	}
+}
+
+func TestAddPaths(t *testing.T) {
+	var rwa rwActions
+
+	err := rwa.addPaths([]string{"/etc/hosts", "/home/mike/", "/a/b/c.txt"}, allow, "", "")
+	if err != nil {
+		t.Fatalf("addPaths failed: %s", err)
+	}
+	err = rwa.addPaths([]string{"/home/mike/.ssh/", "/etc/shadow"}, deny, "", "")
 	if err != nil {
 		t.Fatalf("addPaths failed: %s", err)
 	}
@@ -120,7 +367,7 @@ func TestAddPathsEmpty(t *testing.T) {
 	// Only directories: the files map is never allocated, and looking a path up
 	// in the nil map must not panic.
 	var rwa rwActions
-	if err := rwa.addPaths([]string{"/data/"}, allow); err != nil {
+	if err := rwa.addPaths([]string{"/data/"}, allow, "", ""); err != nil {
 		t.Fatalf("addPaths failed: %s", err)
 	}
 	if rwa.files != nil {
@@ -131,29 +378,29 @@ func TestAddPathsEmpty(t *testing.T) {
 	}
 
 	// No paths at all is not an error.
-	if err := rwa.addPaths(nil, allow); err != nil {
+	if err := rwa.addPaths(nil, allow, "", ""); err != nil {
 		t.Errorf("addPaths(nil) failed: %s", err)
 	}
 }
 
 func TestAddPathsDuplicateFile(t *testing.T) {
 	var rwa rwActions
-	if err := rwa.addPaths([]string{"/a/b"}, allow); err != nil {
+	if err := rwa.addPaths([]string{"/a/b"}, allow, "", ""); err != nil {
 		t.Fatalf("addPaths failed: %s", err)
 	}
-	if err := rwa.addPaths([]string{"/a/b"}, deny); err == nil {
+	if err := rwa.addPaths([]string{"/a/b"}, deny, "", ""); err == nil {
 		t.Error("addPaths with duplicate file path did not fail")
 	}
 
 	// Within a single call as well.
 	var rwa2 rwActions
-	if err := rwa2.addPaths([]string{"/a/b", "/a/b"}, allow); err == nil {
+	if err := rwa2.addPaths([]string{"/a/b", "/a/b"}, allow, "", ""); err == nil {
 		t.Error("addPaths with repeated file path did not fail")
 	}
 }
 
 func TestNewRWActionsNil(t *testing.T) {
-	rwa, err := newRWActions(nil)
+	rwa, err := newRWActions(nil, "", "")
 	if err != nil {
 		t.Fatalf("newRWActions(nil) failed: %s", err)
 	}
@@ -169,7 +416,7 @@ func TestNewRWActionsNil(t *testing.T) {
 }
 
 func TestNewRWActionsEmpty(t *testing.T) {
-	rwa, err := newRWActions(&config.RWActions{})
+	rwa, err := newRWActions(&config.RWActions{}, "", "")
 	if err != nil {
 		t.Fatalf("newRWActions failed: %s", err)
 	}
@@ -181,12 +428,28 @@ func TestNewRWActionsEmpty(t *testing.T) {
 	}
 }
 
+// testPath returns a function which places a path beneath a temporary
+// directory, leaving it otherwise untouched. Nothing beneath that directory
+// exists unless the test creates it, so which paths are directories on disk is
+// under the test's control.
+func testPath(t *testing.T) func(path string) string {
+	t.Helper()
+
+	root := t.TempDir()
+	return func(path string) string {
+		return root + "/" + path
+	}
+}
+
 func TestPathAction(t *testing.T) {
+	// None of these paths exists, so every one without a trailing "/" is a file
+	// rule.
+	path := testPath(t)
 	rwa, err := newRWActions(&config.RWActions{
-		Allow: []string{"/home/mike/", "/etc/hosts"},
-		Ask:   []string{"/home/mike/secrets/", "/tmp/scratch"},
-		Deny:  []string{"/home/mike/.ssh"},
-	})
+		Allow: []string{path("home/"), path("etc/hosts")},
+		Ask:   []string{path("home/secrets/"), path("tmp/scratch")},
+		Deny:  []string{path("home/.ssh")},
+	}, "", "")
 	if err != nil {
 		t.Fatalf("newRWActions failed: %s", err)
 	}
@@ -195,18 +458,66 @@ func TestPathAction(t *testing.T) {
 		path string
 		want action
 	}{
-		{"/etc/hosts", allow},               // exact file allow
-		{"/tmp/scratch", ask},               // exact file ask
-		{"/home/mike/.ssh", deny},           // exact file deny
-		{"/home/mike/notes.txt", allow},     // beneath the allowed directory
-		{"/home/mike/sub/notes.txt", allow}, // deeper beneath it
-		{"/home/mike/.ssh/config", allow},   // a file rule does not cover children
-		{"/etc/hostsX", deny},               // no prefix matching on a file rule
-		{"/var/log/messages", deny},         // nothing matches -> default
-		{"/home/mike", allow},               // the directory itself, so it can be made & removed
-		{"/home/mikex", deny},               // but not a sibling sharing the prefix
-		{"/home/mike/secrets/keys", ask},    // more specific ask beats the allow
-		{"/home/mike/secrets/a/b.txt", ask}, // deeper beneath the ask directory
+		{path("etc/hosts"), allow},          // exact file allow
+		{path("tmp/scratch"), ask},          // exact file ask
+		{path("home/.ssh"), deny},           // exact file deny
+		{path("home/notes.txt"), allow},     // beneath the allowed directory
+		{path("home/sub/notes.txt"), allow}, // deeper beneath it
+		{path("home/.ssh/config"), allow},   // a file rule does not cover children
+		{path("etc/hostsX"), deny},          // no prefix matching on a file rule
+		{path("var/log/messages"), deny},    // nothing matches -> default
+		{path("home"), allow},               // the directory itself, so it can be made & removed
+		{path("homex"), deny},               // but not a sibling sharing the prefix
+		{path("home/secrets/keys"), ask},    // more specific ask beats the allow
+		{path("home/secrets/a/b.txt"), ask}, // deeper beneath the ask directory
+	}
+
+	for _, c := range cases {
+		if got := rwa.pathAction(c.path, deny); got != c.want {
+			t.Errorf("pathAction(%q) = %s, want %s", c.path, got, c.want)
+		}
+	}
+}
+
+func TestPathActionExistingDir(t *testing.T) {
+	// A path which is a directory on disk is a directory rule even without a
+	// trailing "/", so it covers everything within it; a path which is a file is
+	// not.
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q) failed: %s", sub, err)
+	}
+	file := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) failed: %s", file, err)
+	}
+
+	rwa, err := newRWActions(&config.RWActions{
+		Allow: []string{root},
+		Deny:  []string{sub, file},
+	}, "", "")
+	if err != nil {
+		t.Fatalf("newRWActions failed: %s", err)
+	}
+
+	wantDirs := []dirAction{{sub + "/", deny}, {root + "/", allow}}
+	if !slices.Equal(rwa.dirs, wantDirs) {
+		t.Errorf("dirs = %v, want %v", rwa.dirs, wantDirs)
+	}
+	if wantFiles := map[string]action{file: deny}; !maps.Equal(rwa.files, wantFiles) {
+		t.Errorf("files = %v, want %v", rwa.files, wantFiles)
+	}
+
+	cases := []struct {
+		path string
+		want action
+	}{
+		{filepath.Join(sub, "x.txt"), deny},       // within the denied directory
+		{filepath.Join(sub, "a", "b.txt"), deny},  // deeper within it
+		{file, deny},                              // the denied file itself
+		{filepath.Join(file, "child"), allow},     // a file rule does not cover children
+		{filepath.Join(root, "other.txt"), allow}, // elsewhere beneath the allowed root
 	}
 
 	for _, c := range cases {
@@ -217,32 +528,34 @@ func TestPathAction(t *testing.T) {
 }
 
 func TestPathActionClean(t *testing.T) {
-	// Both the configured paths and the path under test are cleaned before
-	// matching, so "." and ".." elements cannot slip past a rule.
+	// The configured paths are cleaned as they are expanded, so "." and ".."
+	// elements in the configuration match the same rules as the cleaned paths
+	// do. pathAction itself is given already expanded paths; that unclean paths
+	// can not slip past a rule is checked in TestCheckRWUncleanPath.
+	path := testPath(t)
 	rwa, err := newRWActions(&config.RWActions{
-		Allow: []string{"/home/mike/"},
-		Deny:  []string{"/home/mike/./secrets/keys/", "/home/mike/x/../.ssh"},
-	})
+		Allow: []string{path("home/")},
+		Deny:  []string{path("home/./secrets/keys/"), path("home/x/../.ssh")},
+	}, "", "")
 	if err != nil {
 		t.Fatalf("newRWActions failed: %s", err)
 	}
 
-	wantDirs := []dirAction{{"/home/mike/secrets/keys/", deny}, {"/home/mike/", allow}}
+	wantDirs := []dirAction{{path("home/secrets/keys/"), deny}, {path("home/"), allow}}
 	if !slices.Equal(rwa.dirs, wantDirs) {
 		t.Errorf("dirs = %v, want %v", rwa.dirs, wantDirs)
+	}
+	if wantFiles := map[string]action{path("home/.ssh"): deny}; !maps.Equal(rwa.files, wantFiles) {
+		t.Errorf("files = %v, want %v", rwa.files, wantFiles)
 	}
 
 	cases := []struct {
 		path string
 		want action
 	}{
-		{"/home/mike/../mike/notes.txt", allow},
-		{"/home/mike/./notes.txt", allow},
-		{"/home/mike/secrets/keys/id_rsa", deny},
-		{"/home/mike/../mike/secrets/keys/id_rsa", deny},
-		{"/home/mike/secrets/../secrets/keys/id_rsa", deny},
-		{"/home/mike/.ssh", deny},
-		{"/home/mike/a/b/../../.ssh", deny},
+		{path("home/notes.txt"), allow},
+		{path("home/secrets/keys/id_rsa"), deny},
+		{path("home/.ssh"), deny},
 	}
 
 	for _, c := range cases {
@@ -254,7 +567,7 @@ func TestPathActionClean(t *testing.T) {
 
 func TestPathActionRootDir(t *testing.T) {
 	// Cleaning "/" must not turn it into "//".
-	rwa, err := newRWActions(&config.RWActions{Allow: []string{"/"}})
+	rwa, err := newRWActions(&config.RWActions{Allow: []string{"/"}}, "", "")
 	if err != nil {
 		t.Fatalf("newRWActions failed: %s", err)
 	}
@@ -274,7 +587,7 @@ func TestPathActionFileBeatsDir(t *testing.T) {
 	rwa, err := newRWActions(&config.RWActions{
 		Allow: []string{"/data/"},
 		Deny:  []string{"/data/secret.txt"},
-	})
+	}, "", "")
 	if err != nil {
 		t.Fatalf("newRWActions failed: %s", err)
 	}
@@ -288,7 +601,7 @@ func TestPathActionFileBeatsDir(t *testing.T) {
 }
 
 func TestPathActionDefault(t *testing.T) {
-	rwa, err := newRWActions(&config.RWActions{Allow: []string{"/data/"}})
+	rwa, err := newRWActions(&config.RWActions{Allow: []string{"/data/"}}, "", "")
 	if err != nil {
 		t.Fatalf("newRWActions failed: %s", err)
 	}
@@ -304,7 +617,7 @@ func TestNewRWActionsDuplicateFile(t *testing.T) {
 	_, err := newRWActions(&config.RWActions{
 		Allow: []string{"/a/b"},
 		Deny:  []string{"/a/b"},
-	})
+	}, "", "")
 	if err == nil {
 		t.Error("newRWActions with a duplicate file path did not fail")
 	}
@@ -314,7 +627,7 @@ func TestNewRWActionsDuplicateDir(t *testing.T) {
 	_, err := newRWActions(&config.RWActions{
 		Allow: []string{"/a/b/"},
 		Deny:  []string{"/a/b/"},
-	})
+	}, "", "")
 	if err == nil {
 		t.Error("newRWActions with a duplicate directory did not fail")
 	}
@@ -324,7 +637,7 @@ func TestNewRWActionsDuplicateDir(t *testing.T) {
 	_, err = newRWActions(&config.RWActions{
 		Allow: []string{"/a/b/", "/c/d/"},
 		Deny:  []string{"/a/b/"},
-	})
+	}, "", "")
 	if err == nil {
 		t.Error("newRWActions with a non-adjacent duplicate directory did not fail")
 	}
@@ -337,7 +650,7 @@ func TestPathActionMostSpecificDir(t *testing.T) {
 		Allow: []string{"/home/mike/"},
 		Ask:   []string{"/home/mike/secrets/"},
 		Deny:  []string{"/home/mike/secrets/keys/"},
-	})
+	}, "", "")
 	if err != nil {
 		t.Fatalf("newRWActions failed: %s", err)
 	}
@@ -403,6 +716,14 @@ func checkSandbox(t *testing.T, cfg *config.SandboxConfig, ask AskFunc) *Sandbox
 	return sb
 }
 
+// checkRW expands and checks path, dropping the expanded path, for the tests
+// which only care whether the operation is allowed. The paths they use are
+// absolute, so expansion leaves them as they are.
+func checkRW(sb *Sandbox, rwa *rwActions, op, path string) error {
+	_, err := sb.expandCheckRW(rwa, op, path)
+	return err
+}
+
 func TestCheckRW(t *testing.T) {
 	sb := checkSandbox(t,
 		&config.SandboxConfig{
@@ -411,21 +732,21 @@ func TestCheckRW(t *testing.T) {
 		}, nil)
 
 	// Reads are governed by the read actions.
-	if err := sb.checkRW(sb.readActions, "read", "/data/in.txt"); err != nil {
+	if err := checkRW(sb, sb.readActions, "read", "/data/in.txt"); err != nil {
 		t.Errorf("checkRW(read, /data/in.txt) failed: %s", err)
 	}
-	if err := sb.checkRW(sb.readActions, "read", "/etc/hosts"); err != nil {
+	if err := checkRW(sb, sb.readActions, "read", "/etc/hosts"); err != nil {
 		t.Errorf("checkRW(read, /etc/hosts) failed: %s", err)
 	}
-	wantPathError(t, sb.checkRW(sb.readActions, "read", "/etc/shadow"), "read", "/etc/shadow")
+	wantPathError(t, checkRW(sb, sb.readActions, "read", "/etc/shadow"), "read", "/etc/shadow")
 
 	// Writes are governed by the write actions, which are separate: /data/ is
 	// readable but only /data/out/ is writable.
-	if err := sb.checkRW(sb.writeActions, "write", "/data/out/x.txt"); err != nil {
+	if err := checkRW(sb, sb.writeActions, "write", "/data/out/x.txt"); err != nil {
 		t.Errorf("checkRW(write, /data/out/x.txt) failed: %s", err)
 	}
-	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/data/in.txt"), "write", "/data/in.txt")
-	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/etc/hosts"), "write", "/etc/hosts")
+	wantPathError(t, checkRW(sb, sb.writeActions, "write", "/data/in.txt"), "write", "/data/in.txt")
+	wantPathError(t, checkRW(sb, sb.writeActions, "write", "/etc/hosts"), "write", "/etc/hosts")
 }
 
 func TestCheckRWAsk(t *testing.T) {
@@ -437,7 +758,7 @@ func TestCheckRWAsk(t *testing.T) {
 	// Granted: no error, and the op and path are passed through to the ask func.
 	ar := &askRecorder{resp: true}
 	sb := checkSandbox(t, cfg, ar.ask)
-	if err := sb.checkRW(sb.readActions, "read", "/data/x.txt"); err != nil {
+	if err := checkRW(sb, sb.readActions, "read", "/data/x.txt"); err != nil {
 		t.Errorf("checkRW read with granted ask failed: %s", err)
 	}
 	if ar.calls != 1 {
@@ -448,7 +769,7 @@ func TestCheckRWAsk(t *testing.T) {
 			"/data/x.txt")
 	}
 
-	if err := sb.checkRW(sb.writeActions, "write", "/data/x.txt"); err != nil {
+	if err := checkRW(sb, sb.writeActions, "write", "/data/x.txt"); err != nil {
 		t.Errorf("checkRW write with granted ask failed: %s", err)
 	}
 	if ar.lastOp != "write" {
@@ -457,8 +778,8 @@ func TestCheckRWAsk(t *testing.T) {
 
 	// Declined: a permission error.
 	sb = checkSandbox(t, cfg, (&askRecorder{resp: false}).ask)
-	wantPathError(t, sb.checkRW(sb.readActions, "read", "/data/x.txt"), "read", "/data/x.txt")
-	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
+	wantPathError(t, checkRW(sb, sb.readActions, "read", "/data/x.txt"), "read", "/data/x.txt")
+	wantPathError(t, checkRW(sb, sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
 }
 
 func TestCheckRWNoAsk(t *testing.T) {
@@ -471,12 +792,12 @@ func TestCheckRWNoAsk(t *testing.T) {
 			Write: &config.RWActions{Allow: []string{"/data/"}, Deny: []string{"/data/no/"}},
 		}, ar.ask)
 
-	if err := sb.checkRW(sb.readActions, "read", "/data/x.txt"); err != nil {
+	if err := checkRW(sb, sb.readActions, "read", "/data/x.txt"); err != nil {
 		t.Errorf("checkRW(read, /data/x.txt) failed: %s", err)
 	}
-	wantPathError(t, sb.checkRW(sb.readActions, "read", "/data/no/x.txt"), "read",
+	wantPathError(t, checkRW(sb, sb.readActions, "read", "/data/no/x.txt"), "read",
 		"/data/no/x.txt")
-	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/elsewhere"), "write", "/elsewhere")
+	wantPathError(t, checkRW(sb, sb.writeActions, "write", "/elsewhere"), "write", "/elsewhere")
 
 	if ar.calls != 0 {
 		t.Errorf("ask func called %d times, want 0", ar.calls)
@@ -490,13 +811,14 @@ func TestCheckRWUncleanPath(t *testing.T) {
 			Write: &config.RWActions{Allow: []string{"/data/"}, Deny: []string{"/data/no/"}},
 		}, nil)
 
-	// The path is cleaned before matching, so ".." cannot escape a deny.
+	// The path is cleaned before matching, so ".." cannot escape a deny; the
+	// error names the expanded path, which is the one that was checked.
 	const unclean = "/data/yes/../no/x.txt"
-	wantPathError(t, sb.checkRW(sb.readActions, "read", unclean), "read", unclean)
-	wantPathError(t, sb.checkRW(sb.writeActions, "write", unclean), "write", unclean)
+	wantPathError(t, checkRW(sb, sb.readActions, "read", unclean), "read", "/data/no/x.txt")
+	wantPathError(t, checkRW(sb, sb.writeActions, "write", unclean), "write", "/data/no/x.txt")
 
 	// An unclean path that lands somewhere allowed is still allowed.
-	if err := sb.checkRW(sb.readActions, "read", "/data/./a/../x.txt"); err != nil {
+	if err := checkRW(sb, sb.readActions, "read", "/data/./a/../x.txt"); err != nil {
 		t.Errorf("checkRW(read, /data/./a/../x.txt) failed: %s", err)
 	}
 }
@@ -510,18 +832,18 @@ func TestCheckRWMissingConfig(t *testing.T) {
 	if sb.writeActions != nil {
 		t.Fatalf("writeActions = %v, want nil", sb.writeActions)
 	}
-	if err := sb.checkRW(sb.readActions, "read", "/data/x.txt"); err != nil {
+	if err := checkRW(sb, sb.readActions, "read", "/data/x.txt"); err != nil {
 		t.Errorf("checkRW(read, /data/x.txt) failed: %s", err)
 	}
-	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
+	wantPathError(t, checkRW(sb, sb.writeActions, "write", "/data/x.txt"), "write", "/data/x.txt")
 
 	// A config block with no paths in it denies everything too.
 	sb = checkSandbox(t, &config.SandboxConfig{
 		Read:  &config.RWActions{},
 		Write: &config.RWActions{},
 	}, nil)
-	wantPathError(t, sb.checkRW(sb.readActions, "read", "/anything"), "read", "/anything")
-	wantPathError(t, sb.checkRW(sb.writeActions, "write", "/anything"), "write", "/anything")
+	wantPathError(t, checkRW(sb, sb.readActions, "read", "/anything"), "read", "/anything")
+	wantPathError(t, checkRW(sb, sb.writeActions, "write", "/anything"), "write", "/anything")
 }
 
 func TestCheckRWNoSandbox(t *testing.T) {
@@ -530,16 +852,210 @@ func TestCheckRWNoSandbox(t *testing.T) {
 	ar := &askRecorder{resp: false}
 	sb := checkSandbox(t, nil, ar.ask)
 
-	for _, p := range []string{"/anything", "/etc/shadow", "relative/path"} {
-		if err := sb.checkRW(sb.readActions, "read", p); err != nil {
+	for _, p := range []string{"/anything", "/etc/shadow", "./relative/path", "~/x"} {
+		if err := checkRW(sb, sb.readActions, "read", p); err != nil {
 			t.Errorf("checkRW(read, %q) failed: %s", p, err)
 		}
-		if err := sb.checkRW(sb.writeActions, "write", p); err != nil {
+		if err := checkRW(sb, sb.writeActions, "write", p); err != nil {
 			t.Errorf("checkRW(write, %q) failed: %s", p, err)
 		}
 	}
 	if ar.calls != 0 {
 		t.Errorf("ask func called %d times, want 0", ar.calls)
+	}
+
+	// Expansion happens whether or not a sandbox is configured, so a path which
+	// can not be expanded is refused even when nothing is restricted.
+	if err := checkRW(sb, sb.readActions, "read", "relative/path"); err == nil {
+		t.Errorf("checkRW(read, %q) did not fail", "relative/path")
+	}
+}
+
+func TestExpandCheckRW(t *testing.T) {
+	// The path being checked goes through the same expansion as the configured
+	// paths, and the expanded path is what is returned.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd failed: %s", err)
+	}
+
+	sb := checkSandbox(t,
+		&config.SandboxConfig{
+			Read: &config.RWActions{
+				Allow: []string{"./data/", "~/notes.txt"},
+				Deny:  []string{"./data/secret/"},
+			},
+		}, nil)
+
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"./data/x.txt", filepath.Join(cwd, "data", "x.txt")},
+		{"./data/a/../x.txt", filepath.Join(cwd, "data", "x.txt")},
+		{"~/notes.txt", filepath.Join(home, "notes.txt")},
+		// The same file named absolutely is the same file.
+		{filepath.Join(cwd, "data", "x.txt"), filepath.Join(cwd, "data", "x.txt")},
+	}
+
+	for _, c := range cases {
+		got, err := sb.expandCheckRW(sb.readActions, "read", c.path)
+		if err != nil {
+			t.Errorf("expandCheckRW(%q) failed: %s", c.path, err)
+		} else if got != c.want {
+			t.Errorf("expandCheckRW(%q) = %q, want %q", c.path, got, c.want)
+		}
+	}
+
+	// cwd itself is outside of the allowed directory, and the error names the
+	// expanded path.
+	_, err = sb.expandCheckRW(sb.readActions, "read", ".")
+	wantPathError(t, err, "read", cwd)
+
+	// A rule written with "./" still denies what is beneath it, however the
+	// path being checked is written.
+	for _, p := range []string{"./data/secret/keys", filepath.Join(cwd, "data/secret/keys")} {
+		_, err := sb.expandCheckRW(sb.readActions, "read", p)
+		wantPathError(t, err, "read", filepath.Join(cwd, "data", "secret", "keys"))
+	}
+
+	// A path which can not be expanded fails before any action is consulted,
+	// with the expansion error rather than a permission error.
+	_, err = sb.expandCheckRW(sb.readActions, "read", "data/x.txt")
+	if err == nil {
+		t.Errorf("expandCheckRW of a bare relative path did not fail")
+	} else if errors.Is(err, fs.ErrPermission) {
+		t.Errorf("expandCheckRW of a bare relative path = %v, want an expansion error", err)
+	}
+}
+
+func TestExpandCheckRWAsk(t *testing.T) {
+	// The user is asked about the expanded path, not the one as written.
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd failed: %s", err)
+	}
+
+	ar := &askRecorder{resp: true}
+	sb := checkSandbox(t,
+		&config.SandboxConfig{Read: &config.RWActions{Ask: []string{"./data/"}}}, ar.ask)
+
+	got, err := sb.expandCheckRW(sb.readActions, "read", "./data/x.txt")
+	if err != nil {
+		t.Fatalf("expandCheckRW failed: %s", err)
+	}
+	want := filepath.Join(cwd, "data", "x.txt")
+	if got != want {
+		t.Errorf("expandCheckRW = %q, want %q", got, want)
+	}
+	if ar.calls != 1 || ar.lastOp != "read" || ar.lastPath != want {
+		t.Errorf("ask called %d times with (%q, %q), want 1 time with (%q, %q)", ar.calls,
+			ar.lastOp, ar.lastPath, "read", want)
+	}
+}
+
+func TestSandboxOpsExpand(t *testing.T) {
+	// The operations act on the expanded path, so a relative or ~ path reaches
+	// the file the rules were checked against.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+
+	sb := checkSandbox(t,
+		&config.SandboxConfig{
+			Read:  &config.RWActions{Allow: []string{"./", "~/"}},
+			Write: &config.RWActions{Allow: []string{"./", "~/"}},
+		}, nil)
+
+	if err := sb.WriteFile("./x.txt", []byte("cwd"), 0o644); err != nil {
+		t.Fatalf("WriteFile(./x.txt) failed: %s", err)
+	}
+	if err := sb.WriteFile("~/x.txt", []byte("home"), 0o644); err != nil {
+		t.Fatalf("WriteFile(~/x.txt) failed: %s", err)
+	}
+
+	// Each landed where it was expanded to, and not in the other directory.
+	for _, c := range []struct{ dir, want string }{{cwd, "cwd"}, {home, "home"}} {
+		data, err := os.ReadFile(filepath.Join(c.dir, "x.txt"))
+		if err != nil {
+			t.Fatalf("ReadFile(%q) failed: %s", filepath.Join(c.dir, "x.txt"), err)
+		}
+		if string(data) != c.want {
+			t.Errorf("%s/x.txt = %q, want %q", c.dir, data, c.want)
+		}
+	}
+
+	for _, c := range []struct{ path, want string }{{"./x.txt", "cwd"}, {"~/x.txt", "home"}} {
+		data, err := sb.ReadFile(c.path)
+		if err != nil {
+			t.Errorf("ReadFile(%q) failed: %s", c.path, err)
+		} else if string(data) != c.want {
+			t.Errorf("ReadFile(%q) = %q, want %q", c.path, data, c.want)
+		}
+	}
+
+	// MkdirAll, Stat, Remove and WalkDir expand too.
+	if err := sb.MkdirAll("./sub/deep", 0o755); err != nil {
+		t.Errorf("MkdirAll(./sub/deep) failed: %s", err)
+	}
+	if _, err := os.Stat(filepath.Join(cwd, "sub", "deep")); err != nil {
+		t.Errorf("MkdirAll(./sub/deep) did not create %s/sub/deep: %s", cwd, err)
+	}
+	if fi, err := sb.Stat("./sub"); err != nil {
+		t.Errorf("Stat(./sub) failed: %s", err)
+	} else if !fi.IsDir() {
+		t.Errorf("Stat(./sub) is not a directory")
+	}
+	if err := sb.Remove("./sub/deep"); err != nil {
+		t.Errorf("Remove(./sub/deep) failed: %s", err)
+	}
+	if _, err := os.Stat(filepath.Join(cwd, "sub", "deep")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("Remove(./sub/deep) did not remove %s/sub/deep", cwd)
+	}
+
+	var walked []string
+	err := sb.WalkDir("./sub", func(path string, d fs.DirEntry, err error) error {
+		walked = append(walked, path)
+		return err
+	})
+	if err != nil {
+		t.Errorf("WalkDir(./sub) failed: %s", err)
+	}
+	if want := []string{filepath.Join(cwd, "sub")}; !slices.Equal(walked, want) {
+		t.Errorf("WalkDir(./sub) walked %v, want %v", walked, want)
+	}
+
+	// A path which can not be expanded fails, without touching the file system.
+	if err := sb.WriteFile("x.txt", []byte("bare"), 0o644); err == nil {
+		t.Errorf("WriteFile of a bare relative path did not fail")
+	}
+	if _, err := os.Stat(filepath.Join(cwd, "x.txt")); err != nil {
+		t.Errorf("the failed WriteFile disturbed %s/x.txt: %s", cwd, err)
+	}
+	if _, err := sb.ReadFile("x.txt"); err == nil {
+		t.Errorf("ReadFile of a bare relative path did not fail")
+	}
+	if err := sb.MkdirAll("sub2", 0o755); err == nil {
+		t.Errorf("MkdirAll of a bare relative path did not fail")
+	}
+	if _, err := sb.Stat("x.txt"); err == nil {
+		t.Errorf("Stat of a bare relative path did not fail")
+	}
+	if err := sb.Remove("x.txt"); err == nil {
+		t.Errorf("Remove of a bare relative path did not fail")
+	}
+	if err := sb.WalkDir("sub", func(path string, d fs.DirEntry, err error) error {
+		t.Errorf("WalkDir of a bare relative path called the walk func for %q", path)
+		return err
+	}); err == nil {
+		t.Errorf("WalkDir of a bare relative path did not fail")
 	}
 }
 
@@ -676,6 +1192,370 @@ func TestWalkDirDeniedRoot(t *testing.T) {
 	wantPathError(t, err, "walkdir", root)
 	if walked {
 		t.Errorf("WalkDir(%q) called the walk func for a denied root", root)
+	}
+}
+
+// makeExec creates an executable in dir which echoes its own name and the
+// arguments it was passed.
+func makeExec(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\necho "+name+" \"$@\"\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile(%q) failed: %s", path, err)
+	}
+	return path
+}
+
+// execRules renders the rules for cmd as "action:pattern,pattern" strings, in
+// the order they will be matched.
+func execRules(ea *execActions, cmd string) []string {
+	var rules []string
+	for _, ap := range ea.cmds[lookPath(cmd)] {
+		var patterns []string
+		for _, re := range ap.patterns {
+			patterns = append(patterns, re.String())
+		}
+		rules = append(rules, ap.act.String()+":"+strings.Join(patterns, ","))
+	}
+	return rules
+}
+
+func TestAddCmds(t *testing.T) {
+	var ea execActions
+
+	err := ea.addCmds([][]string{{"/bin/git", "^status$"}, {"/usr/bin/"}}, allow)
+	if err != nil {
+		t.Fatalf("addCmds failed: %s", err)
+	}
+	err = ea.addCmds([][]string{{"/bin/git"}, {"/usr/bin/priv/"}}, deny)
+	if err != nil {
+		t.Fatalf("addCmds failed: %s", err)
+	}
+
+	wantCmds := []string{"allow:^status$", "deny:"}
+	if got := execRules(&ea, "/bin/git"); !slices.Equal(got, wantCmds) {
+		t.Errorf("addCmds rules for /bin/git = %v, want %v", got, wantCmds)
+	}
+
+	wantDirs := []dirAction{{"/usr/bin/", allow}, {"/usr/bin/priv/", deny}}
+	if !slices.Equal(ea.dirs, wantDirs) {
+		t.Errorf("addCmds dirs = %v, want %v", ea.dirs, wantDirs)
+	}
+}
+
+func TestNewExecActionsNil(t *testing.T) {
+	ea, err := newExecActions(nil)
+	if err != nil {
+		t.Fatalf("newExecActions(nil) failed: %s", err)
+	}
+	if ea != nil {
+		t.Fatalf("newExecActions(nil) = %v, want nil", ea)
+	}
+	// A nil *execActions always yields the default.
+	for _, dflt := range []action{deny, ask, allow} {
+		if got := ea.cmdAction("/bin/git", []string{"status"}, dflt); got != dflt {
+			t.Errorf("nil cmdAction(/bin/git, %s) = %s, want %s", dflt, got, dflt)
+		}
+	}
+}
+
+func TestNewExecActionsEmpty(t *testing.T) {
+	ea, err := newExecActions(&config.ExecuteActions{})
+	if err != nil {
+		t.Fatalf("newExecActions failed: %s", err)
+	}
+	if ea == nil {
+		t.Fatal("newExecActions(&config.ExecuteActions{}) = nil, want non-nil")
+	}
+	if got := ea.cmdAction("/bin/git", nil, ask); got != ask {
+		t.Errorf("cmdAction with no commands = %s, want ask", got)
+	}
+}
+
+func TestNewExecActionsErrors(t *testing.T) {
+	cases := []struct {
+		what string
+		cfg  *config.ExecuteActions
+	}{
+		{"an empty command", &config.ExecuteActions{Allow: [][]string{{}}}},
+		{"arguments on a directory",
+			&config.ExecuteActions{Allow: [][]string{{"/usr/bin/", "^status$"}}}},
+		{"an invalid pattern", &config.ExecuteActions{Allow: [][]string{{"/bin/git", "("}}}},
+		{"a duplicate command",
+			&config.ExecuteActions{
+				Allow: [][]string{{"/bin/git", "^status$"}},
+				Deny:  [][]string{{"/bin/git", "^status$"}},
+			}},
+		{"a duplicate command with no patterns",
+			&config.ExecuteActions{Allow: [][]string{{"/bin/git"}, {"/bin/git"}}}},
+		{"a duplicate directory",
+			&config.ExecuteActions{
+				Allow: [][]string{{"/usr/bin/"}},
+				Deny:  [][]string{{"/usr/bin/"}},
+			}},
+		{"a non-adjacent duplicate directory",
+			&config.ExecuteActions{
+				Allow: [][]string{{"/usr/bin/"}, {"/opt/bin/"}},
+				Deny:  [][]string{{"/usr/bin/"}},
+			}},
+	}
+
+	for _, c := range cases {
+		if _, err := newExecActions(c.cfg); err == nil {
+			t.Errorf("newExecActions with %s did not fail", c.what)
+		}
+	}
+
+	// The same command with different patterns is not a duplicate.
+	_, err := newExecActions(&config.ExecuteActions{
+		Allow: [][]string{{"/bin/git", "^status$"}},
+		Deny:  [][]string{{"/bin/git", "^push$"}, {"/bin/git"}},
+	})
+	if err != nil {
+		t.Errorf("newExecActions with distinct patterns failed: %s", err)
+	}
+}
+
+func TestCmdActionPatterns(t *testing.T) {
+	// The patterns constrain the leading arguments, one pattern per argument,
+	// and the most specific matching rule applies.
+	ea, err := newExecActions(&config.ExecuteActions{
+		Allow: [][]string{{"/bin/git", "^status$"}, {"/bin/git", "^log$"}},
+		Ask:   [][]string{{"/bin/git", "^push$", "^origin$"}},
+		Deny:  [][]string{{"/bin/git"}},
+	})
+	if err != nil {
+		t.Fatalf("newExecActions failed: %s", err)
+	}
+
+	cases := []struct {
+		args []string
+		want action
+	}{
+		{[]string{"status"}, allow},
+		{[]string{"status", "--short"}, allow}, // trailing arguments are unconstrained
+		{[]string{"log"}, allow},
+		{[]string{"push", "origin", "main"}, ask},
+		{[]string{"push", "elsewhere"}, deny}, // the second pattern does not match
+		{[]string{"push"}, deny},              // too few arguments for the ask rule
+		{[]string{"commit"}, deny},
+		{nil, deny},
+	}
+
+	for _, c := range cases {
+		if got := ea.cmdAction("/bin/git", c.args, allow); got != c.want {
+			t.Errorf("cmdAction(/bin/git, %v) = %s, want %s", c.args, got, c.want)
+		}
+	}
+}
+
+func TestCmdActionEquallySpecific(t *testing.T) {
+	// Two rules constraining the same number of arguments both match; the more
+	// restrictive one applies.
+	ea, err := newExecActions(&config.ExecuteActions{
+		Allow: [][]string{{"/bin/rm", "^-"}},
+		Deny:  [][]string{{"/bin/rm", "^-rf$"}},
+	})
+	if err != nil {
+		t.Fatalf("newExecActions failed: %s", err)
+	}
+
+	if got := ea.cmdAction("/bin/rm", []string{"-rf"}, allow); got != deny {
+		t.Errorf("cmdAction(/bin/rm, -rf) = %s, want deny", got)
+	}
+	if got := ea.cmdAction("/bin/rm", []string{"-i"}, deny); got != allow {
+		t.Errorf("cmdAction(/bin/rm, -i) = %s, want allow", got)
+	}
+}
+
+func TestCmdActionDir(t *testing.T) {
+	ea, err := newExecActions(&config.ExecuteActions{
+		Allow: [][]string{{"/usr/bin/"}},
+		Ask:   [][]string{{"/usr/bin/priv/"}},
+		Deny:  [][]string{{"/usr/bin/dd"}},
+	})
+	if err != nil {
+		t.Fatalf("newExecActions failed: %s", err)
+	}
+
+	cases := []struct {
+		cmd  string
+		want action
+	}{
+		{"/usr/bin/ls", allow},         // within the allowed directory
+		{"/usr/bin/dd", deny},          // a command rule beats the directory
+		{"/usr/bin/priv/x", ask},       // the most specific directory
+		{"/usr/bin/priv/a/b", ask},     // deeper beneath it
+		{"/bin/ls", deny},              // nothing matches -> default
+		{"/usr/binary/ls", deny},       // no prefix matching short of a path element
+		{"/usr/bin/ls/../dd", deny},    // cleaned before matching
+		{"/usr/bin/priv/../ls", allow}, //
+	}
+
+	for _, c := range cases {
+		if got := ea.cmdAction(c.cmd, nil, deny); got != c.want {
+			t.Errorf("cmdAction(%q) = %s, want %s", c.cmd, got, c.want)
+		}
+	}
+}
+
+func TestCmdActionUnmatchedPatterns(t *testing.T) {
+	// A rule for a command which does not match its arguments is not a rule for
+	// that command at all, so the directory it is in still applies.
+	ea, err := newExecActions(&config.ExecuteActions{
+		Allow: [][]string{{"/usr/bin/"}},
+		Deny:  [][]string{{"/usr/bin/git", "^push$"}},
+	})
+	if err != nil {
+		t.Fatalf("newExecActions failed: %s", err)
+	}
+
+	if got := ea.cmdAction("/usr/bin/git", []string{"status"}, deny); got != allow {
+		t.Errorf("cmdAction(/usr/bin/git, status) = %s, want allow", got)
+	}
+	if got := ea.cmdAction("/usr/bin/git", []string{"push"}, allow); got != deny {
+		t.Errorf("cmdAction(/usr/bin/git, push) = %s, want deny", got)
+	}
+}
+
+func TestCmdActionLookPath(t *testing.T) {
+	dir := t.TempDir()
+	path := makeExec(t, dir, "prog")
+	t.Setenv("PATH", dir)
+
+	// A command configured by name is resolved through PATH, so running it by
+	// name or by the path it resolves to is the same command.
+	ea, err := newExecActions(&config.ExecuteActions{Allow: [][]string{{"prog"}}})
+	if err != nil {
+		t.Fatalf("newExecActions failed: %s", err)
+	}
+
+	if got := ea.cmdAction("prog", nil, deny); got != allow {
+		t.Errorf("cmdAction(prog) = %s, want allow", got)
+	}
+	if got := ea.cmdAction(path, nil, deny); got != allow {
+		t.Errorf("cmdAction(%q) = %s, want allow", path, got)
+	}
+
+	// Another executable of the same name elsewhere is not the one allowed.
+	other := makeExec(t, t.TempDir(), "prog")
+	if got := ea.cmdAction(other, nil, deny); got != deny {
+		t.Errorf("cmdAction(%q) = %s, want deny", other, got)
+	}
+}
+
+func TestCheckExec(t *testing.T) {
+	sb := checkSandbox(t,
+		&config.SandboxConfig{
+			Execute: &config.ExecuteActions{
+				Allow: [][]string{{"/bin/echo"}},
+				Deny:  [][]string{{"/bin/echo", "^secret$"}},
+			},
+		}, nil)
+
+	if err := sb.checkExec("/bin/echo", []string{"hello"}); err != nil {
+		t.Errorf("checkExec(/bin/echo, hello) failed: %s", err)
+	}
+	wantPathError(t, sb.checkExec("/bin/echo", []string{"secret"}), "execute", "/bin/echo secret")
+	wantPathError(t, sb.checkExec("/bin/false", nil), "execute", "/bin/false")
+}
+
+func TestCheckExecAsk(t *testing.T) {
+	cfg := &config.SandboxConfig{
+		Execute: &config.ExecuteActions{
+			Allow: [][]string{{"/bin/echo"}},
+			Ask:   [][]string{{"/bin/git", "^push$"}},
+		},
+	}
+
+	// Granted: no error, and the whole command line is passed to the ask func.
+	ar := &askRecorder{resp: true}
+	sb := checkSandbox(t, cfg, ar.ask)
+	if err := sb.checkExec("/bin/git", []string{"push", "origin"}); err != nil {
+		t.Errorf("checkExec with granted ask failed: %s", err)
+	}
+	if ar.calls != 1 {
+		t.Errorf("ask func called %d times, want 1", ar.calls)
+	}
+	if ar.lastOp != "execute" || ar.lastPath != "/bin/git push origin" {
+		t.Errorf("ask func(%q, %q), want (%q, %q)", ar.lastOp, ar.lastPath, "execute",
+			"/bin/git push origin")
+	}
+
+	// The ask func is only consulted for an ask action, never for allow or for a
+	// denied command.
+	if err := sb.checkExec("/bin/echo", []string{"hello"}); err != nil {
+		t.Errorf("checkExec(/bin/echo, hello) failed: %s", err)
+	}
+	wantPathError(t, sb.checkExec("/bin/git", []string{"status"}), "execute", "/bin/git status")
+	if ar.calls != 1 {
+		t.Errorf("ask func called %d times, want 1", ar.calls)
+	}
+
+	// Declined: a permission error.
+	sb = checkSandbox(t, cfg, (&askRecorder{resp: false}).ask)
+	wantPathError(t, sb.checkExec("/bin/git", []string{"push"}), "execute", "/bin/git push")
+
+	// A nil ask func denies rather than panicking on a nil call.
+	sb = checkSandbox(t, cfg, nil)
+	wantPathError(t, sb.checkExec("/bin/git", []string{"push"}), "execute", "/bin/git push")
+}
+
+func TestCheckExecMissingConfig(t *testing.T) {
+	// Within a configured sandbox, an absent execute block denies every command.
+	sb := checkSandbox(t, &config.SandboxConfig{
+		Read: &config.RWActions{Allow: []string{"/data/"}},
+	}, nil)
+	if sb.executeActions != nil {
+		t.Fatalf("executeActions = %v, want nil", sb.executeActions)
+	}
+	wantPathError(t, sb.checkExec("/bin/echo", nil), "execute", "/bin/echo")
+
+	// An execute block with no commands in it denies everything too.
+	sb = checkSandbox(t, &config.SandboxConfig{Execute: &config.ExecuteActions{}}, nil)
+	wantPathError(t, sb.checkExec("/bin/echo", nil), "execute", "/bin/echo")
+}
+
+func TestCheckExecNoSandbox(t *testing.T) {
+	// No sandbox configured at all: any command may run, and the user is never
+	// prompted.
+	ar := &askRecorder{resp: false}
+	sb := checkSandbox(t, nil, ar.ask)
+
+	for _, cmd := range []string{"/bin/echo", "rm", "relative/prog"} {
+		if err := sb.checkExec(cmd, []string{"-rf", "/"}); err != nil {
+			t.Errorf("checkExec(%q) failed: %s", cmd, err)
+		}
+	}
+	if ar.calls != 0 {
+		t.Errorf("ask func called %d times, want 0", ar.calls)
+	}
+}
+
+func TestCombinedOutput(t *testing.T) {
+	dir := t.TempDir()
+	allowed := makeExec(t, dir, "allowed")
+	denied := makeExec(t, dir, "denied")
+
+	sb := checkSandbox(t,
+		&config.SandboxConfig{
+			Execute: &config.ExecuteActions{Allow: [][]string{{allowed}}},
+		}, nil)
+
+	out, err := sb.CombinedOutput(context.Background(), dir, allowed, "hello")
+	if err != nil {
+		t.Errorf("CombinedOutput(%q) failed: %s", allowed, err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "allowed hello" {
+		t.Errorf("CombinedOutput(%q) = %q, want %q", allowed, got, "allowed hello")
+	}
+
+	// A denied command is not run at all.
+	out, err = sb.CombinedOutput(context.Background(), dir, denied)
+	wantPathError(t, err, "execute", denied)
+	if out != nil {
+		t.Errorf("CombinedOutput(%q) = %q, want no output", denied, out)
 	}
 }
 

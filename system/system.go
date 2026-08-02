@@ -7,13 +7,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/leftmike/gait/config"
 )
 
-type AskFunc func(op, path string) bool
+// AskFunc is called to ask the user whether an operation may proceed. For
+// reads and writes, what is passed is the path; for executes, the command
+// line.
+type AskFunc func(op, what string) bool
 
 type action int
 
@@ -33,16 +37,56 @@ type rwActions struct {
 	dirs  []dirAction
 }
 
-func (rwa *rwActions) addPaths(paths []string, act action) error {
+func expandPath(path, cwd, home string, look bool) (string, bool, error) {
+	hasSuffix := strings.HasSuffix(path, "/")
+
+	if filepath.IsAbs(path) {
+		path = filepath.Clean(path)
+	} else if path == "." {
+		path = cwd
+	} else if strings.HasPrefix(path, "./") {
+		path = filepath.Join(cwd, strings.TrimPrefix(path, "./"))
+	} else if path == "~" {
+		path = home
+	} else if strings.HasPrefix(path, "~/") {
+		path = filepath.Join(home, strings.TrimPrefix(path, "~/"))
+	} else if strings.ContainsRune(path, '/') || !look {
+		return "", false, fmt.Errorf("sandbox: relative paths must start with ./: %s", path)
+	} else {
+		var err error
+		path, err = exec.LookPath(path)
+		if err != nil {
+			return "", false, fmt.Errorf("sandbox: %s", err)
+		}
+		path = filepath.Clean(path)
+	}
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		return path, hasSuffix, nil
+	}
+
+	isDir := fi.Mode().IsDir()
+	if hasSuffix && !isDir {
+		return "", false, fmt.Errorf("sandbox: path has trailing / and is a file: %s", path)
+	}
+
+	return path, hasSuffix || isDir, nil
+}
+
+func (rwa *rwActions) addPaths(paths []string, act action, cwd, home string) error {
 	for _, path := range paths {
-		if strings.HasSuffix(path, "/") {
-			dir := filepath.Clean(path)
-			if dir != "/" {
-				dir += "/"
+		path, isDir, err := expandPath(path, cwd, home, false)
+		if err != nil {
+			return err
+		}
+
+		if isDir {
+			if path != "/" {
+				path += "/"
 			}
-			rwa.dirs = append(rwa.dirs, dirAction{dir, act})
+			rwa.dirs = append(rwa.dirs, dirAction{path, act})
 		} else {
-			path = filepath.Clean(path)
 			if _, ok := rwa.files[path]; ok {
 				return fmt.Errorf("sandbox: path specified more than once: %s", path)
 			}
@@ -57,21 +101,21 @@ func (rwa *rwActions) addPaths(paths []string, act action) error {
 	return nil
 }
 
-func newRWActions(cfg *config.RWActions) (*rwActions, error) {
+func newRWActions(cfg *config.RWActions, cwd, home string) (*rwActions, error) {
 	if cfg == nil {
 		return nil, nil
 	}
 
 	var rwa rwActions
-	err := rwa.addPaths(cfg.Allow, allow)
+	err := rwa.addPaths(cfg.Allow, allow, cwd, home)
 	if err != nil {
 		return nil, err
 	}
-	err = rwa.addPaths(cfg.Ask, ask)
+	err = rwa.addPaths(cfg.Ask, ask, cwd, home)
 	if err != nil {
 		return nil, err
 	}
-	err = rwa.addPaths(cfg.Deny, deny)
+	err = rwa.addPaths(cfg.Deny, deny, cwd, home)
 	if err != nil {
 		return nil, err
 	}
@@ -89,12 +133,13 @@ func newRWActions(cfg *config.RWActions) (*rwActions, error) {
 	return &rwa, nil
 }
 
+// pathAction returns the action configured for path, which must already have
+// been expanded: expandPath cleans both the configured paths and the path being
+// checked, so the two are compared in the same terms.
 func (rwa *rwActions) pathAction(path string, dflt action) action {
 	if rwa == nil {
 		return dflt
 	}
-
-	path = filepath.Clean(path)
 
 	act, ok := rwa.files[path]
 	if ok {
@@ -113,85 +158,300 @@ func (rwa *rwActions) pathAction(path string, dflt action) action {
 	return dflt
 }
 
-type Sandbox struct {
-	readActions  *rwActions
-	writeActions *rwActions
-	dflt         action
-	ask          AskFunc
-}
-
-func NewSandbox(sbCfg *config.SandboxConfig, ask AskFunc) (*Sandbox, error) {
-	if sbCfg == nil {
-		return &Sandbox{dflt: allow, ask: ask}, nil
+// lookPath resolves a command to the absolute path which will actually be
+// executed, so that the configured commands and the commands being run are
+// compared in the same terms. A command which can not be resolved is used as
+// given.
+func lookPath(name string) string {
+	path, err := exec.LookPath(name)
+	if err != nil {
+		path = name
+	}
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
 	}
 
-	readActions, err := newRWActions(sbCfg.Read)
+	return filepath.Clean(path)
+}
+
+// argPatterns is one rule for a command: the arguments must match patterns for
+// act to apply. The patterns match the leading arguments, one pattern per
+// argument, leaving any remaining arguments unconstrained; no patterns at all
+// matches the command however it is called.
+type argPatterns struct {
+	patterns []*regexp.Regexp
+	act      action
+}
+
+func (ap argPatterns) match(args []string) bool {
+	if len(ap.patterns) > len(args) {
+		return false
+	}
+
+	for i, re := range ap.patterns {
+		if !re.MatchString(args[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (ap argPatterns) equal(patterns []*regexp.Regexp) bool {
+	if len(ap.patterns) != len(patterns) {
+		return false
+	}
+
+	for i, re := range ap.patterns {
+		if re.String() != patterns[i].String() {
+			return false
+		}
+	}
+
+	return true
+}
+
+type execActions struct {
+	cmds map[string][]argPatterns
+	dirs []dirAction
+}
+
+func (ea *execActions) addCmds(cmds [][]string, act action) error {
+	for _, cmd := range cmds {
+		if len(cmd) == 0 {
+			return fmt.Errorf("sandbox: execute action must specify a command")
+		}
+
+		if strings.HasSuffix(cmd[0], "/") {
+			if len(cmd) > 1 {
+				return fmt.Errorf("sandbox: arguments not allowed with a directory: %s", cmd[0])
+			}
+
+			dir := lookPath(cmd[0])
+			if dir != "/" {
+				dir += "/"
+			}
+			ea.dirs = append(ea.dirs, dirAction{dir, act})
+			continue
+		}
+
+		var patterns []*regexp.Regexp
+		for _, arg := range cmd[1:] {
+			re, err := regexp.Compile(arg)
+			if err != nil {
+				return fmt.Errorf("sandbox: %s: %s", cmd[0], err)
+			}
+			patterns = append(patterns, re)
+		}
+
+		path := lookPath(cmd[0])
+		if slices.ContainsFunc(ea.cmds[path],
+			func(ap argPatterns) bool {
+				return ap.equal(patterns)
+			}) {
+
+			return fmt.Errorf("sandbox: command specified more than once: %s",
+				strings.Join(cmd, " "))
+		}
+
+		if ea.cmds == nil {
+			ea.cmds = map[string][]argPatterns{}
+		}
+		ea.cmds[path] = append(ea.cmds[path], argPatterns{patterns, act})
+	}
+
+	return nil
+}
+
+func newExecActions(cfg *config.ExecuteActions) (*execActions, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+
+	var ea execActions
+	err := ea.addCmds(cfg.Allow, allow)
 	if err != nil {
 		return nil, err
 	}
-	writeActions, err := newRWActions(sbCfg.Write)
+	err = ea.addCmds(cfg.Ask, ask)
+	if err != nil {
+		return nil, err
+	}
+	err = ea.addCmds(cfg.Deny, deny)
+	if err != nil {
+		return nil, err
+	}
+
+	// The most specific rule for a command is the one constraining the most
+	// arguments; of equally specific rules, the most restrictive applies.
+	for _, aps := range ea.cmds {
+		slices.SortStableFunc(aps, func(ap1, ap2 argPatterns) int {
+			if n := len(ap2.patterns) - len(ap1.patterns); n != 0 {
+				return n
+			}
+			return int(ap1.act) - int(ap2.act)
+		})
+	}
+
+	slices.SortFunc(ea.dirs, func(da1, da2 dirAction) int {
+		return -strings.Compare(da1.dir, da2.dir)
+	})
+
+	for i := 1; i < len(ea.dirs); i += 1 {
+		if ea.dirs[i-1].dir == ea.dirs[i].dir {
+			return nil, fmt.Errorf("sandbox: directory specified more than once: %s",
+				ea.dirs[i].dir)
+		}
+	}
+
+	return &ea, nil
+}
+
+func (ea *execActions) cmdAction(name string, args []string, dflt action) action {
+	if ea == nil {
+		return dflt
+	}
+
+	path := lookPath(name)
+
+	// A rule for the command itself is more specific than a rule for the
+	// directory it is in; a rule whose patterns don't match is not a rule for
+	// this command at all.
+	for _, ap := range ea.cmds[path] {
+		if ap.match(args) {
+			return ap.act
+		}
+	}
+
+	for _, da := range ea.dirs {
+		if strings.HasPrefix(path, da.dir) {
+			return da.act
+		}
+	}
+
+	return dflt
+}
+
+type Sandbox struct {
+	cwd            string
+	home           string
+	readActions    *rwActions
+	writeActions   *rwActions
+	executeActions *execActions
+	dflt           action
+	ask            AskFunc
+}
+
+func NewSandbox(sbCfg *config.SandboxConfig, ask AskFunc) (*Sandbox, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("sandbox: %s", err)
+	}
+	cwd = filepath.Clean(cwd)
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("sandbox: %s", err)
+	}
+	home = filepath.Clean(home)
+
+	if sbCfg == nil {
+		return &Sandbox{
+			cwd:  cwd,
+			home: home,
+			dflt: allow,
+			ask:  ask,
+		}, nil
+	}
+
+	readActions, err := newRWActions(sbCfg.Read, cwd, home)
+	if err != nil {
+		return nil, err
+	}
+	writeActions, err := newRWActions(sbCfg.Write, cwd, home)
+	if err != nil {
+		return nil, err
+	}
+	executeActions, err := newExecActions(sbCfg.Execute) // XXX
 	if err != nil {
 		return nil, err
 	}
 
 	return &Sandbox{
-		readActions:  readActions,
-		writeActions: writeActions,
-		dflt:         deny,
-		ask:          ask,
+		cwd:            cwd,
+		home:           home,
+		readActions:    readActions,
+		writeActions:   writeActions,
+		executeActions: executeActions,
+		dflt:           deny,
+		ask:            ask,
 	}, nil
 }
 
-func (sb *Sandbox) checkRW(rwa *rwActions, op, path string) error {
+// expandCheckRW expands path the same way as the configured paths were
+// expanded, so that the two are compared in the same terms, and checks that op
+// is allowed on it. The expanded path is what the operation must use.
+func (sb *Sandbox) expandCheckRW(rwa *rwActions, op, path string) (string, error) {
+	path, _, err := expandPath(path, sb.cwd, sb.home, false)
+	if err != nil {
+		return "", err
+	}
+
 	switch rwa.pathAction(path, sb.dflt) {
 	case allow:
-		return nil
+		return path, nil
 	case ask:
 		if sb.ask != nil && sb.ask(op, path) {
-			return nil
+			return path, nil
 		}
 	}
 
-	return &fs.PathError{Op: op, Path: path, Err: fs.ErrPermission}
+	return "", &fs.PathError{Op: op, Path: path, Err: fs.ErrPermission}
 }
 
 func (sb *Sandbox) ReadFile(path string) ([]byte, error) {
-	if err := sb.checkRW(sb.readActions, "read", path); err != nil {
+	path, err := sb.expandCheckRW(sb.readActions, "read", path)
+	if err != nil {
 		return nil, err
 	}
 	return os.ReadFile(path)
 }
 
 func (sb *Sandbox) WriteFile(path string, data []byte, perm fs.FileMode) error {
-	if err := sb.checkRW(sb.writeActions, "write", path); err != nil {
+	path, err := sb.expandCheckRW(sb.writeActions, "write", path)
+	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, perm)
 }
 
 func (sb *Sandbox) MkdirAll(path string, perm fs.FileMode) error {
-	if err := sb.checkRW(sb.writeActions, "mkdir", path); err != nil {
+	path, err := sb.expandCheckRW(sb.writeActions, "mkdir", path)
+	if err != nil {
 		return err
 	}
 	return os.MkdirAll(path, perm)
 }
 
 func (sb *Sandbox) Stat(path string) (fs.FileInfo, error) {
-	if err := sb.checkRW(sb.readActions, "stat", path); err != nil {
+	path, err := sb.expandCheckRW(sb.readActions, "stat", path)
+	if err != nil {
 		return nil, err
 	}
 	return os.Stat(path)
 }
 
 func (sb *Sandbox) Remove(path string) error {
-	if err := sb.checkRW(sb.writeActions, "remove", path); err != nil {
+	path, err := sb.expandCheckRW(sb.writeActions, "remove", path)
+	if err != nil {
 		return err
 	}
 	return os.Remove(path)
 }
 
 func (sb *Sandbox) WalkDir(root string, fn fs.WalkDirFunc) error {
-	if err := sb.checkRW(sb.readActions, "walkdir", root); err != nil {
+	root, err := sb.expandCheckRW(sb.readActions, "walkdir", root)
+	if err != nil {
 		return err
 	}
 
@@ -212,10 +472,29 @@ func (sb *Sandbox) WalkDir(root string, fn fs.WalkDirFunc) error {
 		})
 }
 
+func (sb *Sandbox) checkExec(name string, args []string) error {
+	cmdline := strings.Join(append([]string{name}, args...), " ")
+
+	switch sb.executeActions.cmdAction(name, args, sb.dflt) {
+	case allow:
+		return nil
+	case ask:
+		if sb.ask != nil && sb.ask("execute", cmdline) {
+			return nil
+		}
+	}
+
+	return &fs.PathError{Op: "execute", Path: cmdline, Err: fs.ErrPermission}
+}
+
 // CombinedOutput runs a command in dir and returns its combined stdout and
 // stderr.
 func (sb *Sandbox) CombinedOutput(ctx context.Context, dir, name string, arg ...string) ([]byte,
 	error) {
+
+	if err := sb.checkExec(name, arg); err != nil {
+		return nil, err
+	}
 
 	cmd := exec.CommandContext(ctx, name, arg...)
 	cmd.Dir = dir
