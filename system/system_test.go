@@ -1207,11 +1207,11 @@ func makeExec(t *testing.T, dir, name string) string {
 	return path
 }
 
-// execRules renders the rules for cmd as "action:pattern,pattern" strings, in
-// the order they will be matched.
+// execRules renders the rules for cmd, which must already be expanded, as
+// "action:pattern,pattern" strings, in the order they will be matched.
 func execRules(ea *execActions, cmd string) []string {
 	var rules []string
-	for _, ap := range ea.cmds[lookPath(cmd)] {
+	for _, ap := range ea.cmds[cmd] {
 		var patterns []string
 		for _, re := range ap.patterns {
 			patterns = append(patterns, re.String())
@@ -1224,11 +1224,11 @@ func execRules(ea *execActions, cmd string) []string {
 func TestAddCmds(t *testing.T) {
 	var ea execActions
 
-	err := ea.addCmds([][]string{{"/bin/git", "^status$"}, {"/usr/bin/"}}, allow)
+	err := ea.addCmds([][]string{{"/bin/git", "^status$"}, {"/usr/bin/"}}, allow, "", "")
 	if err != nil {
 		t.Fatalf("addCmds failed: %s", err)
 	}
-	err = ea.addCmds([][]string{{"/bin/git"}, {"/usr/bin/priv/"}}, deny)
+	err = ea.addCmds([][]string{{"/bin/git"}, {"/usr/bin/priv/"}}, deny, "", "")
 	if err != nil {
 		t.Fatalf("addCmds failed: %s", err)
 	}
@@ -1245,7 +1245,7 @@ func TestAddCmds(t *testing.T) {
 }
 
 func TestNewExecActionsNil(t *testing.T) {
-	ea, err := newExecActions(nil)
+	ea, err := newExecActions(nil, "", "")
 	if err != nil {
 		t.Fatalf("newExecActions(nil) failed: %s", err)
 	}
@@ -1261,7 +1261,7 @@ func TestNewExecActionsNil(t *testing.T) {
 }
 
 func TestNewExecActionsEmpty(t *testing.T) {
-	ea, err := newExecActions(&config.ExecuteActions{})
+	ea, err := newExecActions(&config.ExecuteActions{}, "", "")
 	if err != nil {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
@@ -1302,7 +1302,7 @@ func TestNewExecActionsErrors(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if _, err := newExecActions(c.cfg); err == nil {
+		if _, err := newExecActions(c.cfg, "", ""); err == nil {
 			t.Errorf("newExecActions with %s did not fail", c.what)
 		}
 	}
@@ -1311,7 +1311,7 @@ func TestNewExecActionsErrors(t *testing.T) {
 	_, err := newExecActions(&config.ExecuteActions{
 		Allow: [][]string{{"/bin/git", "^status$"}},
 		Deny:  [][]string{{"/bin/git", "^push$"}, {"/bin/git"}},
-	})
+	}, "", "")
 	if err != nil {
 		t.Errorf("newExecActions with distinct patterns failed: %s", err)
 	}
@@ -1324,7 +1324,7 @@ func TestCmdActionPatterns(t *testing.T) {
 		Allow: [][]string{{"/bin/git", "^status$"}, {"/bin/git", "^log$"}},
 		Ask:   [][]string{{"/bin/git", "^push$", "^origin$"}},
 		Deny:  [][]string{{"/bin/git"}},
-	})
+	}, "", "")
 	if err != nil {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
@@ -1356,7 +1356,7 @@ func TestCmdActionEquallySpecific(t *testing.T) {
 	ea, err := newExecActions(&config.ExecuteActions{
 		Allow: [][]string{{"/bin/rm", "^-"}},
 		Deny:  [][]string{{"/bin/rm", "^-rf$"}},
-	})
+	}, "", "")
 	if err != nil {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
@@ -1374,7 +1374,7 @@ func TestCmdActionDir(t *testing.T) {
 		Allow: [][]string{{"/usr/bin/"}},
 		Ask:   [][]string{{"/usr/bin/priv/"}},
 		Deny:  [][]string{{"/usr/bin/dd"}},
-	})
+	}, "", "")
 	if err != nil {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
@@ -1383,14 +1383,12 @@ func TestCmdActionDir(t *testing.T) {
 		cmd  string
 		want action
 	}{
-		{"/usr/bin/ls", allow},         // within the allowed directory
-		{"/usr/bin/dd", deny},          // a command rule beats the directory
-		{"/usr/bin/priv/x", ask},       // the most specific directory
-		{"/usr/bin/priv/a/b", ask},     // deeper beneath it
-		{"/bin/ls", deny},              // nothing matches -> default
-		{"/usr/binary/ls", deny},       // no prefix matching short of a path element
-		{"/usr/bin/ls/../dd", deny},    // cleaned before matching
-		{"/usr/bin/priv/../ls", allow}, //
+		{"/usr/bin/ls", allow},     // within the allowed directory
+		{"/usr/bin/dd", deny},      // a command rule beats the directory
+		{"/usr/bin/priv/x", ask},   // the most specific directory
+		{"/usr/bin/priv/a/b", ask}, // deeper beneath it
+		{"/bin/ls", deny},          // nothing matches -> default
+		{"/usr/binary/ls", deny},   // no prefix matching short of a path element
 	}
 
 	for _, c := range cases {
@@ -1406,7 +1404,7 @@ func TestCmdActionUnmatchedPatterns(t *testing.T) {
 	ea, err := newExecActions(&config.ExecuteActions{
 		Allow: [][]string{{"/usr/bin/"}},
 		Deny:  [][]string{{"/usr/bin/git", "^push$"}},
-	})
+	}, "", "")
 	if err != nil {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
@@ -1424,16 +1422,13 @@ func TestCmdActionLookPath(t *testing.T) {
 	path := makeExec(t, dir, "prog")
 	t.Setenv("PATH", dir)
 
-	// A command configured by name is resolved through PATH, so running it by
-	// name or by the path it resolves to is the same command.
-	ea, err := newExecActions(&config.ExecuteActions{Allow: [][]string{{"prog"}}})
+	// A command configured by name is resolved through PATH, so a rule for the
+	// name is a rule for the path it resolves to.
+	ea, err := newExecActions(&config.ExecuteActions{Allow: [][]string{{"prog"}}}, dir, dir)
 	if err != nil {
 		t.Fatalf("newExecActions failed: %s", err)
 	}
 
-	if got := ea.cmdAction("prog", nil, deny); got != allow {
-		t.Errorf("cmdAction(prog) = %s, want allow", got)
-	}
 	if got := ea.cmdAction(path, nil, deny); got != allow {
 		t.Errorf("cmdAction(%q) = %s, want allow", path, got)
 	}
@@ -1442,6 +1437,52 @@ func TestCmdActionLookPath(t *testing.T) {
 	other := makeExec(t, t.TempDir(), "prog")
 	if got := ea.cmdAction(other, nil, deny); got != deny {
 		t.Errorf("cmdAction(%q) = %s, want deny", other, got)
+	}
+
+	// A command which can not be expanded can not be configured at all.
+	for _, cmd := range []string{"no-such-command", "relative/prog"} {
+		cfg := &config.ExecuteActions{Allow: [][]string{{cmd}}}
+		if _, err := newExecActions(cfg, dir, dir); err == nil {
+			t.Errorf("newExecActions with %q did not fail", cmd)
+		}
+	}
+}
+
+// checkExec expands and checks a command, dropping the expanded path, for the
+// tests which only care whether the command may run. The commands they use are
+// absolute paths, so expansion leaves them as they are.
+func checkExec(sb *Sandbox, name string, args []string) error {
+	_, err := sb.expandCheckExec(name, args)
+	return err
+}
+
+func TestExpandCheckExecLookPath(t *testing.T) {
+	// A command run by name is resolved through PATH, so it is checked, and run,
+	// as the path it resolves to.
+	dir := t.TempDir()
+	path := makeExec(t, dir, "prog")
+	t.Setenv("PATH", dir)
+
+	ar := &askRecorder{resp: true}
+	sb := checkSandbox(t,
+		&config.SandboxConfig{
+			Execute: &config.ExecuteActions{Ask: [][]string{{path}}},
+		}, ar.ask)
+
+	got, err := sb.expandCheckExec("prog", []string{"hello"})
+	if err != nil {
+		t.Errorf("expandCheckExec(prog) failed: %s", err)
+	}
+	if got != path {
+		t.Errorf("expandCheckExec(prog) = %q, want %q", got, path)
+	}
+	if want := path + " hello"; ar.lastPath != want {
+		t.Errorf("ask func path = %q, want %q", ar.lastPath, want)
+	}
+
+	// A relative command is rejected, just as it is for reads and writes.
+	if err := checkExec(sb, "relative/prog", nil); err == nil {
+		t.Error("expandCheckExec of a relative command did not fail")
 	}
 }
 
@@ -1454,11 +1495,11 @@ func TestCheckExec(t *testing.T) {
 			},
 		}, nil)
 
-	if err := sb.checkExec("/bin/echo", []string{"hello"}); err != nil {
+	if err := checkExec(sb, "/bin/echo", []string{"hello"}); err != nil {
 		t.Errorf("checkExec(/bin/echo, hello) failed: %s", err)
 	}
-	wantPathError(t, sb.checkExec("/bin/echo", []string{"secret"}), "execute", "/bin/echo secret")
-	wantPathError(t, sb.checkExec("/bin/false", nil), "execute", "/bin/false")
+	wantPathError(t, checkExec(sb, "/bin/echo", []string{"secret"}), "execute", "/bin/echo secret")
+	wantPathError(t, checkExec(sb, "/bin/false", nil), "execute", "/bin/false")
 }
 
 func TestCheckExecAsk(t *testing.T) {
@@ -1472,7 +1513,7 @@ func TestCheckExecAsk(t *testing.T) {
 	// Granted: no error, and the whole command line is passed to the ask func.
 	ar := &askRecorder{resp: true}
 	sb := checkSandbox(t, cfg, ar.ask)
-	if err := sb.checkExec("/bin/git", []string{"push", "origin"}); err != nil {
+	if err := checkExec(sb, "/bin/git", []string{"push", "origin"}); err != nil {
 		t.Errorf("checkExec with granted ask failed: %s", err)
 	}
 	if ar.calls != 1 {
@@ -1485,21 +1526,21 @@ func TestCheckExecAsk(t *testing.T) {
 
 	// The ask func is only consulted for an ask action, never for allow or for a
 	// denied command.
-	if err := sb.checkExec("/bin/echo", []string{"hello"}); err != nil {
+	if err := checkExec(sb, "/bin/echo", []string{"hello"}); err != nil {
 		t.Errorf("checkExec(/bin/echo, hello) failed: %s", err)
 	}
-	wantPathError(t, sb.checkExec("/bin/git", []string{"status"}), "execute", "/bin/git status")
+	wantPathError(t, checkExec(sb, "/bin/git", []string{"status"}), "execute", "/bin/git status")
 	if ar.calls != 1 {
 		t.Errorf("ask func called %d times, want 1", ar.calls)
 	}
 
 	// Declined: a permission error.
 	sb = checkSandbox(t, cfg, (&askRecorder{resp: false}).ask)
-	wantPathError(t, sb.checkExec("/bin/git", []string{"push"}), "execute", "/bin/git push")
+	wantPathError(t, checkExec(sb, "/bin/git", []string{"push"}), "execute", "/bin/git push")
 
 	// A nil ask func denies rather than panicking on a nil call.
 	sb = checkSandbox(t, cfg, nil)
-	wantPathError(t, sb.checkExec("/bin/git", []string{"push"}), "execute", "/bin/git push")
+	wantPathError(t, checkExec(sb, "/bin/git", []string{"push"}), "execute", "/bin/git push")
 }
 
 func TestCheckExecMissingConfig(t *testing.T) {
@@ -1510,23 +1551,28 @@ func TestCheckExecMissingConfig(t *testing.T) {
 	if sb.executeActions != nil {
 		t.Fatalf("executeActions = %v, want nil", sb.executeActions)
 	}
-	wantPathError(t, sb.checkExec("/bin/echo", nil), "execute", "/bin/echo")
+	wantPathError(t, checkExec(sb, "/bin/echo", nil), "execute", "/bin/echo")
 
 	// An execute block with no commands in it denies everything too.
 	sb = checkSandbox(t, &config.SandboxConfig{Execute: &config.ExecuteActions{}}, nil)
-	wantPathError(t, sb.checkExec("/bin/echo", nil), "execute", "/bin/echo")
+	wantPathError(t, checkExec(sb, "/bin/echo", nil), "execute", "/bin/echo")
 }
 
 func TestCheckExecNoSandbox(t *testing.T) {
-	// No sandbox configured at all: any command may run, and the user is never
-	// prompted.
+	// No sandbox configured at all: any command which expands may run, and the
+	// user is never prompted.
 	ar := &askRecorder{resp: false}
 	sb := checkSandbox(t, nil, ar.ask)
 
-	for _, cmd := range []string{"/bin/echo", "rm", "relative/prog"} {
-		if err := sb.checkExec(cmd, []string{"-rf", "/"}); err != nil {
+	for _, cmd := range []string{"/bin/echo", "sh"} {
+		if err := checkExec(sb, cmd, []string{"-rf", "/"}); err != nil {
 			t.Errorf("checkExec(%q) failed: %s", cmd, err)
 		}
+	}
+
+	// The command still has to expand: a relative one does not.
+	if err := checkExec(sb, "relative/prog", nil); err == nil {
+		t.Error("checkExec of a relative command did not fail")
 	}
 	if ar.calls != 0 {
 		t.Errorf("ask func called %d times, want 0", ar.calls)

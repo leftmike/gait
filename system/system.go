@@ -158,22 +158,6 @@ func (rwa *rwActions) pathAction(path string, dflt action) action {
 	return dflt
 }
 
-// lookPath resolves a command to the absolute path which will actually be
-// executed, so that the configured commands and the commands being run are
-// compared in the same terms. A command which can not be resolved is used as
-// given.
-func lookPath(name string) string {
-	path, err := exec.LookPath(name)
-	if err != nil {
-		path = name
-	}
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
-
-	return filepath.Clean(path)
-}
-
 // argPatterns is one rule for a command: the arguments must match patterns for
 // act to apply. The patterns match the leading arguments, one pattern per
 // argument, leaving any remaining arguments unconstrained; no patterns at all
@@ -216,22 +200,29 @@ type execActions struct {
 	dirs []dirAction
 }
 
-func (ea *execActions) addCmds(cmds [][]string, act action) error {
+func (ea *execActions) addCmds(cmds [][]string, act action, cwd, home string) error {
 	for _, cmd := range cmds {
 		if len(cmd) == 0 {
 			return fmt.Errorf("sandbox: execute action must specify a command")
 		}
 
-		if strings.HasSuffix(cmd[0], "/") {
+		// A bare command name is looked up on PATH, so that a command configured
+		// by name and the same command run by name or by path are compared in
+		// the same terms.
+		path, isDir, err := expandPath(cmd[0], cwd, home, true)
+		if err != nil {
+			return err
+		}
+
+		if isDir {
 			if len(cmd) > 1 {
 				return fmt.Errorf("sandbox: arguments not allowed with a directory: %s", cmd[0])
 			}
 
-			dir := lookPath(cmd[0])
-			if dir != "/" {
-				dir += "/"
+			if path != "/" {
+				path += "/"
 			}
-			ea.dirs = append(ea.dirs, dirAction{dir, act})
+			ea.dirs = append(ea.dirs, dirAction{path, act})
 			continue
 		}
 
@@ -244,7 +235,6 @@ func (ea *execActions) addCmds(cmds [][]string, act action) error {
 			patterns = append(patterns, re)
 		}
 
-		path := lookPath(cmd[0])
 		if slices.ContainsFunc(ea.cmds[path],
 			func(ap argPatterns) bool {
 				return ap.equal(patterns)
@@ -263,21 +253,21 @@ func (ea *execActions) addCmds(cmds [][]string, act action) error {
 	return nil
 }
 
-func newExecActions(cfg *config.ExecuteActions) (*execActions, error) {
+func newExecActions(cfg *config.ExecuteActions, cwd, home string) (*execActions, error) {
 	if cfg == nil {
 		return nil, nil
 	}
 
 	var ea execActions
-	err := ea.addCmds(cfg.Allow, allow)
+	err := ea.addCmds(cfg.Allow, allow, cwd, home)
 	if err != nil {
 		return nil, err
 	}
-	err = ea.addCmds(cfg.Ask, ask)
+	err = ea.addCmds(cfg.Ask, ask, cwd, home)
 	if err != nil {
 		return nil, err
 	}
-	err = ea.addCmds(cfg.Deny, deny)
+	err = ea.addCmds(cfg.Deny, deny, cwd, home)
 	if err != nil {
 		return nil, err
 	}
@@ -307,12 +297,13 @@ func newExecActions(cfg *config.ExecuteActions) (*execActions, error) {
 	return &ea, nil
 }
 
-func (ea *execActions) cmdAction(name string, args []string, dflt action) action {
+// cmdAction returns the action configured for path, which must already have
+// been expanded: expandPath resolves both the configured commands and the
+// command being run, so the two are compared in the same terms.
+func (ea *execActions) cmdAction(path string, args []string, dflt action) action {
 	if ea == nil {
 		return dflt
 	}
-
-	path := lookPath(name)
 
 	// A rule for the command itself is more specific than a rule for the
 	// directory it is in; a rule whose patterns don't match is not a rule for
@@ -372,7 +363,7 @@ func NewSandbox(sbCfg *config.SandboxConfig, ask AskFunc) (*Sandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	executeActions, err := newExecActions(sbCfg.Execute) // XXX
+	executeActions, err := newExecActions(sbCfg.Execute, cwd, home)
 	if err != nil {
 		return nil, err
 	}
@@ -472,19 +463,27 @@ func (sb *Sandbox) WalkDir(root string, fn fs.WalkDirFunc) error {
 		})
 }
 
-func (sb *Sandbox) checkExec(name string, args []string) error {
-	cmdline := strings.Join(append([]string{name}, args...), " ")
+// expandCheckExec expands name the same way as the configured commands were
+// expanded, so that the two are compared in the same terms, and checks that it
+// may be executed. The expanded path is what must be executed.
+func (sb *Sandbox) expandCheckExec(name string, args []string) (string, error) {
+	path, _, err := expandPath(name, sb.cwd, sb.home, true)
+	if err != nil {
+		return "", err
+	}
 
-	switch sb.executeActions.cmdAction(name, args, sb.dflt) {
+	cmdline := strings.Join(append([]string{path}, args...), " ")
+
+	switch sb.executeActions.cmdAction(path, args, sb.dflt) {
 	case allow:
-		return nil
+		return path, nil
 	case ask:
 		if sb.ask != nil && sb.ask("execute", cmdline) {
-			return nil
+			return path, nil
 		}
 	}
 
-	return &fs.PathError{Op: "execute", Path: cmdline, Err: fs.ErrPermission}
+	return "", &fs.PathError{Op: "execute", Path: cmdline, Err: fs.ErrPermission}
 }
 
 // CombinedOutput runs a command in dir and returns its combined stdout and
@@ -492,11 +491,14 @@ func (sb *Sandbox) checkExec(name string, args []string) error {
 func (sb *Sandbox) CombinedOutput(ctx context.Context, dir, name string, arg ...string) ([]byte,
 	error) {
 
-	if err := sb.checkExec(name, arg); err != nil {
+	path, err := sb.expandCheckExec(name, arg)
+	if err != nil {
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, name, arg...)
+	// The expanded path is run, rather than the name as given, so that what is
+	// executed is what was checked.
+	cmd := exec.CommandContext(ctx, path, arg...)
 	cmd.Dir = dir
 	return cmd.CombinedOutput()
 }
