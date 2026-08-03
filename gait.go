@@ -23,7 +23,6 @@ To Do:
 -- (network: yes, ask, always)
 -- github.com/superradcompany/microsandbox
 -- nono.sh
--- matching rules: most specific (longest) wins; error if same path is specified more than once
 
 - allow programatic tool calling
 

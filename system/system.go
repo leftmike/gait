@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/leftmike/gait/config"
 )
@@ -38,6 +40,36 @@ type rwActions struct {
 	dirs  []dirAction
 }
 
+// resolveSymlinks resolves the symbolic links in path, so that the path which
+// is checked against the configured paths is the path which the operation will
+// actually reach. Without this, a link within an allowed directory reaches a
+// file outside of it, and a link to a denied command runs it.
+//
+// Only the links which exist can be resolved; trailing components which do not
+// exist yet are kept as they are, so that a path can be checked before it is
+// created. Resolving here still leaves the window between the check and the
+// operation, in which a component could be replaced by a link; closing that
+// needs the operations themselves to refuse to follow links.
+func resolveSymlinks(path string) string {
+	var rest string
+
+	for {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err == nil {
+			return filepath.Join(resolved, rest)
+		}
+
+		dir := filepath.Dir(path)
+		if dir == path {
+			// The root was reached without resolving anything.
+			return filepath.Join(path, rest)
+		}
+
+		rest = filepath.Join(filepath.Base(path), rest)
+		path = dir
+	}
+}
+
 func expandPath(path, cwd, home string, look bool) (string, bool, error) {
 	hasSuffix := strings.HasSuffix(path, "/")
 
@@ -61,6 +93,8 @@ func expandPath(path, cwd, home string, look bool) (string, bool, error) {
 		}
 		path = filepath.Clean(path)
 	}
+
+	path = resolveSymlinks(path)
 
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -195,7 +229,11 @@ func (ea *execActions) addCmds(cmds [][]string, act action, cwd, home string) er
 		} else {
 			var pats []*regexp.Regexp
 			for _, arg := range cmd[1:] {
-				pat, err := regexp.Compile(arg)
+				// A pattern must match the whole argument. An unanchored
+				// pattern is satisfied by any argument merely containing a
+				// match, which would let an allow rule pass the arguments it
+				// was written to exclude.
+				pat, err := regexp.Compile(`\A(?:` + arg + `)\z`)
 				if err != nil {
 					return fmt.Errorf("sandbox: %s: %s", cmd[0], err)
 				}
@@ -364,6 +402,21 @@ func NewSandbox(sbCfg *config.SandboxConfig, ask AskFunc) (*Sandbox, error) {
 	}, nil
 }
 
+// checkAction checks that op is allowed on path, which must already have been
+// expanded, asking the user if that is what the path is configured for.
+func (sb *Sandbox) checkAction(rwa *rwActions, op, path string) error {
+	switch rwa.resolveAction(path, sb.dflt) {
+	case allow:
+		return nil
+	case ask:
+		if sb.ask != nil && sb.ask(op, path) {
+			return nil
+		}
+	}
+
+	return &fs.PathError{Op: op, Path: path, Err: fs.ErrPermission}
+}
+
 // expandCheckRW expands path the same way as the configured paths were
 // expanded, so that the two are compared in the same terms, and checks that op
 // is allowed on it. The expanded path is what the operation must use.
@@ -373,16 +426,11 @@ func (sb *Sandbox) expandCheckRW(rwa *rwActions, op, path string) (string, error
 		return "", err
 	}
 
-	switch rwa.resolveAction(path, sb.dflt) {
-	case allow:
-		return path, nil
-	case ask:
-		if sb.ask != nil && sb.ask(op, path) {
-			return path, nil
-		}
+	if err := sb.checkAction(rwa, op, path); err != nil {
+		return "", err
 	}
 
-	return "", &fs.PathError{Op: op, Path: path, Err: fs.ErrPermission}
+	return path, nil
 }
 
 func (sb *Sandbox) ReadFile(path string) ([]byte, error) {
@@ -406,6 +454,35 @@ func (sb *Sandbox) MkdirAll(path string, perm fs.FileMode) error {
 	if err != nil {
 		return err
 	}
+
+	// The missing parents are created as well, so each of them must be allowed
+	// too; checking only the path itself would create a denied directory on the
+	// way to an allowed one. A parent which does not exist cannot be a symlink,
+	// so what is checked is still what is created.
+	var missing []string
+	for dir := filepath.Dir(path); ; {
+		if _, err := os.Stat(dir); err == nil {
+			break
+		}
+
+		missing = append(missing, dir)
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	// The parents are checked in the order in which they will be created, so
+	// that asking about them follows the same order.
+	for i := len(missing) - 1; i >= 0; i -= 1 {
+		err := sb.checkAction(sb.writeActions, "mkdir", missing[i])
+		if err != nil {
+			return err
+		}
+	}
+
 	return os.MkdirAll(path, perm)
 }
 
@@ -448,6 +525,39 @@ func (sb *Sandbox) WalkDir(root string, fn fs.WalkDirFunc) error {
 		})
 }
 
+// quoteArg quotes an argument which would otherwise be unclear, leaving the
+// ordinary ones as they are so that the command line stays readable.
+func quoteArg(arg string) string {
+	if arg == "" || !utf8.ValidString(arg) {
+		return strconv.Quote(arg)
+	}
+
+	for _, r := range arg {
+		if r == ' ' || r == '"' || r == '\\' || !strconv.IsPrint(r) {
+			return strconv.Quote(arg)
+		}
+	}
+
+	return arg
+}
+
+// quoteCmdline renders a command line for the user to be asked about. The
+// arguments are quoted so that what is shown is unambiguous: an argument
+// containing spaces is not mistaken for several arguments, an empty one is
+// visible, and one containing newlines or other control characters cannot
+// forge further lines in the prompt.
+func quoteCmdline(path string, args []string) string {
+	var b strings.Builder
+
+	b.WriteString(quoteArg(path))
+	for _, arg := range args {
+		b.WriteByte(' ')
+		b.WriteString(quoteArg(arg))
+	}
+
+	return b.String()
+}
+
 // expandCheckExec expands name the same way as the configured commands were
 // expanded, so that the two are compared in the same terms, and checks that it
 // may be executed. The expanded path is what must be executed.
@@ -457,7 +567,7 @@ func (sb *Sandbox) expandCheckExec(name string, args []string) (string, error) {
 		return "", err
 	}
 
-	cmdline := strings.Join(append([]string{path}, args...), " ")
+	cmdline := quoteCmdline(path, args)
 
 	switch sb.executeActions.resolveAction(path, args, sb.dflt) {
 	case allow:
