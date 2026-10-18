@@ -50,10 +50,10 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 		local           bool
 		thoughts        bool
 	}{
-		{provider: "anthropic", model: "claude-sonnet-4-6", thoughts: true},
-		{provider: "anthropic", model: "claude-haiku-4-5", thoughts: true},
+		{provider: "anthropic", model: "claude-sonnet-5-5", thoughts: true},
+		{provider: "anthropic", model: "claude-haiku-5-5", thoughts: true},
 		{provider: "google", model: "gemini-3.1-flash-lite", short: true, thoughts: true},
-		{provider: "huggingface", model: "openai/gpt-oss-20b:fireworks-ai", short: true},
+		{provider: "huggingface", model: "Qwen/Qwen3.6-35B-A3B", short: true},
 		{provider: "llamacpp", local: true},
 		{provider: "ollama", model: "llama3.2:3b", local: true},
 		{provider: "openai", model: "gpt-5.4-nano", thoughts: true},
