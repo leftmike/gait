@@ -6,6 +6,10 @@ To Do:
 -- /mcp__<server>__<prompt>: expose the <prompt> at <server>
 -- /tools -- list tools
 
+- Qwen 3.8 27B
+
+- https://github.com/perplexityai/numbat
+
 - web_fetch: get user confirmation / config of domains / urls to fetch
 - claude code builtin tools: Bash, Edit, Write, Read, Glob, Grep, Agent, WebFetch, WebSearch,
   AskUserQuestion, ExitPlanMode
@@ -23,12 +27,17 @@ To Do:
 -- (network: yes, ask, always)
 -- github.com/superradcompany/microsandbox
 -- nono.sh
+-- https://github.com/microsoft/mxc
 
 - allow programatic tool calling
 
 - open telemetry
 
 - codex skills prompt: https://github.com/openai/codex/blob/99f47d6e9a3546c14c43af99c7a58fa6bd130548/codex-rs/core/src/skills/render.rs#L19
+
+- configure system prompt
+
+- log everything
 
 - mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
@@ -176,6 +185,18 @@ func main() {
 	mdl, err := clnt.NewModel(agntCfg.ModelConfig)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
+
+		fmt.Print("available models: ")
+		var comma bool
+		for _, id := range sortModels(clnt.ListModels()) {
+			if comma {
+				fmt.Print(", ")
+			}
+			fmt.Print(id)
+			comma = true
+		}
+		fmt.Println()
+
 		os.Exit(1)
 	}
 

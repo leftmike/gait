@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/leftmike/gait/agent"
@@ -124,28 +124,40 @@ func slashHelp(agnt *agent.Agent, st model.State, args []string) error {
 	return nil
 }
 
+func sortModels(models map[string]model.ModelMetadata) []string {
+	var ids []string
+	for id := range models {
+		ids = append(ids, id)
+	}
+	slices.SortFunc(ids, func(id1, id2 string) int {
+		return strings.Compare(strings.ToLower(id1), strings.ToLower(id2))
+	})
+
+	return ids
+}
+
 func slashModels(agnt *agent.Agent, st model.State, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("/models: no arguments allowed: %s", args)
 	}
 
-	models := agnt.Client.ListModels()
-	var ids []string
-	for id := range models {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-
 	fmt.Printf("%-24s %-20s %-5s %-10s %-10s %s\n",
 		"ID", "NAME", "REAS", "CONTEXT", "OUTPUT", "COST (IN/OUT per M)")
-	for _, id := range ids {
+
+	models := agnt.Client.ListModels()
+	for _, id := range sortModels(models) {
 		mmd := models[id]
+		if len(id) > 24 {
+			fmt.Printf("%-44s  ", id)
+		} else {
+			fmt.Printf("%-24s %-20s ", id, mmd.Name)
+		}
+
 		reas := "no"
 		if mmd.Reasoning {
 			reas = "yes"
 		}
-		fmt.Printf("%-24s %-20s %-5s %-10d %-10d $%.2f / $%.2f\n",
-			id, mmd.Name, reas, mmd.ContextLimit, mmd.OutputLimit,
+		fmt.Printf("%-5s %-10d %-10d $%.2f / $%.2f\n", reas, mmd.ContextLimit, mmd.OutputLimit,
 			mmd.InputCost, mmd.OutputCost)
 	}
 
