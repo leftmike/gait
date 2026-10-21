@@ -33,21 +33,25 @@ var (
 			fn:   slashCost,
 		},
 		"/effort": {
-			cmd:  "/effort",
+			cmd:  "/effort [level]",
 			desc: "show or set the reasoning effort level",
 			fn:   slashEffort,
 		},
 		"/exit": {cmd: "/exit", desc: "exit the REPL", fn: slashExit},
 		"/help": {cmd: "/help", desc: "show help and available commands"},
 		"/model": {
-			cmd:  "/model",
+			cmd:  "/model [model]",
 			desc: "show or select the model to use",
 			fn:   slashModel,
 		},
-		"/models": {cmd: "/models", desc: "list available models", fn: slashModels},
-		"/quit":   {fn: slashExit}, // alias for /exit
+		"/models": {
+			cmd:  "/models [order]",
+			desc: "list available models, optionally order by id, name, or cost",
+			fn:   slashModels,
+		},
+		"/quit": {fn: slashExit}, // alias for /exit
 		"/skills": {
-			cmd:  "/skills",
+			cmd:  "/skills [skill ...]",
 			desc: "list available skills or show skill details",
 			fn:   slashSkills,
 		},
@@ -57,6 +61,8 @@ var (
 			fn:   slashStatus,
 		},
 	}
+
+	sortedCommands []string
 )
 
 func init() {
@@ -64,6 +70,13 @@ func init() {
 	sc := slashCommands["/help"]
 	sc.fn = slashHelp
 	slashCommands["/help"] = sc
+
+	for cmd, sc := range slashCommands {
+		if sc.cmd != "" {
+			sortedCommands = append(sortedCommands, cmd)
+		}
+	}
+	slices.Sort(sortedCommands)
 }
 
 func slash(agnt *agent.Agent, st model.State, s string) error {
@@ -72,14 +85,7 @@ func slash(agnt *agent.Agent, st model.State, s string) error {
 		return sc.fn(agnt, st, args)
 	}
 
-	fmt.Print("commands:")
-	for _, sc := range slashCommands {
-		if sc.cmd != "" {
-			fmt.Printf(" %s", sc.cmd)
-		}
-	}
-	fmt.Println()
-
+	fmt.Printf("commands: %s\n", strings.Join(sortedCommands, " "))
 	return nil
 }
 
@@ -114,43 +120,79 @@ func slashHelp(agnt *agent.Agent, st model.State, args []string) error {
 		return fmt.Errorf("/help: no arguments allowed: %s", args)
 	}
 
-	for _, sc := range slashCommands {
-		if sc.cmd == "" {
-			continue
-		}
-		fmt.Printf("%s: %s\n", sc.cmd, sc.desc)
+	for _, cmd := range sortedCommands {
+		sc := slashCommands[cmd]
+		fmt.Printf("%s\n        %s\n", sc.cmd, sc.desc)
 	}
 
 	return nil
 }
 
-func sortModels(models map[string]model.ModelMetadata) []string {
-	var ids []string
+func sortModels(models map[string]model.ModelMetadata, orderBy string) []string {
+	var mmds []*model.ModelMetadata
 	for id := range models {
-		ids = append(ids, id)
+		mmd := models[id]
+		mmds = append(mmds, &mmd)
 	}
-	slices.SortFunc(ids, func(id1, id2 string) int {
-		return strings.Compare(strings.ToLower(id1), strings.ToLower(id2))
+	slices.SortFunc(mmds, func(mmd1, mmd2 *model.ModelMetadata) int {
+		switch orderBy {
+		case "id":
+			return strings.Compare(strings.ToLower(mmd1.Model), strings.ToLower(mmd2.Model))
+		case "name":
+			return strings.Compare(strings.ToLower(mmd1.Name), strings.ToLower(mmd2.Name))
+		case "cost":
+			if mmd1.InputCost < mmd2.InputCost {
+				return -1
+			} else if mmd1.InputCost > mmd2.InputCost {
+				return 1
+			} else if mmd1.OutputCost < mmd2.OutputCost {
+				return -1
+			} else if mmd1.OutputCost > mmd2.OutputCost {
+				return 1
+			}
+
+			return strings.Compare(strings.ToLower(mmd1.Model), strings.ToLower(mmd2.Model))
+		default:
+			panic(fmt.Sprintf("unexpected order by: %s", orderBy))
+		}
 	})
+	var ids []string
+	for _, mmd := range mmds {
+		ids = append(ids, mmd.Model)
+	}
 
 	return ids
 }
 
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+
+	return s[:max]
+}
+
 func slashModels(agnt *agent.Agent, st model.State, args []string) error {
-	if len(args) > 0 {
-		return fmt.Errorf("/models: no arguments allowed: %s", args)
+	orderBy := "id"
+	if len(args) == 1 {
+		if !slices.Contains([]string{"id", "name", "cost"}, args[0]) {
+			return fmt.Errorf("/models: order by must be id, name, or cost: %s", args[0])
+		}
+		orderBy = args[0]
+	} else if len(args) > 0 {
+		return fmt.Errorf("/models: only one optional argument allowed: %s", args)
 	}
 
 	fmt.Printf("%-24s %-20s %-5s %-10s %-10s %s\n",
 		"ID", "NAME", "REAS", "CONTEXT", "OUTPUT", "COST (IN/OUT per M)")
 
 	models := agnt.Client.ListModels()
-	for _, id := range sortModels(models) {
+	for _, id := range sortModels(models, orderBy) {
 		mmd := models[id]
 		if len(id) > 24 {
-			fmt.Printf("%-44s  ", id)
+			fmt.Printf("%-44s  ", truncate(id, 44))
 		} else {
-			fmt.Printf("%-24s %-20s ", id, mmd.Name)
+			fmt.Printf("%-24s %-20s ", id, truncate(mmd.Name, 20))
 		}
 
 		reas := "no"

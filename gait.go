@@ -188,7 +188,7 @@ func main() {
 
 		fmt.Print("available models: ")
 		var comma bool
-		for _, id := range sortModels(clnt.ListModels()) {
+		for _, id := range sortModels(clnt.ListModels(), "id") {
 			if comma {
 				fmt.Print(", ")
 			}
