@@ -21,12 +21,12 @@ environment variable (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `HF_TOKEN`,
 
 ## Configuration
 
-gait reads an HCL config file from `~/.gait/gait.hcl`, `~/.gait.hcl`, or
-`./gait.hcl` (use `-config` to point at a specific file, or `-no-config` to
-skip it).
+gait reads the first HCL config file found from `./gait.hcl`,
+`~/.gait/gait.hcl`, or `~/.gait.hcl` (use `-config` to point at a specific
+file, or `-no-config` to skip it).
 
 ```hcl
-provider "anthropic"            # default provider
+provider = "anthropic"          # default provider
 
 provider "anthropic" {
     model   = "claude-opus-4-1"

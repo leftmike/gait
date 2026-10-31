@@ -36,7 +36,9 @@ To Do:
 
 - open telemetry
 
+- skills
 - codex skills prompt: https://github.com/openai/codex/blob/99f47d6e9a3546c14c43af99c7a58fa6bd130548/codex-rs/core/src/skills/render.rs#L19
+- read the skills
 
 - configure system prompt
 
@@ -168,7 +170,7 @@ func main() {
 	fs.BoolVar(&trace, "trace", false, "trace model interaction")
 	fs.BoolVar(&trace, "t", false, "trace model interaction")
 
-	agntCfg, cfg, err := config.ParseFlags(fs)
+	agntCfg, cfg, err := config.ParseFlags(fs, os.Args[1:])
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)

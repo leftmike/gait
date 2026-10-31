@@ -4,7 +4,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -48,19 +50,6 @@ type SandboxConfig struct {
 	Write   *RWActions      `hcl:"write,block"`
 }
 
-/*
-"mcpServers": {
-        "remote-http-files": {
-          "type": "http",
-          "url": "https://localhost:8443/mcp"
-        },
-        "remote-sse-files": {
-          "type": "sse",
-          "url": "https://localhost:8443/sse"
-        }
-      },
-*/
-
 type MCPServer struct {
 	Name    string   `hcl:"name,label"`
 	Type    string   `hcl:"type,optional"`    // stdio, http, sse
@@ -69,16 +58,6 @@ type MCPServer struct {
 	URL     string   `hcl:"url,optional"`     // http, sse
 	// Headers
 }
-
-/*
-system name {
-    read {
-        allow = []
-        ask = ["."]
-        deny = []
-    }
-}
-*/
 
 type Config struct {
 	Provider       string          `hcl:"provider,optional"`
@@ -124,32 +103,71 @@ func configFilenames() []string {
 	return []string{"./gait.hcl", "~/.gait/gait.hcl", "~/.gait.hcl"}
 }
 
+func expandHome(name string) string {
+	if name != "~" && !strings.HasPrefix(name, "~/") {
+		return name
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return name
+	}
+	return filepath.Join(home, name[1:])
+}
+
 func ReadConfig(filenames []string) (*Config, error) {
 	for _, name := range filenames {
+		name = expandHome(name)
 		buf, err := os.ReadFile(name)
-		if err == nil {
-			var cfg Config
-			err := hclsimple.Decode(name, buf, nil, &cfg)
-			return &cfg, err
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return nil, err
 		}
+
+		var cfg Config
+		err = hclsimple.Decode(name, buf, nil, &cfg)
+		if err != nil {
+			return nil, err
+		}
+		err = cfg.checkDuplicates()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		return &cfg, nil
 	}
 
 	return nil, fmt.Errorf("config file not found: %v", filenames)
 }
 
-func stringsJoin(vals []string, conj string) string {
-	switch len(vals) {
-	case 1:
-		return vals[0]
-	case 2:
-		return fmt.Sprintf("%s %s %s", vals[0], conj, vals[1])
-	default:
-		return fmt.Sprintf("%s, %s %s", strings.Join(vals[:len(vals)-1], ", "), conj,
-			vals[len(vals)-1])
+func checkDuplicate(kind string, names []string) error {
+	seen := map[string]bool{}
+	for _, name := range names {
+		key := strings.ToLower(name)
+		if seen[key] {
+			return fmt.Errorf("duplicate %s block: %s", kind, name)
+		}
+		seen[key] = true
 	}
+	return nil
 }
 
-func ParseFlags(fs *flag.FlagSet) (AgentConfig, *Config, error) {
+func (cfg *Config) checkDuplicates() error {
+	var providers, sandboxes []string
+	for _, clntCfg := range cfg.ClientConfigs {
+		providers = append(providers, clntCfg.Provider)
+	}
+	for _, sbCfg := range cfg.SandboxConfigs {
+		sandboxes = append(sandboxes, sbCfg.Name)
+	}
+
+	err := checkDuplicate("provider", providers)
+	if err != nil {
+		return err
+	}
+	return checkDuplicate("sandbox", sandboxes)
+}
+
+func ParseFlags(fs *flag.FlagSet, args []string) (AgentConfig, *Config, error) {
 	var configFilename string
 	var noConfig bool
 	var useAnthropic bool
@@ -195,10 +213,13 @@ func ParseFlags(fs *flag.FlagSet) (AgentConfig, *Config, error) {
 	fs.StringVar(&sandbox, "sandbox", "", "tool `sandbox`")
 	fs.BoolVar(&noSandbox, "no-sandbox", false, "tools don't use a sandbox")
 	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api_key` for Brave Search")
-	fs.Parse(os.Args[1:])
+	err := fs.Parse(args)
+	if err != nil {
+		return AgentConfig{}, nil, err
+	}
 
 	if maxTokens < 0 {
-		return AgentConfig{}, nil, fmt.Errorf("max-tokens must be positive")
+		return AgentConfig{}, nil, fmt.Errorf("max-tokens must not be negative")
 	}
 
 	providers := map[string]bool{
@@ -231,14 +252,13 @@ func ParseFlags(fs *flag.FlagSet) (AgentConfig, *Config, error) {
 			filenames = configFilenames()
 		}
 
-		var err error
 		cfg, err = ReadConfig(filenames)
 		if err != nil {
 			return AgentConfig{}, nil, err
 		}
 
 		if provider == "" {
-			provider = cfg.Provider
+			provider = strings.ToLower(cfg.Provider)
 		}
 		clntCfg, ok := cfg.FindClientConfig(provider)
 
@@ -276,6 +296,8 @@ func ParseFlags(fs *flag.FlagSet) (AgentConfig, *Config, error) {
 				}
 			}
 		}
+	} else if sandbox != "" && sandbox != "none" {
+		return AgentConfig{}, nil, errors.New("sandbox flag requires a config")
 	}
 
 	if braveAPIKey != "" {
