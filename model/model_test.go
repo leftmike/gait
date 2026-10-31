@@ -101,7 +101,7 @@ func testSimple(t *testing.T, clnt model.Client, provider, name string,
 
 	mdl, err := clnt.NewModel(mdlCfg)
 	if err != nil {
-		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
+		t.Fatalf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
 
 	st := clnt.NewState()
@@ -191,11 +191,11 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 
 	mdl, err := clnt.NewModel(mdlCfg)
 	if err != nil {
-		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
+		t.Fatalf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
 	err = mdl.SetTools(tools, testSandbox())
 	if err != nil {
-		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
+		t.Fatalf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}
 
 	st := clnt.NewState()
@@ -261,11 +261,11 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 
 	mdl, err := clnt.NewModel(mdlCfg)
 	if err != nil {
-		t.Errorf("NewModel(%s, %s) failed with %s", provider, name, err)
+		t.Fatalf("NewModel(%s, %s) failed with %s", provider, name, err)
 	}
 	err = mdl.SetTools(tools, testSandbox())
 	if err != nil {
-		t.Errorf("SetTools(%s, %s) failed with %s", provider, name, err)
+		t.Fatalf("SetTools(%s, %s) failed with %s", provider, name, err)
 	}
 
 	st := clnt.NewState()
