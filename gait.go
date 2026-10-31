@@ -14,6 +14,8 @@ To Do:
 - claude code builtin tools: Bash, Edit, Write, Read, Glob, Grep, Agent, WebFetch, WebSearch,
   AskUserQuestion, ExitPlanMode
 - remove brave search?
+- opencode tools: https://opencode.ai/v2/docs/tools/
+- web search: https://opencode.ai/v2/docs/websearch
 
 - tool search tool: https://www.anthropic.com/engineering/advanced-tool-use
 
@@ -25,9 +27,10 @@ To Do:
 -- execute: yes, always, no
 -- write: yes, always, no
 -- (network: yes, ask, always)
--- github.com/superradcompany/microsandbox
 -- nono.sh
--- https://github.com/microsoft/mxc
+-- github.com/superradcompany/microsandbox
+-- github.com/microsoft/mxc
+-- github.com/NVIDIA/OpenShell
 
 - allow programatic tool calling
 
