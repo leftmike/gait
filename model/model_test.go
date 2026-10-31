@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/leftmike/gait/config"
@@ -66,35 +67,37 @@ func testModels(t *testing.T, test testModelFunc, mdlCfg config.ModelConfig) {
 			continue
 		} else if mdlCfg.IncludeThoughts && !c.thoughts {
 			continue
-		} else if testing.Short() && !c.short {
-			fmt.Printf("skipping %s %s\n", c.provider, c.model)
-			continue
-		} else if *provider == "" && c.local {
-			fmt.Printf("skipping %s (local) %s\n", c.provider, c.model)
-			continue
 		}
 
-		clntCfg, ok := cfg.FindClientConfig(c.provider)
-		if !c.local && (!ok || clntCfg.APIKey == "") {
-			t.Fatalf("missing api key for provider: %s", c.provider)
-		} else if c.local {
-			clntCfg.Provider = c.provider
-		}
+		t.Run(c.provider+"/"+c.model, func(t *testing.T) {
+			if testing.Short() && !c.short {
+				t.Skipf("skipping %s %s", c.provider, c.model)
+			} else if *provider == "" && c.local {
+				t.Skipf("skipping %s (local) %s", c.provider, c.model)
+			}
+			t.Parallel()
 
-		clnt, err := model.NewClient(&clntCfg)
-		if err != nil {
-			t.Fatalf("NewClient(%s) failed with %s", c.provider, err)
-		}
+			clntCfg, ok := cfg.FindClientConfig(c.provider)
+			if !c.local && (!ok || clntCfg.APIKey == "") {
+				t.Fatalf("missing api key for provider: %s", c.provider)
+			} else if c.local {
+				clntCfg.Provider = c.provider
+			}
 
-		mdlCfg.Model = c.model
-		test(t, clnt, c.provider, c.model, mdlCfg)
+			clnt, err := model.NewClient(&clntCfg)
+			if err != nil {
+				t.Fatalf("NewClient(%s) failed with %s", c.provider, err)
+			}
+
+			cfg := mdlCfg
+			cfg.Model = c.model
+			test(t, clnt, c.provider, c.model, cfg)
+		})
 	}
 }
 
 func testSimple(t *testing.T, clnt model.Client, provider, name string,
 	mdlCfg config.ModelConfig) {
-
-	fmt.Println(provider, name)
 
 	mdl, err := clnt.NewModel(mdlCfg)
 	if err != nil {
@@ -123,26 +126,32 @@ func testSimple(t *testing.T, clnt model.Client, provider, name string,
 }
 
 func TestSimple(t *testing.T) {
+	t.Parallel()
 	testModels(t, testSimple, config.ModelConfig{})
 }
 
-var (
-	temperatureLocation string
-	weatherLocation     string
-)
+type locations struct {
+	mutex       sync.Mutex
+	temperature string
+	weather     string
+}
 
 type currentTemperatureArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current temperature for"`
 }
 
-func currentTemperature(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func (l *locations) currentTemperature(ctx context.Context, sb *system.Sandbox,
+	buf []byte) (string, error) {
+
 	var args currentTemperatureArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
 		return "", err
 	}
 
-	temperatureLocation = args.Location
+	l.mutex.Lock()
+	l.temperature = args.Location
+	l.mutex.Unlock()
 
 	return "40", nil
 }
@@ -151,14 +160,18 @@ type currentWeatherArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current weather for"`
 }
 
-func currentWeather(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func (l *locations) currentWeather(ctx context.Context, sb *system.Sandbox,
+	buf []byte) (string, error) {
+
 	var args currentWeatherArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
 		return "", err
 	}
 
-	weatherLocation = args.Location
+	l.mutex.Lock()
+	l.weather = args.Location
+	l.mutex.Unlock()
 
 	return "sunny and 70", nil
 }
@@ -166,13 +179,12 @@ func currentWeather(ctx context.Context, sb *system.Sandbox, buf []byte) (string
 func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 	mdlCfg config.ModelConfig) {
 
-	fmt.Println(provider, name)
-
+	var locs locations
 	tools := map[string]tool.Tool{
 		"current_temperature": tool.Tool{
 			Name:        "current_temperature",
 			Description: "Gets the current temperature for the given location",
-			Func:        currentTemperature,
+			Func:        locs.currentTemperature,
 			Schema:      tool.MustToolSchema[currentTemperatureArgs](),
 		},
 	}
@@ -191,19 +203,17 @@ func testSimpleTool(t *testing.T, clnt model.Client, provider, name string,
 current_temperature tool.`)
 	n := st.Len()
 
-	temperatureLocation = ""
-
 	ctx := context.Background()
 	err = mdl.Generate(ctx, st, &model.Options{})
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
 
-	if temperatureLocation == "" {
+	if locs.temperature == "" {
 		t.Errorf("Generate(%s, %s) current temperature not called", provider, name)
-	} else if !strings.Contains(strings.ToLower(temperatureLocation), "seattle") {
+	} else if !strings.Contains(strings.ToLower(locs.temperature), "seattle") {
 		t.Errorf("Generate(%s %s) argument did not include seattle: %s", provider, name,
-			temperatureLocation)
+			locs.temperature)
 	}
 
 	var toolCall, toolOutput bool
@@ -226,25 +236,25 @@ current_temperature tool.`)
 }
 
 func TestSimpleTool(t *testing.T) {
+	t.Parallel()
 	testModels(t, testSimpleTool, config.ModelConfig{})
 }
 
 func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 	mdlCfg config.ModelConfig) {
 
-	fmt.Println(provider, name)
-
+	var locs locations
 	tools := map[string]tool.Tool{
 		"current_temperature": tool.Tool{
 			Name:        "current_temperature",
 			Description: "Gets the current temperature for the given location",
-			Func:        currentTemperature,
+			Func:        locs.currentTemperature,
 			Schema:      tool.MustToolSchema[currentTemperatureArgs](),
 		},
 		"current_weather": tool.Tool{
 			Name:        "current_weather",
 			Description: "Gets the current weather for the given location",
-			Func:        currentWeather,
+			Func:        locs.currentWeather,
 			Schema:      tool.MustToolSchema[currentWeatherArgs](),
 		},
 	}
@@ -263,27 +273,24 @@ func testMultiTool(t *testing.T, clnt model.Client, provider, name string,
 current_temperature and current_weather tools.`)
 	n := st.Len()
 
-	temperatureLocation = ""
-	weatherLocation = ""
-
 	ctx := context.Background()
 	err = mdl.Generate(ctx, st, &model.Options{})
 	if err != nil {
 		t.Errorf("Generate(%s, %s) failed with %s", provider, name, err)
 	}
 
-	if temperatureLocation == "" {
+	if locs.temperature == "" {
 		t.Errorf("Generate(%s, %s) current temperature not called", provider, name)
-	} else if !strings.Contains(strings.ToLower(temperatureLocation), "seattle") {
+	} else if !strings.Contains(strings.ToLower(locs.temperature), "seattle") {
 		t.Errorf("Generate(%s %s) argument did not include seattle: %s", provider, name,
-			temperatureLocation)
+			locs.temperature)
 	}
 
-	if weatherLocation == "" {
+	if locs.weather == "" {
 		t.Errorf("Generate(%s, %s) current weather not called", provider, name)
-	} else if !strings.Contains(strings.ToLower(weatherLocation), "seattle") {
+	} else if !strings.Contains(strings.ToLower(locs.weather), "seattle") {
 		t.Errorf("Generate(%s %s) argument did not include seattle: %s", provider, name,
-			weatherLocation)
+			locs.weather)
 	}
 	var toolCalls, toolOutputs int
 	for n < st.Len() {
@@ -306,9 +313,11 @@ current_temperature and current_weather tools.`)
 }
 
 func TestMultiTool(t *testing.T) {
+	t.Parallel()
 	testModels(t, testMultiTool, config.ModelConfig{})
 }
 
 func TestMultiToolThinking(t *testing.T) {
+	t.Parallel()
 	testModels(t, testMultiTool, config.ModelConfig{IncludeThoughts: true})
 }
