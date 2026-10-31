@@ -42,6 +42,7 @@ description: a test skill for unit testing
 			fail: true,
 		},
 		{
+			name: "test-skill",
 			s: `---
 name: test-skill
 description: a test skill for unit testing
@@ -49,6 +50,53 @@ description: a test skill for unit testing
 # Test Skill
 ---
 Endmatter
+`,
+			sf: skillFrontmatter{
+				Name:        "test-skill",
+				Description: "a test skill for unit testing",
+			},
+			body: `# Test Skill
+---
+Endmatter
+`,
+		},
+		{
+			name: "test-skill",
+			s:    "---\r\nname: test-skill\r\ndescription: crlf\r\n---  \r\n# Test Skill\r\n",
+			sf: skillFrontmatter{
+				Name:        "test-skill",
+				Description: "crlf",
+			},
+			body: "# Test Skill\r\n",
+		},
+		{
+			name: "test-skill",
+			s: `---
+name: test-skill
+description: "   "
+---
+# Test Skill
+`,
+			fail: true,
+		},
+		{
+			name: "test-skill",
+			s: `---
+name: test-skill
+description: no body
+---`,
+			sf: skillFrontmatter{
+				Name:        "test-skill",
+				Description: "no body",
+			},
+		},
+		{
+			name: "test-skill",
+			s: `--- 
+name: test-skill
+description: a test skill for unit testing
+---text
+# Test Skill
 `,
 			fail: true,
 		},
@@ -193,18 +241,21 @@ description: a test skill for unit testing
 
 	for _, c := range cases {
 		sf, body, err := parseSkill(c.name, c.s)
-		if err == nil {
-			if c.fail {
-				t.Errorf("parseSkill(%s) did not fail", c.s)
-			}
-		} else if err != nil {
+		if err != nil {
 			if !c.fail {
 				t.Errorf("parseSkill(%s) failed with %s", c.s, err)
 			}
-		} else if !reflect.DeepEqual(c.sf, sf) {
+			continue
+		}
+		if c.fail {
+			t.Errorf("parseSkill(%s) did not fail", c.s)
+			continue
+		}
+		if !reflect.DeepEqual(c.sf, sf) {
 			t.Errorf("parseSkill(%s) got %v want %v", c.s, sf, c.sf)
-		} else if c.body != body {
-			t.Errorf("parseSkill(%s) got %s want %s", c.s, body, c.body)
+		}
+		if c.body != body {
+			t.Errorf("parseSkill(%s) got %q want %q", c.s, body, c.body)
 		}
 	}
 }
@@ -338,17 +389,61 @@ description: Skill %s
 	skills, err := ReadDir(tempDir)
 	if err != nil {
 		t.Errorf("ReadDir() failed with %s", err)
-	} else {
-		if len(skills) != len(names) {
-			t.Errorf("ReadAll() returned %d skills, want %d", len(skills), len(names))
-		}
+	}
+	if len(skills) != len(names) {
+		t.Errorf("ReadDir() returned %d skills, want %d", len(skills), len(names))
+	}
 
-		for _, sk := range skills {
-			testSkill(t, "ReadDir", sk, filepath.Join(tempDir, sk.Name), sk.Name, "Skill "+sk.Name,
-				"", "", "", sk.Name)
-			if !slices.Contains(names, sk.Name) {
-				t.Errorf("ReadDir() unexpected skill name %s", sk.Name)
-			}
+	for _, sk := range skills {
+		testSkill(t, "ReadDir", sk, filepath.Join(tempDir, sk.Name), sk.Name, "Skill "+sk.Name,
+			"", "", "", sk.Name)
+		if !slices.Contains(names, sk.Name) {
+			t.Errorf("ReadDir() unexpected skill name %s", sk.Name)
+		}
+	}
+}
+
+func TestReadDirErrors(t *testing.T) {
+	tempDir := t.TempDir()
+	write := func(dir, s string) {
+		err := os.MkdirAll(filepath.Join(tempDir, dir), 0755)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.WriteFile(filepath.Join(tempDir, dir, "SKILL.md"), []byte(s), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("good-skill", "---\nname: good-skill\ndescription: good\n---\nbody\n")
+	write("wrong-name", "---\nname: other-name\ndescription: bad\n---\nbody\n")
+	write("no-description", "---\nname: no-description\n---\nbody\n")
+
+	target := t.TempDir()
+	write("../"+filepath.Base(target)+"/linked-skill",
+		"---\nname: linked-skill\ndescription: linked\n---\nbody\n")
+	err := os.Symlink(filepath.Join(target, "linked-skill"), filepath.Join(tempDir, "linked-skill"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	skills, err := ReadDir(tempDir)
+	var got []string
+	for _, sk := range skills {
+		got = append(got, sk.Name)
+	}
+	slices.Sort(got)
+	if want := []string{"good-skill", "linked-skill"}; !slices.Equal(got, want) {
+		t.Errorf("ReadDir() got skills %v want %v", got, want)
+	}
+
+	if err == nil {
+		t.Fatal("ReadDir() did not return errors for invalid skills")
+	}
+	for _, dir := range []string{"wrong-name", "no-description"} {
+		if !strings.Contains(err.Error(), filepath.Join(tempDir, dir)) {
+			t.Errorf("ReadDir() error missing %s: %s", dir, err)
 		}
 	}
 }
@@ -365,7 +460,7 @@ func TestSystemPrompt(t *testing.T) {
 		{
 			skillFrontmatter: skillFrontmatter{
 				Name:        "another-skill",
-				Description: "Another <test> skill",
+				Description: "Another <test> skill & it's \"quoted\"",
 			},
 			Dir: "/home/user/skills/another-skill",
 		},
@@ -388,8 +483,8 @@ func TestSystemPrompt(t *testing.T) {
 	if !strings.Contains(s, "/home/user/skills/test-skill/SKILL.md") {
 		t.Error("Prompt() missing skill location")
 	}
-	if !strings.Contains(s, "&lt;test&gt;") {
-		t.Error("Prompt() should HTML-escape description")
+	if !strings.Contains(s, `Another &lt;test&gt; skill &amp; it's "quoted"`) {
+		t.Errorf("Prompt() should escape only &, <, and >: %s", s)
 	}
 }
 

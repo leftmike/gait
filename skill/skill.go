@@ -3,7 +3,7 @@ package skill
 import (
 	"errors"
 	"fmt"
-	"html"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,37 +48,47 @@ func readSkill(dir, name string) (*Skill, error) {
 }
 
 var (
-	kebabCaseRegex = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	kebabCaseRegex  = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	frontmatterLine = regexp.MustCompile(`(?m)^---[ \t]*\r?$`)
 )
+
+func splitFrontmatter(s string) (string, string, bool) {
+	loc := frontmatterLine.FindStringIndex(s)
+	if loc == nil || loc[0] != 0 {
+		return "", "", false
+	}
+	rest := strings.TrimPrefix(s[loc[1]:], "\n")
+
+	loc = frontmatterLine.FindStringIndex(rest)
+	if loc == nil {
+		return "", "", false
+	}
+	return rest[:loc[0]], strings.TrimPrefix(rest[loc[1]:], "\n"), true
+}
 
 func parseSkill(name, s string) (skillFrontmatter, string, error) {
 	var sf skillFrontmatter
 
-	sections := strings.Split(strings.TrimSpace(s), "---\n")
-	if len(sections) != 3 || sections[0] != "" {
+	front, body, ok := splitFrontmatter(strings.TrimLeft(s, "\ufeff \t\r\n"))
+	if !ok {
 		return sf, "", errors.New("skill file format must be frontmatter followed by body")
 	}
 
-	err := yaml.Unmarshal([]byte(sections[1]), &sf)
+	err := yaml.Unmarshal([]byte(front), &sf)
 	if err != nil {
 		return sf, "", err
 	}
 
-	if sf.Name != name {
+	if len(sf.Name) > 64 {
+		return sf, "", fmt.Errorf("skill name longer than 64 characters: %s", sf.Name)
+	} else if !kebabCaseRegex.MatchString(sf.Name) {
+		return sf, "", fmt.Errorf(
+			"skill name must be lowercase letters, numbers, and single hyphens only: %s", sf.Name)
+	} else if sf.Name != name {
 		return sf, "", fmt.Errorf("skill directory must match skill name: %s %s", name, sf.Name)
-	} else if name != strings.ToLower(name) || !kebabCaseRegex.MatchString(name) {
-		return sf, "",
-			fmt.Errorf("skill name must be lowercase letters, numbers, and hyphens only: %s", name)
-	} else if len(name) > 64 {
-		return sf, "", fmt.Errorf("skill name longer than 64 characters: %s", name)
-	} else if strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") ||
-		strings.Contains(name, "--") {
-
-		return sf, "",
-			fmt.Errorf("skill name must not start or end with a hyphen or contain --: %s", name)
 	}
 
-	if sf.Description == "" {
+	if strings.TrimSpace(sf.Description) == "" {
 		return sf, "", fmt.Errorf("skill description is required: %s", name)
 	} else if utf8.RuneCountInString(sf.Description) > 1024 {
 		return sf, "", fmt.Errorf("skill description longer than 1024 characters: %s", name)
@@ -88,7 +98,7 @@ func parseSkill(name, s string) (skillFrontmatter, string, error) {
 		return sf, "", fmt.Errorf("skill compatibility longer than 500 characters: %s", name)
 	}
 
-	return sf, sections[2], nil
+	return sf, body, nil
 }
 
 func ReadDir(dir string) ([]*Skill, error) {
@@ -102,20 +112,27 @@ func ReadDir(dir string) ([]*Skill, error) {
 	}
 
 	var skills []*Skill
+	var errs []error
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		fi, err := os.Stat(filepath.Join(dir, entry.Name()))
+		if err != nil || !fi.IsDir() {
 			continue
 		}
 
 		sk, err := readSkill(dir, entry.Name())
-		if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		} else if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", filepath.Join(dir, entry.Name()), err))
 			continue
 		}
 		skills = append(skills, sk)
 	}
 
-	return skills, nil
+	return skills, errors.Join(errs...)
 }
+
+var promptEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
 func SystemPrompt(skills []*Skill) string {
 	if len(skills) == 0 {
@@ -127,13 +144,13 @@ func SystemPrompt(skills []*Skill) string {
 	for _, sk := range skills {
 		buf.WriteString("<skill>\n")
 		buf.WriteString("<name>\n")
-		buf.WriteString(html.EscapeString(sk.Name))
+		buf.WriteString(promptEscaper.Replace(sk.Name))
 		buf.WriteString("\n</name>\n")
 		buf.WriteString("<description>\n")
-		buf.WriteString(html.EscapeString(sk.Description))
+		buf.WriteString(promptEscaper.Replace(sk.Description))
 		buf.WriteString("\n</description>\n")
 		buf.WriteString("<location>\n")
-		buf.WriteString(html.EscapeString(filepath.Join(sk.Dir, "SKILL.md")))
+		buf.WriteString(promptEscaper.Replace(filepath.Join(sk.Dir, "SKILL.md")))
 		buf.WriteString("\n</location>\n")
 		buf.WriteString("</skill>\n")
 	}

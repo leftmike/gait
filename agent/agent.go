@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/mcp"
@@ -34,16 +36,18 @@ func (agnt *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbo
 
 func (agnt *Agent) AddSkill(dir string) error {
 	skills, err := skill.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-
+	errs := []error{err}
 	for _, sk := range skills {
+		if prev := skill.FindSkill(agnt.Skills, sk.Name); prev != nil {
+			errs = append(errs, fmt.Errorf("duplicate skill %s: %s ignored, using %s", sk.Name,
+				sk.Dir, prev.Dir))
+			continue
+		}
 		// XXX: agnt.fs.AddTree(sk.Dir, false)
 		agnt.Skills = append(agnt.Skills, sk)
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 func (agnt *Agent) SystemPrompt(st model.State) {
