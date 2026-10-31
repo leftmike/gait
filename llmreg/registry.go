@@ -1,3 +1,4 @@
+// Package llmreg provides a registry of LLM providers and models from models.dev.
 package llmreg
 
 import (
@@ -51,17 +52,22 @@ type Costs struct {
 var (
 	providers    map[string]Provider
 	providersErr error
-	once         sync.Once
+	loaded       bool
+	mutex        sync.Mutex
 )
 
 func Providers(refresh bool) (map[string]Provider, error) {
-	once.Do(func() {
-		var buf []byte
-		buf, providersErr = fetchJSON("https://models.dev/api.json", "modelsdev.json", refresh)
-		if providersErr == nil {
-			providersErr = json.Unmarshal(buf, &providers)
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if !loaded || refresh {
+		var p map[string]Provider
+		buf, err := fetchJSON("https://models.dev/api.json", "modelsdev.json", refresh)
+		if err == nil {
+			err = json.Unmarshal(buf, &p)
 		}
-	})
+		providers, providersErr, loaded = p, err, true
+	}
 
 	return providers, providersErr
 }

@@ -9,12 +9,18 @@ import (
 	"time"
 )
 
+var cacheDir string
+
 func fetchJSON(url, cacheName string, refresh bool) ([]byte, error) {
-	base, err := os.UserCacheDir()
-	if err != nil || base == "" {
-		base = os.TempDir()
+	dir := cacheDir
+	if dir == "" {
+		base, err := os.UserCacheDir()
+		if err != nil || base == "" {
+			base = os.TempDir()
+		}
+		dir = filepath.Join(base, "gait")
 	}
-	cachePath := filepath.Join(base, "gait", cacheName)
+	cachePath := filepath.Join(dir, cacheName)
 
 	if !refresh {
 		buf, ok := readFreshCache(cachePath, 24*time.Hour)
