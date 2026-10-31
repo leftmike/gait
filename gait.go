@@ -42,7 +42,7 @@ To Do:
 
 - log everything
 
-- mcpclient/Client.WithSession: only Ping if session not used in longer than 250ms
+- mcp/Client.WithSession: only Ping if session not used in longer than 250ms
 - Read Claude desktop config file
 - Read Claude code config file
 - Read OpenAI config file (if possible)

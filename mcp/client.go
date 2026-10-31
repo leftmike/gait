@@ -1,4 +1,4 @@
-package mcpclient
+package mcp
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/system"
@@ -19,12 +19,12 @@ import (
 type Client struct {
 	svrCfg    config.MCPServer
 	verbose   bool
-	clnt      *mcp.Client
-	sess      *mcp.ClientSession
+	clnt      *sdk.Client
+	sess      *sdk.ClientSession
 	retry     bool
-	prompts   []*mcp.Prompt
-	resources []*mcp.Resource
-	tools     []*mcp.Tool
+	prompts   []*sdk.Prompt
+	resources []*sdk.Resource
+	tools     []*sdk.Tool
 }
 
 func NewClient(ctx context.Context, svrCfg config.MCPServer, verbose bool) (*Client, error) {
@@ -44,7 +44,7 @@ func NewClient(ctx context.Context, svrCfg config.MCPServer, verbose bool) (*Cli
 	clnt := Client{
 		svrCfg:  svrCfg,
 		verbose: verbose,
-		clnt:    mcp.NewClient(&mcp.Implementation{Name: "gait", Version: "v0.1.0"}, nil),
+		clnt:    sdk.NewClient(&sdk.Implementation{Name: "gait", Version: "v0.1.0"}, nil),
 	}
 
 	err := clnt.WithSession(ctx, clnt.newClient)
@@ -55,7 +55,7 @@ func NewClient(ctx context.Context, svrCfg config.MCPServer, verbose bool) (*Cli
 	return &clnt, nil
 }
 
-func (clnt *Client) newClient(ctx context.Context, sess *mcp.ClientSession) error {
+func (clnt *Client) newClient(ctx context.Context, sess *sdk.ClientSession) error {
 	ir := sess.InitializeResult()
 	if ir.Capabilities.Prompts != nil {
 		ret, err := sess.ListPrompts(ctx, nil)
@@ -93,18 +93,18 @@ func (clnt *Client) Close() {
 	}
 }
 
-func (clnt *Client) transport() mcp.Transport {
+func (clnt *Client) transport() sdk.Transport {
 	switch clnt.svrCfg.Type {
 	case "", "stdio":
-		return &mcp.CommandTransport{
+		return &sdk.CommandTransport{
 			Command: exec.Command(clnt.svrCfg.Command, clnt.svrCfg.Args...),
 		}
 	case "sse":
-		return &mcp.SSEClientTransport{
+		return &sdk.SSEClientTransport{
 			Endpoint: clnt.svrCfg.URL,
 		}
 	case "http":
-		return &mcp.StreamableClientTransport{
+		return &sdk.StreamableClientTransport{
 			Endpoint: clnt.svrCfg.URL,
 		}
 	default:
@@ -113,7 +113,7 @@ func (clnt *Client) transport() mcp.Transport {
 }
 
 func (clnt *Client) WithSession(ctx context.Context,
-	with func(ctx context.Context, sess *mcp.ClientSession) error) error {
+	with func(ctx context.Context, sess *sdk.ClientSession) error) error {
 
 	if clnt.sess != nil && clnt.sess.Ping(ctx, nil) != nil {
 		clnt.sess.Close()
@@ -165,7 +165,7 @@ func (clnt *Client) AddTools(tools map[string]tool.Tool) {
 			Func: func(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 				var s string
 				err := clnt.WithSession(ctx,
-					func(ctx context.Context, sess *mcp.ClientSession) error {
+					func(ctx context.Context, sess *sdk.ClientSession) error {
 						var args map[string]any
 						err := json.Unmarshal(buf, &args)
 						if err != nil {
@@ -173,14 +173,14 @@ func (clnt *Client) AddTools(tools map[string]tool.Tool) {
 						}
 
 						ret, err := sess.CallTool(ctx,
-							&mcp.CallToolParams{Name: name, Arguments: args})
+							&sdk.CallToolParams{Name: name, Arguments: args})
 						if err != nil {
 							return err
 						}
 
 						var lines []string
 						for _, cnt := range ret.Content {
-							if tc, ok := cnt.(*mcp.TextContent); ok {
+							if tc, ok := cnt.(*sdk.TextContent); ok {
 								lines = append(lines, tc.Text)
 							}
 						}

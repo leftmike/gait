@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/leftmike/gait/config"
-	"github.com/leftmike/gait/mcpclient"
+	"github.com/leftmike/gait/mcp"
 	"github.com/leftmike/gait/model"
 	"github.com/leftmike/gait/skill"
 	"github.com/leftmike/gait/system"
@@ -19,11 +19,11 @@ type Agent struct {
 	Sandbox     *system.Sandbox
 
 	Skills []*skill.Skill
-	clnts  []*mcpclient.Client // XXX: rename field
+	clnts  []*mcp.Client // XXX: rename field
 }
 
 func (agnt *Agent) AddServer(ctx context.Context, svrCfg config.MCPServer, verbose bool) error {
-	clnt, err := mcpclient.NewClient(ctx, svrCfg, verbose)
+	clnt, err := mcp.NewClient(ctx, svrCfg, verbose)
 	if err != nil {
 		return err
 	}
