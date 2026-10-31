@@ -422,7 +422,9 @@ func (st *openAIState) toInputItemList() ([]responses.ResponseInputItemUnionPara
 			txtLen += len(step.content)
 
 		case ThinkingStep:
-			if idx+1 < len(st.steps) && st.steps[idx+1].typ == ModelResponseStep {
+			if idx+1 < len(st.steps) && (st.steps[idx+1].typ == ModelResponseStep ||
+				st.steps[idx+1].typ == ToolCallStep) {
+
 				lst = append(lst, responses.ResponseInputItemUnionParam{
 					OfReasoning: &responses.ResponseReasoningItemParam{
 						ID:               step.id,

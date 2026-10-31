@@ -216,22 +216,27 @@ func TestOpenAIToInputItemList(t *testing.T) {
 		"reasoning",
 		"output_message",
 		"input_message:user",
+		"reasoning",
 		"function_call",
 		"function_call",
 		"function_call_output",
 		"function_call_output",
 		"output_message",
 	})
-	checkTxtLen(t, txtLen, 31)
+	checkTxtLen(t, txtLen, 33)
 
 	rs := lst[2].OfReasoning
 	if rs.ID != "rs1" || rs.EncryptedContent.Value != "enc1" || rs.Summary[0].Text != "t1" {
 		t.Errorf("reasoning: got %+v", rs)
 	}
-	if fc := lst[6].OfFunctionCall; fc.CallID != "c2" || fc.Name != "g" {
+	rs = lst[5].OfReasoning
+	if rs.ID != "rs2" || rs.EncryptedContent.Value != "enc2" || rs.Summary[0].Text != "t2" {
+		t.Errorf("reasoning before tool call: got %+v", rs)
+	}
+	if fc := lst[7].OfFunctionCall; fc.CallID != "c2" || fc.Name != "g" {
 		t.Errorf("function call: got %+v", fc)
 	}
-	if out := lst[7].OfFunctionCallOutput; out.CallID != "c1" || out.Output.OfString.Value != "o1" {
+	if out := lst[8].OfFunctionCallOutput; out.CallID != "c1" || out.Output.OfString.Value != "o1" {
 		t.Errorf("function call output: got %+v", out)
 	}
 }
