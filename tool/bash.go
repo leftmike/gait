@@ -83,6 +83,7 @@ var Bash = Tool{
 		"Commands run with a default timeout of 120000 milliseconds (2 minutes), " +
 		"which can be raised up to 600000 milliseconds (10 minutes). Output " +
 		"longer than 30KB is truncated.",
-	Func:   bash,
-	Schema: MustToolSchema[bashArgs](),
+	Func:        bash,
+	Schema:      MustToolSchema[bashArgs](),
+	RunsCommand: true,
 }

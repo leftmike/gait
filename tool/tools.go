@@ -15,6 +15,7 @@ type Tool struct {
 	Description string
 	Func        ToolFunc
 	Schema      ToolSchema
+	RunsCommand bool
 }
 
 // A ToolFunc runs inside a sandbox, which mediates its access to the
@@ -243,6 +244,16 @@ func Anthropic(apiKey string) map[string]Tool {
 			WebFetch.Name:  WebFetch,
 			WriteFile.Name: WriteFile,
 		})
+}
+
+func WithoutCommands(tools map[string]Tool) map[string]Tool {
+	kept := map[string]Tool{}
+	for name, tl := range tools {
+		if !tl.RunsCommand {
+			kept[name] = tl
+		}
+	}
+	return kept
 }
 
 func OpenAI() map[string]Tool {

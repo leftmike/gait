@@ -233,6 +233,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer sb.Close(context.Background())
+	if !sandbox.CanRun(sb) {
+		tools = tool.WithoutCommands(tools)
+	}
 
 	agnt := agent.Agent{
 		AgentConfig: agntCfg,

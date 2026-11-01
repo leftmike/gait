@@ -55,7 +55,7 @@ without one.
 sandbox = "dev"
 
 sandbox "dev" {
-    type  = "nono"                  # backend: none, nono, or microsandbox
+    type  = "nono"                  # backend: none, tools, nono, or microsandbox
     read  = ["~/go/pkg/mod"]        # read-only
     write = ["/tmp"]                # read-write
     deny  = ["~/.aws"]              # no access
@@ -74,6 +74,10 @@ only; the default is `none`. A sandbox block may also hold a block named after
 its backend for that backend's own settings.
 
 The `none` backend does not restrict anything.
+
+The `tools` backend checks the file tools against the policy and does not run
+commands: the `bash`, `shell` and `shell_command` tools are removed. It does
+not accept `env`.
 
 The `nono` backend runs each command under [nono](https://nono.sh), which must
 be installed, and checks the file tools against the same policy. It grants

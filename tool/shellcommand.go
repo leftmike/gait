@@ -55,6 +55,7 @@ var ShellCommand = Tool{
 		"is given as an argv array and is executed directly, not through a shell, so " +
 		"redirection and pipes are not interpreted; run an explicit shell (for example " +
 		"[\"bash\", \"-lc\", \"...\"]) if you need them.",
-	Func:   shellCommand,
-	Schema: MustToolSchema[shellCommandArgs](),
+	Func:        shellCommand,
+	Schema:      MustToolSchema[shellCommandArgs](),
+	RunsCommand: true,
 }

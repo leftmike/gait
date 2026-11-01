@@ -59,6 +59,7 @@ var Shell = Tool{
 		"it is executed directly rather than through a shell unless you invoke one " +
 		"explicitly. Use workdir to set the working directory and timeout_ms to bound " +
 		"how long the command may run.",
-	Func:   shell,
-	Schema: MustToolSchema[shellArgs](),
+	Func:        shell,
+	Schema:      MustToolSchema[shellArgs](),
+	RunsCommand: true,
 }
