@@ -12,6 +12,7 @@ require (
 	github.com/ollama/ollama v0.30.11
 	github.com/openai/openai-go/v3 v3.22.0
 	github.com/peterh/liner v1.2.2
+	github.com/superradcompany/microsandbox/sdk/go v0.7.12
 	google.golang.org/genai v1.46.0
 	gopkg.in/yaml.v3 v3.0.1
 )

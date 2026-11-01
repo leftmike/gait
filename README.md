@@ -55,7 +55,7 @@ without one.
 sandbox = "dev"
 
 sandbox "dev" {
-    type  = "nono"                  # backend: none or nono
+    type  = "nono"                  # backend: none, nono, or microsandbox
     read  = ["~/go/pkg/mod"]        # read-only
     write = ["/tmp"]                # read-write
     deny  = ["~/.aws"]              # no access
@@ -86,5 +86,22 @@ does not work on WSL2. Its block:
 ```hcl
     nono {
         binary = "/usr/local/bin/nono" # default: nono on PATH
+    }
+```
+
+The `microsandbox` backend runs commands in a
+[microsandbox](https://github.com/superradcompany/microsandbox) microVM built
+from an OCI image, so commands use the image's programs rather than the host's.
+It needs gait built with `go build -tags microsandbox` (which requires cgo) and,
+on Linux, read-write access to `/dev/kvm`. The policy's paths are mounted at the
+same paths in the VM; `env` values are copied from the host. The VM starts on
+the first command and is removed when gait exits; the first start downloads the
+runtime into `~/.microsandbox` and pulls the image. Its block:
+
+```hcl
+    microsandbox {
+        image  = "golang:1.25"      # required
+        memory = 2048               # MiB, optional
+        cpus   = 2                  # optional
     }
 ```
