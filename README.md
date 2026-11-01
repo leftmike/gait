@@ -48,8 +48,8 @@ gait -ollama -model qwen2.5 -baseurl http://localhost:11545/v1
 ## Sandboxes
 
 Tools run commands and access files through a sandbox. Select one with
-`sandbox = "<name>"` in the config or `-sandbox <name>`; `-no-sandbox` or
-`-sandbox none` runs without one.
+`sandbox = "<name>"` in the config or `-sandbox <name>`; `-sandbox none` runs
+without one.
 
 ```hcl
 sandbox = "dev"

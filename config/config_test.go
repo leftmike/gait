@@ -200,17 +200,12 @@ sandbox "s" {
 		t.Errorf("SandboxConfig = %+v, want s", agntCfg.SandboxConfig)
 	}
 
-	for _, args := range [][]string{
-		{"-config", name, "-no-sandbox"},
-		{"-config", name, "-sandbox", "none"},
-	} {
-		agntCfg, err := parse(args...)
-		if err != nil {
-			t.Fatal(err)
-		} else if agntCfg.SandboxConfig != nil {
-			t.Errorf("ParseFlags(%v) SandboxConfig = %+v, want nil", args,
-				agntCfg.SandboxConfig)
-		}
+	agntCfg, err = parse("-config", name, "-sandbox", "none")
+	if err != nil {
+		t.Fatal(err)
+	} else if agntCfg.SandboxConfig != nil {
+		t.Errorf("ParseFlags(-sandbox none) SandboxConfig = %+v, want nil",
+			agntCfg.SandboxConfig)
 	}
 
 	if _, err := parse("-config", name, "-sandbox", "x"); err == nil {

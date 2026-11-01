@@ -211,7 +211,6 @@ func ParseFlags(fs *flag.FlagSet, args []string) (AgentConfig, *Config, error) {
 	var effort string
 	var maxTokens int
 	var sandbox string
-	var noSandbox bool
 	var braveAPIKey string
 
 	fs.StringVar(&configFilename, "config", "", "config filename")
@@ -238,7 +237,6 @@ func ParseFlags(fs *flag.FlagSet, args []string) (AgentConfig, *Config, error) {
 	fs.StringVar(&effort, "effort", "", "reasoning `effort`; depends on provider and model")
 	fs.IntVar(&maxTokens, "max-tokens", 0, "maximum output `tokens`")
 	fs.StringVar(&sandbox, "sandbox", "", "tool `sandbox`")
-	fs.BoolVar(&noSandbox, "no-sandbox", false, "tools don't use a sandbox")
 	fs.StringVar(&braveAPIKey, "brave-apikey", "", "`api_key` for Brave Search")
 	err := fs.Parse(args)
 	if err != nil {
@@ -308,19 +306,13 @@ func ParseFlags(fs *flag.FlagSet, args []string) (AgentConfig, *Config, error) {
 			maxTokens = clntCfg.MaxTokens
 		}
 
-		if noSandbox {
-			if sandbox != "" && sandbox != "none" {
-				return AgentConfig{}, nil, errors.New("no sandbox and sandbox flags not allowed")
-			}
-		} else {
-			if sandbox == "" {
-				sandbox = cfg.Sandbox
-			}
-			if sandbox != "" && sandbox != "none" {
-				sbCfg = cfg.FindSandboxConfig(sandbox)
-				if sbCfg == nil {
-					return AgentConfig{}, nil, fmt.Errorf("unknown sandbox: %s", sandbox)
-				}
+		if sandbox == "" {
+			sandbox = cfg.Sandbox
+		}
+		if sandbox != "" && sandbox != "none" {
+			sbCfg = cfg.FindSandboxConfig(sandbox)
+			if sbCfg == nil {
+				return AgentConfig{}, nil, fmt.Errorf("unknown sandbox: %s", sandbox)
 			}
 		}
 	} else if sandbox != "" && sandbox != "none" {
