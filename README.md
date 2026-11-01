@@ -55,10 +55,10 @@ without one.
 sandbox = "dev"
 
 sandbox "dev" {
-    type  = "none"                  # backend: none
+    type  = "nono"                  # backend: none or nono
     read  = ["~/go/pkg/mod"]        # read-only
     write = ["/tmp"]                # read-write
-    deny  = ["./.env"]              # no access
+    deny  = ["~/.aws"]              # no access
     env   = ["PATH", "HOME"]        # environment variables passed through
 
     network {
@@ -74,3 +74,17 @@ only; the default is `none`. A sandbox block may also hold a block named after
 its backend for that backend's own settings.
 
 The `none` backend does not restrict anything.
+
+The `nono` backend runs each command under [nono](https://nono.sh), which must
+be installed, and checks the file tools against the same policy. It grants
+nothing beyond the policy except system paths needed to run programs (such as
+`/usr`), so add `/tmp` to `write` if commands need temporary files. On Linux, a
+path cannot be given less access than a directory containing it, such as
+`deny = ["./.env"]` with the working directory writable. A host allow list
+does not work on WSL2. Its block:
+
+```hcl
+    nono {
+        binary = "/usr/local/bin/nono" # default: nono on PATH
+    }
+```

@@ -14,8 +14,9 @@ import (
 )
 
 type Caps struct {
-	Enforced bool
-	Network  bool
+	Enforced   bool
+	NestedDeny bool
+	Network    bool
 }
 
 type OpenFunc func(t *testing.T, p sandbox.Policy) sandbox.Sandbox
@@ -221,6 +222,10 @@ func Run(t *testing.T, open OpenFunc, caps Caps) {
 	})
 
 	t.Run("Deny", func(t *testing.T) {
+		if !caps.NestedDeny {
+			t.Skip("deny inside a grant is not supported")
+		}
+
 		dir := tempDir(t)
 		secret := filepath.Join(dir, "secret.txt")
 		writeFile(t, secret, "secret")

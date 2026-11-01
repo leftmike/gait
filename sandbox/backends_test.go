@@ -2,6 +2,7 @@ package sandbox_test
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/leftmike/gait/sandbox"
@@ -24,4 +25,19 @@ func TestOpenUnknown(t *testing.T) {
 	if err == nil {
 		t.Error("Open of an unknown backend succeeded")
 	}
+}
+
+func TestNono(t *testing.T) {
+	if _, err := exec.LookPath("nono"); err != nil {
+		t.Skip("nono not installed")
+	}
+
+	testutil.Run(t, func(t *testing.T, p sandbox.Policy) sandbox.Sandbox {
+		sb, err := sandbox.Open(context.Background(), "nono", p, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { sb.Close(context.Background()) })
+		return sb
+	}, testutil.Caps{Enforced: true, Network: true})
 }
