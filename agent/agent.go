@@ -8,8 +8,8 @@ import (
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/mcp"
 	"github.com/leftmike/gait/model"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/skill"
-	"github.com/leftmike/gait/system"
 	"github.com/leftmike/gait/tool"
 )
 
@@ -18,7 +18,7 @@ type Agent struct {
 	Client      model.Client
 	Model       model.Model
 	Tools       map[string]tool.Tool
-	Sandbox     *system.Sandbox
+	Sandbox     sandbox.Sandbox
 
 	Skills []*skill.Skill
 	clnts  []*mcp.Client // XXX: rename field

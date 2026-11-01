@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	"github.com/invopop/jsonschema"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
-func testSandbox() *system.Sandbox {
-	sb, err := system.NewSandbox(nil, nil)
+func testSandbox() sandbox.Sandbox {
+	sb, err := sandbox.Open(context.Background(), "none", sandbox.Policy{}, nil)
 	if err != nil {
 		panic(fmt.Sprintf("new sandbox failed: %s", err))
 	}

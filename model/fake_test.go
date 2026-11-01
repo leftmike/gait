@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/leftmike/gait/config"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 )
 
@@ -101,7 +101,7 @@ func (ft *fakeTool) tools() map[string]tool.Tool {
 		"current_temperature": {
 			Name:        "current_temperature",
 			Description: "Gets the current temperature for the given location",
-			Func: func(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+			Func: func(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error) {
 				var args struct {
 					Location string `json:"location"`
 				}
@@ -136,7 +136,7 @@ func newFakeModel(t *testing.T, clnt Client, mdlCfg config.ModelConfig, ft *fake
 		t.Fatalf("NewModel() failed with %s", err)
 	}
 
-	sb, err := system.NewSandbox(nil, nil)
+	sb, err := sandbox.Open(context.Background(), "none", sandbox.Policy{}, nil)
 	if err != nil {
 		t.Fatalf("NewSandbox() failed with %s", err)
 	}

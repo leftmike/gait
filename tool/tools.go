@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
 type Tool struct {
@@ -19,7 +19,7 @@ type Tool struct {
 
 // A ToolFunc runs inside a sandbox, which mediates its access to the
 // filesystem and to external commands.
-type ToolFunc func(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error)
+type ToolFunc func(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error)
 
 type ToolSchema map[string]any
 
@@ -194,7 +194,7 @@ func Sorted(tools map[string]Tool) []Tool {
 	return sorted
 }
 
-func CallTool(ctx context.Context, tools map[string]Tool, name string, sb *system.Sandbox,
+func CallTool(ctx context.Context, tools map[string]Tool, name string, sb sandbox.Sandbox,
 	args []byte) (string, error) {
 
 	tl, ok := tools[name]

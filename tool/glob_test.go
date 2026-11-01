@@ -1,7 +1,16 @@
 package tool
 
 import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
 	"testing"
+
+	"github.com/leftmike/gait/sandbox"
 )
 
 func TestGlobMatch(t *testing.T) {
@@ -34,6 +43,51 @@ func TestGlobMatch(t *testing.T) {
 	for _, c := range cases {
 		if got := globMatch(c.pattern, c.name); got != c.match {
 			t.Errorf("globMatch(%q, %q) = %v, want %v", c.pattern, c.name, got, c.match)
+		}
+	}
+}
+
+func TestGlob(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a.go", "sub/b.go", "c.txt"} {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ctx := context.Background()
+	sb, err := sandbox.Open(ctx, "none", sandbox.Policy{Workdir: dir}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range []globArgs{
+		{Pattern: "**/*.go"},
+		{Pattern: "**/*.go", Path: "."},
+		{Pattern: "**/*.go", Path: dir},
+	} {
+		buf, err := json.Marshal(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := glob(ctx, sb, buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got := strings.Split(out, "\n")
+		sort.Strings(got)
+		root := args.Path
+		if root == "" {
+			root = "."
+		}
+		want := []string{filepath.Join(root, "a.go"), filepath.Join(root, "sub", "b.go")}
+		if !slices.Equal(got, want) {
+			t.Errorf("glob(%+v) = %q, want %q", args, got, want)
 		}
 	}
 }

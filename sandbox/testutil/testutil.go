@@ -140,9 +140,11 @@ func Run(t *testing.T, open OpenFunc, caps Caps) {
 		}
 		sb := open(t, sandbox.Policy{Workdir: dir})
 
-		res := run(t, sb, sandbox.Cmd{Args: []string{"pwd"}, Dir: sub})
-		if got := strings.TrimSpace(string(res.Output)); got != sub {
-			t.Errorf("pwd = %q, want %q", got, sub)
+		for _, d := range []string{sub, "sub"} {
+			res := run(t, sb, sandbox.Cmd{Args: []string{"pwd"}, Dir: d})
+			if got := strings.TrimSpace(string(res.Output)); got != sub {
+				t.Errorf("pwd in %s = %q, want %q", d, got, sub)
+			}
 		}
 	})
 

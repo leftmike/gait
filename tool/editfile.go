@@ -8,7 +8,7 @@ import (
 	"io/fs"
 	"strings"
 
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
 // isBinary reports whether data looks like a binary (non-text) file. It uses
@@ -28,7 +28,7 @@ type editFileArgs struct {
 	ReplaceAll bool   `json:"replace_all,omitempty" gait:"replace all occurrences of old_string (default false)"`
 }
 
-func editFile(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func editFile(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error) {
 	var args editFileArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -42,7 +42,7 @@ func editFile(ctx context.Context, sb *system.Sandbox, buf []byte) (string, erro
 		return "", fmt.Errorf("old_string and new_string are identical")
 	}
 
-	data, err := sb.ReadFile(args.Path)
+	data, err := sb.FS().ReadFile(ctx, args.Path)
 	if err != nil {
 		return "", err
 	}
@@ -70,11 +70,11 @@ func editFile(ctx context.Context, sb *system.Sandbox, buf []byte) (string, erro
 	}
 
 	mode := fs.FileMode(0644)
-	info, err := sb.Stat(args.Path)
+	info, err := sb.FS().Stat(ctx, args.Path)
 	if err == nil {
 		mode = info.Mode()
 	}
-	err = sb.WriteFile(args.Path, []byte(updated), mode)
+	err = sb.FS().WriteFile(ctx, args.Path, []byte(updated), mode)
 	if err != nil {
 		return "", err
 	}

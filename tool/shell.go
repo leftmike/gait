@@ -6,12 +6,10 @@ package tool
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
 	"time"
 
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
 type shellArgs struct {
@@ -20,7 +18,7 @@ type shellArgs struct {
 	TimeoutMS int      `json:"timeout_ms,omitempty" gait:"the maximum time to wait in milliseconds; defaults to no timeout"`
 }
 
-func shell(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func shell(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error) {
 	var args shellArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -37,22 +35,21 @@ func shell(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) 
 		defer cancel()
 	}
 
-	out, err := sb.CombinedOutput(ctx, args.Workdir, args.Command[0], args.Command[1:]...)
+	res, err := sb.Run(ctx, sandbox.Cmd{Args: args.Command, Dir: args.Workdir})
 
 	// A command that runs but exits non-zero is not a tool failure: the model
 	// wants to see the output and the exit status, so report them in the result
 	// rather than returning an error.
 	if ctx.Err() == context.DeadlineExceeded {
-		return fmt.Sprintf("%scommand timed out after %d ms", out, args.TimeoutMS), nil
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		return fmt.Sprintf("%sexit status %d", out, exitErr.ExitCode()), nil
+		return fmt.Sprintf("%scommand timed out after %d ms", res.Output, args.TimeoutMS), nil
 	}
 	if err != nil {
 		return "", err
 	}
-	return string(out), nil
+	if res.ExitCode != 0 {
+		return fmt.Sprintf("%sexit status %d", res.Output, res.ExitCode), nil
+	}
+	return string(res.Output), nil
 }
 
 var Shell = Tool{

@@ -7,12 +7,10 @@ package tool
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
 	"time"
 
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
 type shellCommandArgs struct {
@@ -21,7 +19,7 @@ type shellCommandArgs struct {
 	TimeoutMS int      `json:"timeout_ms,omitempty" gait:"the timeout for the command in milliseconds"`
 }
 
-func shellCommand(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func shellCommand(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error) {
 	var args shellCommandArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -37,19 +35,18 @@ func shellCommand(ctx context.Context, sb *system.Sandbox, buf []byte) (string, 
 		defer cancel()
 	}
 
-	out, err := sb.CombinedOutput(ctx, args.Workdir, args.Command[0], args.Command[1:]...)
+	res, err := sb.Run(ctx, sandbox.Cmd{Args: args.Command, Dir: args.Workdir})
 
 	// A non-zero exit is a normal outcome the model should see, so report the
 	// output along with the exit code rather than failing the tool call. A
 	// failure to start the command (e.g. a missing binary) is a real error.
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		return fmt.Sprintf("%sexited with code %d", out, exitErr.ExitCode()), nil
-	}
 	if err != nil {
 		return "", err
 	}
-	return string(out), nil
+	if res.ExitCode != 0 {
+		return fmt.Sprintf("%sexited with code %d", res.Output, res.ExitCode), nil
+	}
+	return string(res.Output), nil
 }
 
 var ShellCommand = Tool{

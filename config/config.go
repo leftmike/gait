@@ -11,7 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsimple"
+
+	"github.com/leftmike/gait/sandbox"
 )
 
 type ModelConfig struct {
@@ -31,23 +34,46 @@ type ClientConfig struct {
 	MaxTokens int    `hcl:"max_tokens,optional"`
 }
 
-type RWActions struct {
-	Allow []string `hcl:"allow,optional"`
-	Ask   []string `hcl:"ask,optional"`
-	Deny  []string `hcl:"deny,optional"`
-}
-
-type ExecuteActions struct {
-	Allow [][]string `hcl:"allow,optional"`
-	Ask   [][]string `hcl:"ask,optional"`
-	Deny  [][]string `hcl:"deny,optional"`
+type NetworkConfig struct {
+	Mode  string   `hcl:"mode"` // none, all, allow
+	Hosts []string `hcl:"hosts,optional"`
 }
 
 type SandboxConfig struct {
-	Name    string          `hcl:"name,label"`
-	Read    *RWActions      `hcl:"read,block"`
-	Execute *ExecuteActions `hcl:"execute,block"`
-	Write   *RWActions      `hcl:"write,block"`
+	Name    string         `hcl:"name,label"`
+	Type    string         `hcl:"type"`
+	Read    []string       `hcl:"read,optional"`
+	Write   []string       `hcl:"write,optional"`
+	Deny    []string       `hcl:"deny,optional"`
+	Env     []string       `hcl:"env,optional"`
+	Network *NetworkConfig `hcl:"network,block"`
+	Backend hcl.Body       `hcl:",remain"`
+}
+
+func (sbCfg *SandboxConfig) Policy() (sandbox.Policy, error) {
+	p := sandbox.Policy{
+		ReadOnly:  sbCfg.Read,
+		ReadWrite: sbCfg.Write,
+		Deny:      sbCfg.Deny,
+		Env:       sbCfg.Env,
+	}
+
+	if sbCfg.Network != nil {
+		switch sbCfg.Network.Mode {
+		case "none":
+			p.Network.Mode = sandbox.NetNone
+		case "all":
+			p.Network.Mode = sandbox.NetAll
+		case "allow":
+			p.Network.Mode = sandbox.NetAllowList
+		default:
+			return sandbox.Policy{}, fmt.Errorf("sandbox %s: unknown network mode: %s",
+				sbCfg.Name, sbCfg.Network.Mode)
+		}
+		p.Network.Hosts = sbCfg.Network.Hosts
+	}
+
+	return p, nil
 }
 
 type MCPServer struct {
@@ -70,8 +96,9 @@ type Config struct {
 }
 
 type AgentConfig struct {
-	ModelConfig   ModelConfig
-	ClientConfig  *ClientConfig
+	ModelConfig  ModelConfig
+	ClientConfig *ClientConfig
+	// SandboxConfig is nil when there is no sandbox.
 	SandboxConfig *SandboxConfig
 }
 

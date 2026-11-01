@@ -263,12 +263,8 @@ func TestHostFSWalkDir(t *testing.T) {
 
 	var got []string
 	err := hfs.WalkDir(ctx, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(dir, path)
-		got = append(got, rel)
-		return nil
+		got = append(got, path)
+		return err
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -277,6 +273,18 @@ func TestHostFSWalkDir(t *testing.T) {
 	want := []string{".", "a", "a/f", "b", "b/f"}
 	if !slices.Equal(got, want) {
 		t.Errorf("WalkDir = %v, want %v", got, want)
+	}
+
+	got = nil
+	err = hfs.WalkDir(ctx, "a", func(path string, d fs.DirEntry, err error) error {
+		got = append(got, path)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a", "a/f"}; !slices.Equal(got, want) {
+		t.Errorf("WalkDir(a) = %v, want %v", got, want)
 	}
 
 	err = hfs.WalkDir(ctx, "hidden", func(string, fs.DirEntry, error) error { return nil })

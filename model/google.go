@@ -10,7 +10,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -31,7 +31,7 @@ type googleModel struct {
 	inputCost       float64
 	outputCost      float64
 	tools           map[string]tool.Tool
-	sandbox         *system.Sandbox
+	sandbox         sandbox.Sandbox
 	funcDecls       []*genai.FunctionDeclaration
 }
 
@@ -438,7 +438,7 @@ func toGoogleFuncDecls(tools map[string]tool.Tool) []*genai.FunctionDeclaration 
 	return decls
 }
 
-func (mdl *googleModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
+func (mdl *googleModel) SetTools(tools map[string]tool.Tool, sb sandbox.Sandbox) error {
 	mdl.tools = tools
 	mdl.sandbox = sb
 	mdl.funcDecls = toGoogleFuncDecls(tools)

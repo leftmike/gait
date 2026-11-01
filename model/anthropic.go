@@ -13,7 +13,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -35,7 +35,7 @@ type anthropicModel struct {
 	inputCost       float64
 	outputCost      float64
 	tools           map[string]tool.Tool
-	sandbox         *system.Sandbox
+	sandbox         sandbox.Sandbox
 	toolParams      []anthropic.ToolUnionParam
 }
 
@@ -385,7 +385,7 @@ func toAnthropicTools(tools map[string]tool.Tool) []anthropic.ToolUnionParam {
 	return toolParams
 }
 
-func (mdl *anthropicModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
+func (mdl *anthropicModel) SetTools(tools map[string]tool.Tool, sb sandbox.Sandbox) error {
 	mdl.tools = tools
 	mdl.sandbox = sb
 	mdl.toolParams = toAnthropicTools(tools)

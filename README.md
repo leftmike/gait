@@ -44,3 +44,33 @@ Examples:
 gait -anthropic -model claude-sonnet-4-6
 gait -ollama -model qwen2.5 -baseurl http://localhost:11545/v1
 ```
+
+## Sandboxes
+
+Tools run commands and access files through a sandbox. Select one with
+`sandbox = "<name>"` in the config or `-sandbox <name>`; `-no-sandbox` or
+`-sandbox none` runs without one.
+
+```hcl
+sandbox = "dev"
+
+sandbox "dev" {
+    type  = "none"                  # backend: none
+    read  = ["~/go/pkg/mod"]        # read-only
+    write = ["/tmp"]                # read-write
+    deny  = ["./.env"]              # no access
+    env   = ["PATH", "HOME"]        # environment variables passed through
+
+    network {
+        mode  = "allow"             # none, all, or allow
+        hosts = ["proxy.golang.org"]
+    }
+}
+```
+
+The working directory is read-write unless it is listed. Relative paths are
+relative to the working directory. The network policy applies to commands
+only; the default is `none`. A sandbox block may also hold a block named after
+its backend for that backend's own settings.
+
+The `none` backend does not restrict anything.

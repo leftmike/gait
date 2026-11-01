@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
 const applyPatchDescription = "Use the `apply_patch` tool to edit files.\n" +
@@ -88,7 +88,7 @@ type applyPatchArgs struct {
 	Input string `json:"input" gait:"The entire contents of the apply_patch command"`
 }
 
-func applyPatch(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func applyPatch(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error) {
 	var args applyPatchArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -100,7 +100,7 @@ func applyPatch(ctx context.Context, sb *system.Sandbox, buf []byte) (string, er
 		return "", err
 	}
 
-	affected, err := applyHunks(sb, hunks)
+	affected, err := applyHunks(ctx, sb.FS(), hunks)
 	if err != nil {
 		return "", err
 	}
@@ -414,7 +414,7 @@ type affectedPaths struct {
 
 // Apply the hunks to the filesystem, returning which files were added, modified, or
 // deleted.
-func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
+func applyHunks(ctx context.Context, fsys sandbox.FS, hunks []patchHunk) (affectedPaths, error) {
 	if len(hunks) == 0 {
 		return affectedPaths{}, fmt.Errorf("No files were modified.")
 	}
@@ -423,11 +423,11 @@ func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 	for _, hunk := range hunks {
 		switch hunk.op {
 		case addFileOp:
-			err := makeParentDirs(sb, hunk.path)
+			err := makeParentDirs(ctx, fsys, hunk.path)
 			if err != nil {
 				return affectedPaths{}, err
 			}
-			err = sb.WriteFile(hunk.path, []byte(hunk.contents), 0o644)
+			err = fsys.WriteFile(ctx, hunk.path, []byte(hunk.contents), 0o644)
 			if err != nil {
 				return affectedPaths{},
 					fmt.Errorf("Failed to write file %s: %s", hunk.path, err)
@@ -435,7 +435,7 @@ func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 			affected.added = append(affected.added, hunk.path)
 
 		case deleteFileOp:
-			err := sb.Remove(hunk.path)
+			err := fsys.Remove(ctx, hunk.path)
 			if err != nil {
 				return affectedPaths{},
 					fmt.Errorf("Failed to delete file %s: %s", hunk.path, err)
@@ -443,28 +443,28 @@ func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 			affected.deleted = append(affected.deleted, hunk.path)
 
 		case updateFileOp:
-			newContents, err := deriveNewContentsFromChunks(sb, hunk.path, hunk.chunks)
+			newContents, err := deriveNewContentsFromChunks(ctx, fsys, hunk.path, hunk.chunks)
 			if err != nil {
 				return affectedPaths{}, err
 			}
 			if hunk.movePath != "" {
-				err = makeParentDirs(sb, hunk.movePath)
+				err = makeParentDirs(ctx, fsys, hunk.movePath)
 				if err != nil {
 					return affectedPaths{}, err
 				}
-				err = sb.WriteFile(hunk.movePath, []byte(newContents), 0o644)
+				err = fsys.WriteFile(ctx, hunk.movePath, []byte(newContents), 0o644)
 				if err != nil {
 					return affectedPaths{},
 						fmt.Errorf("Failed to write file %s: %s", hunk.movePath, err)
 				}
-				err = sb.Remove(hunk.path)
+				err = fsys.Remove(ctx, hunk.path)
 				if err != nil {
 					return affectedPaths{},
 						fmt.Errorf("Failed to remove original %s: %s", hunk.path, err)
 				}
 				affected.modified = append(affected.modified, hunk.movePath)
 			} else {
-				err = sb.WriteFile(hunk.path, []byte(newContents), 0o644)
+				err = fsys.WriteFile(ctx, hunk.path, []byte(newContents), 0o644)
 				if err != nil {
 					return affectedPaths{},
 						fmt.Errorf("Failed to write file %s: %s", hunk.path, err)
@@ -476,10 +476,10 @@ func applyHunks(sb *system.Sandbox, hunks []patchHunk) (affectedPaths, error) {
 	return affected, nil
 }
 
-func makeParentDirs(sb *system.Sandbox, path string) error {
+func makeParentDirs(ctx context.Context, fsys sandbox.FS, path string) error {
 	dir := filepath.Dir(path)
 	if dir != "" && dir != "." {
-		err := sb.MkdirAll(dir, 0o755)
+		err := fsys.MkdirAll(ctx, dir, 0o755)
 		if err != nil {
 			return fmt.Errorf("Failed to create parent directories for %s: %s", path, err)
 		}
@@ -488,10 +488,10 @@ func makeParentDirs(sb *system.Sandbox, path string) error {
 }
 
 // Return the new contents of the file at path after applying the chunks to it.
-func deriveNewContentsFromChunks(sb *system.Sandbox, path string,
+func deriveNewContentsFromChunks(ctx context.Context, fsys sandbox.FS, path string,
 	chunks []updateChunk) (string, error) {
 
-	buf, err := sb.ReadFile(path)
+	buf, err := fsys.ReadFile(ctx, path)
 	if err != nil {
 		return "", fmt.Errorf("Failed to read file to update %s: %s", path, err)
 	}

@@ -157,6 +157,14 @@ func (hfs *HostFS) Workdir() string {
 	return hfs.workdir
 }
 
+// Dir expands a command's directory; empty means the workdir.
+func (hfs *HostFS) Dir(dir string) (string, error) {
+	if dir == "" {
+		return hfs.workdir, nil
+	}
+	return ExpandPath(dir, hfs.workdir, hfs.home)
+}
+
 func within(path, dir string) bool {
 	return path == dir || dir == "/" || strings.HasPrefix(path, dir+"/")
 }
@@ -259,14 +267,15 @@ func (hfs *HostFS) Stat(_ context.Context, path string) (fs.FileInfo, error) {
 	return os.Stat(path)
 }
 
-// WalkDir skips what cannot be read, rather than failing the walk.
+// WalkDir passes paths in the same form as root and skips what cannot be read, rather
+// than failing the walk.
 func (hfs *HostFS) WalkDir(ctx context.Context, root string, fn fs.WalkDirFunc) error {
-	root, err := hfs.check("walkdir", root, readAccess)
+	resolved, err := hfs.check("walkdir", root, readAccess)
 	if err != nil {
 		return err
 	}
 
-	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	return filepath.WalkDir(resolved, func(path string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -278,6 +287,10 @@ func (hfs *HostFS) WalkDir(ctx context.Context, root string, fn fs.WalkDirFunc) 
 			return nil
 		}
 
-		return fn(path, d, err)
+		rel, rerr := filepath.Rel(resolved, path)
+		if rerr != nil {
+			return rerr
+		}
+		return fn(filepath.Join(root, rel), d, err)
 	})
 }

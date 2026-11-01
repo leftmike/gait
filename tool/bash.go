@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
 const (
@@ -29,7 +29,7 @@ type bashArgs struct {
 	Timeout int    `json:"timeout,omitempty" gait:"timeout in milliseconds; defaults to 120000 and is capped at 600000"`
 }
 
-func bash(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func bash(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error) {
 	var args bashArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -50,25 +50,28 @@ func bash(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	out, err := sb.CombinedOutput(ctx, "", "bash", "-c", args.Command)
+	res, err := sb.Run(ctx, sandbox.Cmd{Args: []string{"bash", "-c", args.Command}})
 
 	// Report a timeout explicitly rather than as an opaque signal error.
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", fmt.Errorf("command timed out after %s", timeout)
 	}
+	if err != nil {
+		return "", err
+	}
 
-	result := string(out)
+	result := string(res.Output)
 	if len(result) > bashMaxOutput {
 		result = result[:bashMaxOutput] + "\n... (output truncated)"
 	}
 
 	// A non-zero exit status is reported alongside any output the command
 	// produced so the model can see both.
-	if err != nil {
+	if res.ExitCode != 0 {
 		if result != "" {
-			return "", fmt.Errorf("%s\n%w", result, err)
+			return "", fmt.Errorf("%s\nexit status %d", result, res.ExitCode)
 		}
-		return "", err
+		return "", fmt.Errorf("exit status %d", res.ExitCode)
 	}
 
 	return result, nil

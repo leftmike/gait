@@ -10,7 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 
 	"github.com/leftmike/gait/config"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -25,7 +25,7 @@ type chatAPIModel struct {
 	clnt       *chatAPIClient
 	model      string
 	tools      map[string]tool.Tool
-	sandbox    *system.Sandbox
+	sandbox    sandbox.Sandbox
 	toolParams []openai.ChatCompletionToolUnionParam
 }
 
@@ -204,7 +204,7 @@ func toOpenAICompatTools(tools map[string]tool.Tool) []openai.ChatCompletionTool
 	return toolParams
 }
 
-func (mdl *chatAPIModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
+func (mdl *chatAPIModel) SetTools(tools map[string]tool.Tool, sb sandbox.Sandbox) error {
 	mdl.tools = tools
 	mdl.sandbox = sb
 	mdl.toolParams = toOpenAICompatTools(tools)

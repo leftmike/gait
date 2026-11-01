@@ -14,7 +14,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -35,7 +35,7 @@ type openRouterModel struct {
 	inputCost       float64
 	outputCost      float64
 	tools           map[string]tool.Tool
-	sandbox         *system.Sandbox
+	sandbox         sandbox.Sandbox
 	toolParams      []components.ChatFunctionTool
 }
 
@@ -312,7 +312,7 @@ func toOpenRouterTools(tools map[string]tool.Tool) []components.ChatFunctionTool
 	return toolParams
 }
 
-func (mdl *openRouterModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
+func (mdl *openRouterModel) SetTools(tools map[string]tool.Tool, sb sandbox.Sandbox) error {
 	mdl.tools = tools
 	mdl.sandbox = sb
 	mdl.toolParams = toOpenRouterTools(tools)

@@ -11,7 +11,7 @@ import (
 	ollama "github.com/ollama/ollama/api"
 
 	"github.com/leftmike/gait/config"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -28,7 +28,7 @@ type ollamaModel struct {
 	numPredict   int
 	contextLimit int
 	tools        map[string]tool.Tool
-	sandbox      *system.Sandbox
+	sandbox      sandbox.Sandbox
 	toolDefs     ollama.Tools
 }
 
@@ -318,7 +318,7 @@ func toOllamaTools(tools map[string]tool.Tool) (ollama.Tools, error) {
 	return toolDefs, nil
 }
 
-func (mdl *ollamaModel) SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error {
+func (mdl *ollamaModel) SetTools(tools map[string]tool.Tool, sb sandbox.Sandbox) error {
 	toolDefs, err := toOllamaTools(tools)
 	if err != nil {
 		return err

@@ -72,7 +72,7 @@ import (
 	"github.com/leftmike/gait/agent"
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 	"github.com/leftmike/gait/util"
 )
@@ -82,12 +82,20 @@ var (
 	trace   bool
 )
 
-func askUser(op, path string) bool {
-	fmt.Fprintf(os.Stderr, "%s %s? [y/N] ", op, path)
-	var resp string
-	fmt.Fscanln(os.Stdin, &resp)
-	resp = strings.ToLower(strings.TrimSpace(resp))
-	return resp == "y" || resp == "yes"
+func openSandbox(ctx context.Context, sbCfg *config.SandboxConfig) (sandbox.Sandbox, error) {
+	if sbCfg == nil {
+		return sandbox.Open(ctx, "none", sandbox.Policy{}, nil)
+	}
+
+	p, err := sbCfg.Policy()
+	if err != nil {
+		return nil, err
+	}
+	sb, err := sandbox.Open(ctx, sbCfg.Type, p, sbCfg.Backend)
+	if err != nil {
+		return nil, fmt.Errorf("sandbox %s: %w", sbCfg.Name, err)
+	}
+	return sb, nil
 }
 
 func interact(agnt *agent.Agent, opts *model.Options) error {
@@ -219,11 +227,12 @@ func main() {
 		tools = tool.All(cfg.BraveAPIKey)
 	}
 
-	sb, err := system.NewSandbox(agntCfg.SandboxConfig, askUser)
+	sb, err := openSandbox(context.Background(), agntCfg.SandboxConfig)
 	if err != nil {
 		fmt.Printf("%s: %s\n", os.Args[0], err)
 		os.Exit(1)
 	}
+	defer sb.Close(context.Background())
 
 	agnt := agent.Agent{
 		AgentConfig: agntCfg,

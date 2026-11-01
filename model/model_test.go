@@ -12,7 +12,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/model"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 )
 
@@ -20,8 +20,8 @@ var (
 	provider = flag.String("provider", "", "limit tests to this provider")
 )
 
-func testSandbox() *system.Sandbox {
-	sb, err := system.NewSandbox(nil, nil)
+func testSandbox() sandbox.Sandbox {
+	sb, err := sandbox.Open(context.Background(), "none", sandbox.Policy{}, nil)
 	if err != nil {
 		panic(fmt.Sprintf("new sandbox failed: %s", err))
 	}
@@ -140,7 +140,7 @@ type currentTemperatureArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current temperature for"`
 }
 
-func (l *locations) currentTemperature(ctx context.Context, sb *system.Sandbox,
+func (l *locations) currentTemperature(ctx context.Context, sb sandbox.Sandbox,
 	buf []byte) (string, error) {
 
 	var args currentTemperatureArgs
@@ -160,7 +160,7 @@ type currentWeatherArgs struct {
 	Location string `json:"location" jsonschema:"location to get the current weather for"`
 }
 
-func (l *locations) currentWeather(ctx context.Context, sb *system.Sandbox,
+func (l *locations) currentWeather(ctx context.Context, sb sandbox.Sandbox,
 	buf []byte) (string, error) {
 
 	var args currentWeatherArgs

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
 type globArgs struct {
@@ -53,7 +53,7 @@ type globMatchInfo struct {
 	modTime int64
 }
 
-func glob(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func glob(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error) {
 	var args globArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -68,7 +68,7 @@ func glob(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	pattern := filepath.ToSlash(args.Pattern)
 
 	var matches []globMatchInfo
-	err = sb.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err = sb.FS().WalkDir(ctx, root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}

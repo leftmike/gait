@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 )
 
 const maxGrepFileSize = 1024 * 1024 * 8
@@ -90,7 +90,7 @@ func grepFileLines(re *regexp.Regexp, content string, multiline bool) []int {
 	return out
 }
 
-func grep(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
+func grep(ctx context.Context, sb sandbox.Sandbox, buf []byte) (string, error) {
 	var args grepArgs
 	err := json.Unmarshal(buf, &args)
 	if err != nil {
@@ -120,12 +120,12 @@ func grep(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 
 	// Collect the files to search.
 	var files []string
-	info, err := sb.Stat(root)
+	info, err := sb.FS().Stat(ctx, root)
 	if err != nil {
 		return "", err
 	}
 	if info.IsDir() {
-		err = sb.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		err = sb.FS().WalkDir(ctx, root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
@@ -165,7 +165,7 @@ func grep(ctx context.Context, sb *system.Sandbox, buf []byte) (string, error) {
 	var lines []string // output lines, before applying head_limit
 
 	for _, path := range files {
-		data, err := sb.ReadFile(path)
+		data, err := sb.FS().ReadFile(ctx, path)
 		if err != nil || len(data) > maxGrepFileSize || isBinary(data) {
 			continue
 		}

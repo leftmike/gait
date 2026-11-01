@@ -42,11 +42,13 @@ func (sb *none) Run(ctx context.Context, cmd Cmd) (Result, error) {
 		return Result{}, errors.New("sandbox: empty command")
 	}
 
-	c := exec.CommandContext(ctx, cmd.Args[0], cmd.Args[1:]...)
-	c.Dir = cmd.Dir
-	if c.Dir == "" {
-		c.Dir = sb.hfs.Workdir()
+	dir, err := sb.hfs.Dir(cmd.Dir)
+	if err != nil {
+		return Result{}, err
 	}
+
+	c := exec.CommandContext(ctx, cmd.Args[0], cmd.Args[1:]...)
+	c.Dir = dir
 	if len(cmd.Env) > 0 {
 		c.Env = os.Environ()
 		for k, v := range cmd.Env {

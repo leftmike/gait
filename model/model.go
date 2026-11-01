@@ -9,7 +9,7 @@ import (
 
 	"github.com/leftmike/gait/config"
 	"github.com/leftmike/gait/llmreg"
-	"github.com/leftmike/gait/system"
+	"github.com/leftmike/gait/sandbox"
 	"github.com/leftmike/gait/tool"
 )
 
@@ -33,7 +33,7 @@ type ModelMetadata struct {
 
 type Model interface {
 	Generate(ctx context.Context, st State, opts *Options) error
-	SetTools(tools map[string]tool.Tool, sb *system.Sandbox) error
+	SetTools(tools map[string]tool.Tool, sb sandbox.Sandbox) error
 	ContextLimit() int
 }
 
