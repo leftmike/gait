@@ -16,19 +16,13 @@ To Do:
 - remove brave search?
 - opencode tools: https://opencode.ai/v2/docs/tools/
 - web search: https://opencode.ai/v2/docs/websearch
+- sandbox: tool: apply network policy to web search and fetch
 
 - tool search tool: https://www.anthropic.com/engineering/advanced-tool-use
 
 - channels: https://code.claude.com/docs/en/channels-reference
 
 - restricted sandbox for running cli programs
--- mode: none, harness, kernel?, (bubblewrap, kvm, etc)
--- read: yes, always, no
--- execute: yes, always, no
--- write: yes, always, no
--- (network: yes, ask, always)
--- nono.sh
--- github.com/superradcompany/microsandbox
 -- github.com/microsoft/mxc
 -- github.com/NVIDIA/OpenShell
 
